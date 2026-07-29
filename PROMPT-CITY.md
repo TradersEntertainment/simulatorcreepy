@@ -20,189 +20,245 @@ Output every file with its **exact `res://` path** and its **full contents** —
 
 **Title:** "MEŞRUİYET" — subtitle "Bir Şehir Kurma ve Kaybetme Simülasyonu"
 
-You are the founder-governor of a new city on a river delta, starting with 400 settlers, a treasury, and a blank grid. You must grow it into a functioning city over **60 turns (each turn = one season, 15 years)**. You will not survive by being nice and you will not survive by being cruel. You will survive — if you survive — by knowing exactly how far you already went.
+You are the founder-governor of a new city on a river delta: 400 settlers, a small treasury, a blank grid. **One term, 60 turns, one season per turn — fifteen years.** You will not survive by being kind and you will not survive by being cruel. You will survive, if you survive, by knowing exactly how far you already went. At turn 60 you do not hand the city to an heir. You stand in it.
 
-**Genre:** Turn-based city builder fused with a political-drift simulator. Think *SimCity* placement, *Frostpunk* law-book escalation, and *Democracy*'s faction arithmetic, but the core subject is **ideological drift under pressure**.
+**Genre:** Turn-based city builder fused with a political-drift simulator. *SimCity* placement, *Frostpunk* law-book escalation, *Democracy*'s faction arithmetic — but the subject is **ideological drift under pressure**.
 
-**Tone:** Dry, bureaucratic, quietly ominous. The UI is a governor's desk: ledgers, stamped decrees, a newspaper, telegrams from ministers. Text is terse and official — humor comes from euphemism ("Gönüllü Yeniden Yerleşim Programı"), never from jokes.
+**Tone:** Dry, bureaucratic, quietly ominous. The UI is a governor's desk: ledgers, stamped decrees, a newspaper, telegrams from ministers. Text is terse and official. Humour comes only from euphemism ("Gönüllü Yeniden Yerleşim Programı"), never from jokes.
+
+**Target session:** a full run is 90–120 minutes. Size all content and pacing to that.
 
 ---
 
 ## 2. DESIGN PILLARS (obey these — they are the whole game)
 
-1. **Placement is a political act.** Every building has a *functional* effect AND a *political* effect that depends on **which district it is placed in**. The map is where politics is played, not a second menu bolted onto a builder.
-2. **The player must never choose "become a dictator."** Nobody picks that from a menu. Instead: every crisis has a *clean* response that is slow and expensive, and a *fast* response that shifts an axis. Under time pressure the player takes the fast one. Twelve reasonable emergency measures later there are checkpoints on the streets. **Drift must be emergent, never selected.** Never label an option as extreme, evil, or authoritarian — label it by what it does ("Tahıl El Koyma Kararnamesi").
-3. **Each extreme fails through a different mechanic, not a lose screen.** See §6.
-4. **Extremes are powerful, not stupid.** Radical zones unlock tools that genuinely solve otherwise-unsolvable crises. The cost is fragility, not weakness. If a player can win by hugging the center, the game is broken — the center must be too slow to survive the mid-game crises alone.
-5. **Truth is a resource with a political price.** See §5. This is the standout system; build it fully.
+1. **Placement is a political act.** Every building has a functional effect AND a political effect that depends on **which district it is placed in**. The map is where politics is played, not a menu bolted onto a builder.
+2. **The player must never choose "become a dictator."** Every crisis has a *clean* response — slow and expensive — and a *fast* response that shifts an axis. Under pressure players take the fast one. Twelve reasonable emergency measures later there are checkpoints on the streets. **Drift is emergent, never selected.** Never label an option as extreme, evil, or authoritarian; label it by what it does.
+3. **The safety margin is the real currency.** See §7. Foresight — hoarded stock, treasury, spare labour — is the only thing that lets you afford the clean option. A player who spends every surplus on growth grows faster and arrives at the first crisis with nothing. **The cause of drift is greed, not malice.**
+4. **Each extreme fails through its own mechanic, not a lose screen.** See §9.
+5. **Extremes are powerful, not stupid.** Radical bands unlock tools that genuinely solve otherwise-unsolvable crises. The cost is fragility, not weakness. If hugging the centre can win, the game is broken — the centre must be too slow to survive the mid-game alone.
+6. **Truth is a resource with a political price.** See §5.
 
 ---
 
 ## 3. THE CITY LAYER
 
-**Map:** a `48 × 32` tile grid, 32 px tiles, top-down. Camera pans with middle-drag/WASD and zooms with the wheel (0.5×–2.5×). River along one edge, fertile soil near it, ore in the hills, marsh that must be drained.
+**Map:** `48 × 32` tiles, 32 px each, top-down. Camera pans with middle-drag/WASD, zooms 0.5×–2.5×. River along one edge, fertile soil near it, ore in the hills, marsh that must be drained.
 
-**Districts:** the map is partitioned into **6 named districts**, each with its own `grievance: float`, `wealth: float`, `population: int` and **faction affinity**:
-- **LİMAN** — docks and workers. Affinity: İşçiler.
-- **TEPE** — the wealthy hill. Affinity: Tüccarlar.
-- **ESKİ ŞEHİR** — old town, market, temple. Affinity: Gelenek.
-- **SANAYİ** — industry, smoke. Affinity: İşçiler.
-- **ÜNİVERSİTE** — schools, press, clinics. Affinity: Aydınlar.
-- **KIŞLA** — garrison and depots. Affinity: Ordu.
+**Districts — 6, pre-drawn and named**, each with its own `grievance`, `wealth`, `population` and faction affinity:
+**LİMAN** (docks, workers → İşçiler) · **TEPE** (wealthy hill → Tüccarlar) · **ESKİ ŞEHİR** (old town, market, temple → Gelenek) · **SANAYİ** (industry, smoke → İşçiler) · **ÜNİVERSİTE** (schools, press, clinics → Aydınlar) · **KIŞLA** (garrison, depots → Ordu).
 
-Districts start mostly empty and grow as you zone them. A district can riot, strike, or fall out of your control **independently** — losing a district removes its production and its tiles from your build range.
+A district can riot, strike, or fall out of your control **independently**. Losing one removes its production and its tiles from your build range.
 
-**Resources (stockpiles + per-turn flow, both shown):** `Para (₺)`, `Yiyecek`, `Su`, `Enerji`, `Malzeme`, `İşgücü`. Plus city-wide indices 0–100: `Sağlık`, `Eğitim`, `Güvenlik`, `Kültür`, `Kirlilik`.
+**Resources:** show stockpile AND per-turn flow for `Para (₺)`, `Yiyecek`, `Su`, `Enerji`, `Malzeme`, `İşgücü`. Plus city indices 0–100: `Sağlık`, `Eğitim`, `Güvenlik`, `Kültür`, `Kirlilik`.
 
-**Buildings — implement at least 30**, each with: cost, upkeep, tile footprint, worker demand, output, adjacency rules, and **a political effect that varies by district**. Examples of the pattern you must follow throughout:
+**Light supply chains — exactly two, no more.** Everything else is a district-level pool.
+- **Food:** `Tarla → Değirmen → Fırın → Ekmek`. Each stage has throughput and a small stock. A blocked middle stage starves the city while the granary total still looks fine — and a lying minister (§5) will report the total, not the blockage. This is deliberate.
+- **Materials:** `Ocak → Kereste/Taş → İnşaat Deposu`. Construction draws from the depot, not from an abstract pool, so a cut ore supply freezes building three turns later.
+
+Both chains consume **İşgücü**, which is a single shared pool. This matters — see §8.
+
+**Buildings — at least 30**, each with cost, upkeep, footprint, worker demand, output, adjacency rules, and **a district-dependent political effect**. Follow this pattern throughout:
 
 | Building | Function | Political effect |
 |---|---|---|
-| Tahıl Ambarı | +Yiyecek buffer | none — a rare politically neutral building |
-| Dokuma Atölyesi | +₺, needs 40 işgücü | in SANAYİ: +Tüccar loyalty. In LİMAN: +₺ bonus (cheap labor) but +grievance and +Kirlilik |
-| Karakol | +Güvenlik in radius | in LİMAN: −İşçi loyalty, +Otorite. In TEPE: +Tüccar loyalty, no axis shift |
-| Matbaa (press) | +Eğitim, **+Şeffaflık** | +Aydın loyalty, −Otorite, surfaces scandals |
+| Tahıl Ambarı | +Yiyecek buffer | none — one of the few politically neutral buildings |
+| Dokuma Atölyesi | +₺, needs 40 işgücü | in SANAYİ: +Tüccar. In LİMAN: +₺ bonus (cheap labour) but +grievance, +Kirlilik |
+| Karakol | +Güvenlik in radius | in LİMAN: −İşçi, +Otorite. In TEPE: +Tüccar, no axis shift |
+| Matbaa | +Eğitim, **+Şeffaflık** | +Aydın, −Otorite, surfaces scandals |
 | Park | +Mutluluk in radius | in TEPE: +Tüccar. In LİMAN: +İşçi, −Tüccar ("neden onlara?") |
-| Anıt (your statue) | +Meşruiyet, −₺₺ | +Otorite strongly, −Aydın |
-| Tapınak | +Kültür, −grievance | +Gelenek loyalty, −Aydın, −İlerleme |
-| Tayınlama Deposu | food to everyone regardless of ₺ | +Eşitlik, −Tüccar |
+| Anıt | +Meşruiyet, −₺₺ | +Otorite strongly, −Aydın |
+| Tapınak | +Kültür, −grievance | +Gelenek, −Aydın |
+| Tayınlama Deposu | food to all regardless of ₺ | +Eşitlik, −Tüccar |
 | Serbest Borsa | +₺₺₺ | +Sermaye, +Tüccar, housing costs rise → +LİMAN grievance |
-| Toplu Konut | cheap housing, high density | +Eşitlik, −Tüccar, −TEPE property value |
+| Toplu Konut | cheap dense housing | +Eşitlik, −Tüccar, −TEPE land value |
 | Kontrol Noktası | −smuggling, +Güvenlik | +Otorite, +grievance in its own district |
+| Kışla | +Garnizon capacity | +Ordu, enables conscription — see §8 |
 
-Zoning: the player paints `KONUT` (3 density tiers), `TİCARET`, `SANAYİ`, `TARIM` and then places specific service buildings. Housing tiers unlock by law and by land value. Roads/water/power must connect (simple flood-fill connectivity check — show unserviced buildings with a red icon).
+Zoning: paint `KONUT` (3 density tiers), `TİCARET`, `SANAYİ`, `TARIM`, then place service buildings. Roads/water/power must connect (flood-fill check; mark unserviced buildings with a red icon).
 
-**Needs & grievance:** every 100 population demands food, water, housing, a job, and a service basket. Each unmet need adds grievance **to that district**, weighted by the district's own expectations (TEPE tolerates less discomfort than LİMAN; LİMAN tolerates less injustice than TEPE). Grievance decays slowly when needs are met. District grievance > 70 for 3 consecutive turns → unrest event. > 90 → the district acts on its own.
+**Needs & grievance:** every 100 population demands food, water, housing, a job and a service basket. Unmet needs add grievance **to that district**, weighted by local expectations — TEPE tolerates less discomfort, LİMAN tolerates less injustice. Grievance decays slowly when needs are met. `>70` for 3 consecutive turns → unrest event. `>90` → the district acts on its own.
 
 ---
 
 ## 4. THE GOVERNANCE LAYER
 
-### Two ideological axes, each `-100 … +100`
+**Two axes, each `-100 … +100`:** **OTORİTE ↔ ÖZGÜRLÜK** (`axis_order`) and **SERMAYE ↔ EŞİTLİK** (`axis_economy`).
 
-- **OTORİTE ↔ ÖZGÜRLÜK** (`axis_order`)
-- **SERMAYE ↔ EŞİTLİK** (`axis_economy`)
+Render each as a horizontal meter with a marker and, behind it, **a faint trail of the last 15 turns** so the player can see the drift they never noticed. Build this trail — it is the only place the game's subject becomes visible.
 
-Show them as two horizontal meters with a marker and, behind it, a faint trail of the last 15 turns so the player can *see the drift they didn't notice*. This trail is important — build it.
+**Bands (absolute value):**
+- `0–39` **PRAGMATİK** — no modifiers, no unlocks. Safe, and too slow to survive the mid-game alone.
+- `40–69` **KARARLI** — unlocks that side's strong laws and buildings. Mild opposing-faction penalty.
+- `70–89` **RADİKAL** — unlocks that side's decisive crisis tools. Opposing factions turn hostile; that quadrant's failure mechanic switches on at partial strength.
+- `90–100` **DÖNÜŞSÜZ** — the strongest tools in the game. A one-time warning event fires, a visible **8-turn `GERİ DÖNÜŞ` countdown** begins, and the failure mechanic runs at full strength. Pulling back below 80 is possible but demands a real sacrifice: repeal your keystone law, lose 30 Meşruiyet, or hand a district's administration to a faction. Countdown reaching 0 while still ≥90 fires that collapse ending.
 
-**Zone bands (absolute value):**
-- `0–39` **PRAGMATİK** — no modifiers, no special unlocks. Safe, and too slow to survive the mid-game alone.
-- `40–69` **KARARLI** — unlocks that side's strong laws and buildings. Mild penalty from the opposing faction.
-- `70–89` **RADİKAL** — unlocks that side's decisive crisis tools. Opposing factions turn hostile; the failure mechanic for that quadrant switches on at partial strength.
-- `90–100` **DÖNÜŞSÜZ** — the most powerful tools in the game are available. A one-time warning event fires, a visible `GERİ DÖNÜŞ` countdown of 8 turns begins, and the quadrant failure mechanic runs at full strength. Pulling back below 80 is possible but requires a genuine sacrifice (repeal your keystone law, lose 30 legitimacy, or hand a district's administration to a faction). If the countdown reaches 0 while still ≥90, the corresponding collapse ending fires.
+**Meşruiyet (0–100, starts 60):** spent to force laws through the council and to absorb scandals; gained by meeting needs, winning crises, holding elections. At 0 you are finished regardless of everything else.
 
-### Legitimacy (`Meşruiyet`, 0–100, starts 60)
-Spent to pass laws against council opposition and to survive scandals. Gained by meeting needs, winning crises, and holding elections. At 0 you are finished regardless of anything else.
+**Factions — 5, loyalty 0–100, all start 50:** `TÜCCARLAR`, `İŞÇİLER`, `ORDU`, `GELENEK`, `AYDINLAR`. Each grants a passive gift at ≥65 (Tüccarlar −15% build cost · İşçiler +10% işgücü · Ordu +Güvenlik and coup immunity · Gelenek faster grievance decay · Aydınlar +Şeffaflık) and a threat at ≤25 (sabotage, strike, coup clock, schism, leak). **Two hostile factions at once = a compound crisis.**
 
-### Factions — 5, loyalty 0–100, all start at 50
-`TÜCCARLAR`, `İŞÇİLER`, `ORDU`, `GELENEK`, `AYDINLAR`.
-Each has a **passive gift while ≥65** (Tüccarlar: −15% build cost. İşçiler: +10% işgücü. Ordu: +Güvenlik, coup immunity. Gelenek: grievance decays faster. Aydınlar: +research, +Şeffaflık) and **a threat while ≤25** (sabotage, strike, coup clock, schism, leak). **Two hostile factions simultaneously = a compound crisis.** Ordu ≤25 while Meşruiyet ≤35 starts a 5-turn coup countdown, announced only if your information is reliable (§5) — otherwise it hits without warning.
-
-### Instruments of government
-- **KARARNAME (decrees):** immediate, cheap, per-turn limited (2/turn). Shift axes by 3–10. ~25 of them.
-- **YASA (laws):** permanent, and **slotted — you have 4 law slots, expandable to 7**. To adopt a new law you must repeal an old one. This forces the city to have an actual identity instead of accumulating every good idea. ~40 laws, each shifting axes persistently and modifying formulas (tax yield, housing density caps, conscription, price controls, censorship, term limits, land rights).
-- **BÜTÇE (budget):** sliders for tax rate (0–60%) and funding for Sağlık / Eğitim / Güvenlik / Kültür / Altyapı. The soft layer between hard laws.
-- **MECLİS (council):** 21 seats, composition derived from faction loyalty and district populations. Laws need a majority; short of one you spend Meşruiyet to force it. **The council's debate is your best early-warning system** — members voice the grievances your ministers are hiding. At `axis_order ≥ 75` you unlock "Meclisi Tatil Et": laws pass instantly and free — and you lose the debate, i.e. you lose your last honest information channel. Make this trade explicit in the tooltip and devastating in practice.
-- **ANAYASA (constitution):** on turn 5 the player writes **3 founding clauses** from a pool of 12 (e.g. "Mülkiyet Kutsaldır", "Herkese Ekmek", "Şehir Kendini Savunur", "Söz Serbesttir"). Each sets run-long multipliers and one locked axis floor/ceiling. This is the main replayability lever — the same map plays very differently.
+**Instruments:**
+- **KARARNAME** — immediate, 2 per turn, shift axes 3–10. ~25 of them.
+- **YASA** — permanent and **slotted: 4 slots, expandable to 7**. Adopting a law means repealing one. This forces the city to have an identity instead of collecting every good idea. ~40 laws that shift axes persistently and modify formulas (tax yield, density caps, conscription, price controls, censorship, land rights).
+- **BÜTÇE** — tax rate 0–60% and funding sliders for Sağlık / Eğitim / Güvenlik / Kültür / Altyapı.
+- **MECLİS** — 21 seats derived from faction loyalty and district population. Laws need a majority; short of one, spend Meşruiyet. **The council debate is your best early-warning system** — members voice grievances your ministers are hiding. At `axis_order ≥ 75` you unlock "Meclisi Tatil Et": laws pass instantly and free, and you permanently lose the debate, i.e. your last honest channel. State the trade in the tooltip and make it devastating in practice.
+- **ANAYASA** — on turn 5, pick **3 founding clauses from a pool of 12** ("Mülkiyet Kutsaldır", "Herkese Ekmek", "Şehir Kendini Savunur", "Söz Serbesttir", …). Each sets run-long multipliers and one locked axis floor or ceiling. This is the main replayability lever.
 
 ---
 
-## 5. THE INFORMATION SYSTEM (build this fully — it is the thesis)
+## 5. MINISTERS & THE INFORMATION SYSTEM (the thesis — build it fully)
 
-Maintain, for every stat, **a true value and a displayed value.**
+Maintain **a true value and a displayed value for every stat.** Every UI read goes through the `Reporting` autoload; nothing reads `GameState` directly. That single rule is what makes this system real rather than cosmetic.
+
+**Five named ministers**, one per domain: `MALİYE` (₺, tax), `TARIM` (food chain), `GÜVENLİK` (Güvenlik, garrison, threat), `İMAR` (materials, construction, housing), `HALK` (grievance, population, health). Each has a name, a portrait drawn from procedural shapes, a personal agenda, and **a distortion style applied only to their own domain**:
 
 ```
-transparency = f(press buildings, censorship laws, axis_order, council active)
-report_error = base_noise * (1.0 - transparency) * authority_pressure
-displayed = true * (1.0 + biased_noise)   # bias is OPTIMISTIC, never pessimistic
+displayed = true * (1.0 + bias)
+bias = minister.style_bias * (1.0 - transparency) * authority_pressure
+# bias is always OPTIMISTIC for a loyalist; a hawk inflates threats instead
 ```
 
-- High `axis_order` + censorship → officials report what you want to hear. Granary shows 60% when it holds 20%. Grievance shows 30 when it is 75. **The punishment for authoritarianism is not a score penalty — it is being unable to govern.**
-- Above a noise threshold, show numbers as ranges ("Tahıl: ~%40–70") and mark them with a small `?` glyph. When the truth finally surfaces it should land as a shock: "GERÇEK RAKAMLAR" report on a scandal or after a purge.
-- A free press keeps numbers accurate but periodically surfaces scandals that cost 5–15 Meşruiyet each.
-- Independent auditors, an opposition newspaper, and an open council are three distinct, purchasable, politically expensive sources of truth.
+Maliye inflates revenue. Güvenlik inflates the external threat and understates unrest. Tarım hides a blocked chain stage behind a healthy total. Halk rounds grievance down. Distortion scales with `axis_order` and with censorship laws — under a free press and an open council the numbers are nearly clean.
+
+**Dismissal is the central repeated choice.** Sack a minister and two candidates appear:
+- **SADIK** — reports what you want to hear (high distortion), obeys without friction, −25% decree cost, no council complaints.
+- **UZMAN** — reports the truth, +20% output in their domain, and reports *you* to the council, costing Meşruiyet whenever you act against their advice.
+
+The same question recurs on every purge. The whole road to dictatorship is compressed into one choice the player will make eight times, and the loyalist is the correct short-term answer nearly every time. **That is the trap and it must be a fair one.**
+
+**The interlock that matters most (implement it explicitly):** a loyalist Tarım minister reports the granary full while it drains. The player consumes their safety margin without knowing. They arrive at the crisis with no buffer and must take the fast option. **Lying ministers destroy the safety margin silently** — the drift happened three turns earlier, at an appointment.
+
+Three purchasable, politically expensive sources of truth: an independent auditor, an opposition newspaper, an open council. A free press keeps numbers accurate but surfaces scandals costing 5–15 Meşruiyet each. Above a noise threshold, display ranges ("Tahıl: ~%40–70") with a small `?` glyph, and when reality finally surfaces, deliver it as a full-screen "GERÇEK RAKAMLAR" report.
 
 ---
 
-## 6. THE FOUR COLLAPSES (distinct mechanics, not lose screens)
+## 6. THE OUTSIDE WORLD (three pressures, one squeeze)
 
-- **OTORİTE (Diktatörlük):** information degrades (§5) until you are managing a fiction; purges buy compliance and destroy competence (each purge: +Güvenlik, −Eğitim, −a random building's output permanently); ends in a **coup** by the army you built.
-- **ÖZGÜRLÜK (Anarşi):** every build order now needs consent — construction times double, then triple; permits deadlock; services decay; districts stop remitting taxes and pass to local strongmen one by one until you govern one district.
-- **SERMAYE (Plütokrasi):** the treasury is enormous and the city is hollow. Land values price workers out; LİMAN and SANAYİ depopulate; the buildings still stand but nobody staffs them; ends in a **general strike** that no amount of money can end.
-- **EŞİTLİK (Kolektif):** everyone is housed and fed and nothing accumulates; capital never forms, research stalls, shortages become chronic, a black market forms that you cannot tax; ends in **brain drain and famine**.
+**a) External threat — KOMŞU: MERSA.** A single `tehdit_seviyesi` 0–100 rising on its own schedule and with your weakness. It makes tribute demands, stages border raids, and eventually invades. **No war map** — all combat resolves as event cards against `Garnizon Gücü` (§8).
 
-Each collapse should be *visible in the city* for 10+ turns before it lands. No sudden deaths.
+**b) Foreign debt — creditors demand LAWS, not money.** This is the key rule: a loan's collateral is **a law slot**. Accepting a credit line forces a creditor law ("Özel Mülkiyet Dokunulmazlığı", "Liman İmtiyazı", "Grev Yasağı") into one of your 4–7 slots, **and it cannot be repealed while the debt is outstanding**. So foreign money does not buy you out of politics — it shrinks your capacity to govern and drags `axis_economy` toward Sermaye. Three loans and half your law book belongs to someone else. Escaping a crisis is impossible; only choosing which axis you escape along.
+
+**c) Refugees.** Columns arrive at the gate, mostly after Mersa presses a smaller neighbour. Accepting costs food, water and housing from your buffer and grants population and İşgücü. Refusing costs Aydınlar and Gelenek loyalty. Accepting without a buffer means starvation and grievance — or requisition, and +Otorite. **Refugees are the buffer test made into a moral choice.**
+
+**The mid-game squeeze — design it deliberately.** Around turn 30 the neighbouring city of **KADRA** collapses. One event, three simultaneous consequences: a large refugee column at your gate, Mersa's threat level jumps because Kadra's fall empowers it, and your creditors reprice risk and raise interest. Telegraph it **5 turns in advance** through minister reports and council murmurs — a player with reliable information and a buffer can prepare; a player with loyalist ministers will not see it coming at all.
 
 ---
 
-## 7. TURN STRUCTURE
+## 7. THE SAFETY MARGIN (pillar 3, mechanically)
 
-1. **RAPOR** — newspaper front page (headline reacts to the previous turn), ledger, faction moods, council murmurs. Displayed values only.
-2. **İNŞA** — zone and place buildings, spend ₺/Malzeme.
-3. **YÖNETİM** — decrees, laws, budget, council votes.
+Every crisis response is priced so that the clean option costs roughly **1.5× one turn of surplus**. It is affordable only out of accumulated stock, treasury or spare labour — never out of current income. Growth spending and buffer holding draw from the same surplus, so the player chooses between compounding and surviving, every single turn.
+
+Make the buffer legible: a persistent HUD strip showing `TAMPON: N tur` — how many turns the city could absorb a shock. Watching that number fall from 6 to 1 while you build is the game's core tension. And a loyalist Tarım minister makes that number a lie, which is exactly the point.
+
+---
+
+## 8. GARRISON, CONSCRIPTION, AND THE COUP (one causal chain)
+
+`Garnizon Gücü` grows through Kışla buildings and conscription laws. Conscription draws bodies from the **shared İşgücü pool**, i.e. straight out of the farms and mills of the food chain.
+
+**The intended causal loop, and you must make it reachable in a normal run:**
+`Mersa'nın tehdidi ↑ → askere alma → tarlalarda işgücü ↓ → yiyecek açığı → yiyecek krizi → hızlı çözüm: el koyma → axis_order ↑ → bilgi bozulur → sonraki kriz körlemesine karşılanır`
+
+Arming against an external threat is what makes you authoritarian. Nothing in the UI ever says so.
+
+**And the other end:** `coup_risk = f(Garnizon Gücü, 1 - Ordu loyalty, 1 - Meşruiyet)`. The army large enough to save you is the army large enough to depose you. Ordu ≤25 with Meşruiyet ≤35 starts a 5-turn coup countdown — **announced only if your information is reliable**. With a loyalist Güvenlik minister it arrives with no warning at all.
+
+---
+
+## 9. THE FOUR COLLAPSES (distinct mechanics, visible 10+ turns ahead)
+
+- **OTORİTE / Diktatörlük:** information degrades until you govern a fiction; each purge trades competence for compliance (+Güvenlik, −Eğitim, one building's output permanently reduced); ends in a coup by the army you built.
+- **ÖZGÜRLÜK / Anarşi:** every build order needs consent — construction times double then triple, permits deadlock, services decay, districts stop remitting taxes and pass to local strongmen one by one until you govern one district.
+- **SERMAYE / Plütokrasi:** the treasury is enormous and the city is hollow. Land values price workers out, LİMAN and SANAYİ depopulate, the buildings stand unstaffed; ends in a general strike no amount of money can end.
+- **EŞİTLİK / Kolektif:** everyone housed and fed, nothing accumulates. Capital never forms, research stalls, shortages turn chronic, an untaxable black market forms; ends in brain drain and famine.
+
+No sudden deaths. Every collapse is legible in the city long before it lands.
+
+---
+
+## 10. TURN STRUCTURE, EVENTS, ENDINGS
+
+1. **RAPOR** — newspaper front page reacting to last turn, ledger, minister telegrams, faction moods, council murmurs. Displayed values only.
+2. **İNŞA** — zone and place, spend ₺ and Malzeme from the depot.
+3. **YÖNETİM** — decrees, laws, budget, council votes, minister appointments.
 4. **OLAY** — simulation tick, then 1–2 event cards resolve.
 
-**Events — at least 50 cards**, each with 3–4 responses mapped to different axes plus one slow/expensive clean option: drought, epidemic, dock strike, refugee column at the gate, granary fire, foreign creditor's ultimatum, assassination attempt, corruption scandal, bumper harvest, ore strike, riot, religious revival, student protest, army pay demand, neighbouring city's collapse, a minister who wants to tell you something in private.
+**Events — at least 50 cards**, each with 3–4 responses on different axes plus one slow clean option: drought, epidemic, dock strike, refugee column, granary fire, creditor ultimatum, Mersa's tribute demand, border raid, assassination attempt, corruption scandal, bumper harvest, ore strike, riot, religious revival, student protest, army pay demand, Kadra's collapse, a minister asking to speak with you privately.
 
-**Pacing:** turns 1–10 no crises (learn the systems). 11–30 escalating. 31–50 compound crises where the clean option genuinely cannot pay in time — this is where drift happens. 51–60 endgame; whatever you have become, you face it.
+**Pacing:** turns 1–10 no crises, learn the systems. 11–30 escalating single crises. 31–50 compound crises where the clean option genuinely cannot pay in time unless you built a buffer — this is where drift happens. 51–60 endgame; whatever you have become, you face it.
 
-**Endings — write at least 8**, each a full screen with an epilogue paragraph, a final map snapshot, and statistics: the four collapses, `İFLAS`, `TERK EDİLMİŞ ŞEHİR` (population < 150), `SÜRDÜRÜLEBİLİR ŞEHİR` (survive 60 turns, both axes < 70, no district lost — the best ending and it should be hard), and `DAYANIKLI ŞEHİR` (survived 60 turns having touched RADİKAL and pulled back — the most interesting ending, and say so).
+**Endings — at least 11**, each a full screen with an epilogue paragraph, a final map snapshot and run statistics:
+the four collapses · `DARBE` (your own garrison) · `İŞGAL` (Mersa overruns you) · `BORÇLU ŞEHİR` (every law slot creditor-owned — you govern someone else's city) · `İFLAS` · `TERK EDİLMİŞ ŞEHİR` (population < 150) · `SÜRDÜRÜLEBİLİR ŞEHİR` (60 turns, both axes < 70, no district lost — the best ending, and it must be hard) · `DAYANIKLI ŞEHİR` (60 turns having reached RADİKAL and pulled back — the most interesting ending; say so on the screen).
 
 ---
 
-## 8. PRESENTATION (2D, procedural)
+## 11. PRESENTATION (2D, procedural)
 
-- **The city looks like your politics.** As axes shift, buildings gain overlay sprites drawn in code: `axis_order` → banners, checkpoints, your statues, shuttered windows. `özgürlük` → graffiti, improvised extensions, awnings. `sermaye` → billboards, tall thin towers, private walls. `eşitlik` → murals, shared courtyards, laundry lines. This is the single highest-payoff visual feature — make it obvious enough that a player who never reads the meters can *see* what they became.
-- Buildings are flat-color geometry with clean readable silhouettes and a 1 px darker outline; roads darken and pave as land value rises. Seasons tint the palette; smoke particles from industry scale with Kirlilik; tiny citizen dots walk the roads, and their density/speed reflects employment.
-- UI is a governor's desk: parchment panels with `StyleBoxFlat`, stamped decree cards, a newspaper overlay, a law book with 4–7 physical slots. Two axis meters with the 15-turn drift trail, always visible.
-- A full-screen paper-grain + vignette shader on the UI `CanvasLayer`. Display `1920×1080`, `canvas_items` stretch, aspect `expand`.
+- **The city looks like your politics.** As axes shift, buildings gain code-drawn overlays: `otorite` → banners, checkpoints, your statues, shuttered windows. `özgürlük` → graffiti, improvised extensions, awnings. `sermaye` → billboards, tall thin towers, private walls. `eşitlik` → murals, shared courtyards, laundry lines. Make it obvious enough that a player who never reads the meters can *see* what they became. Highest-payoff feature in the game.
+- Flat-color building geometry with clean silhouettes and a 1 px darker outline; roads pave as land value rises; seasons tint the palette; smoke particles scale with Kirlilik; tiny citizen dots walk the roads with density and speed reflecting employment.
+- UI is a governor's desk: parchment `StyleBoxFlat` panels, stamped decree cards, a newspaper overlay, a law book with physical slots (creditor-held slots visibly sealed with a foreign wax stamp), five minister portraits with a small `?` badge when their reports are unreliable. Both axis meters with the 15-turn drift trail, always visible. `TAMPON: N tur` strip always visible.
+- Full-screen paper-grain + vignette shader on the UI `CanvasLayer`. `1920×1080`, `canvas_items` stretch, aspect `expand`.
 
-## 9. AUDIO (synthesized, no files)
+## 12. AUDIO (synthesized, no files)
 
-Stamp thud for decrees, coin clink, construction taps, a low string drone whose dissonance rises with total grievance, a crowd murmur bed that swells before unrest, newspaper rustle, a distant bell on crisis, a muffled drum in the coup countdown. Build each as an `AudioStreamWAV` in `AudioBus.gd` at startup. `Master`/`SFX`/`Ambience` buses, mute toggle.
+Stamp thud for decrees, coin clink, construction taps, a low string drone whose dissonance rises with total grievance, a crowd murmur bed swelling before unrest, newspaper rustle, a distant bell on crisis, a muffled drum during the coup countdown, a dry telegraph tick for minister reports. Build each as an `AudioStreamWAV` in `AudioBus.gd` at startup. `Master`/`SFX`/`Ambience` buses, mute toggle.
 
-## 10. ARCHITECTURE
+## 13. ARCHITECTURE
 
 ```
 res://project.godot
 res://scenes/Main.tscn                    # screen router
 res://scenes/TitleScreen.tscn
 res://scenes/CityView.tscn                # grid, camera, placement
-res://scenes/ui/HUD.tscn                  # ledger, axis meters, turn button
+res://scenes/ui/HUD.tscn                  # ledger, axis meters, TAMPON strip, turn button
 res://scenes/ui/NewspaperPanel.tscn
-res://scenes/ui/LawBookPanel.tscn
+res://scenes/ui/LawBookPanel.tscn         # slots, creditor seals
 res://scenes/ui/CouncilPanel.tscn
 res://scenes/ui/BudgetPanel.tscn
+res://scenes/ui/MinisterPanel.tscn        # portraits, reliability, SADIK/UZMAN choice
+res://scenes/ui/CreditorPanel.tscn        # loans and the laws they demand
 res://scenes/ui/EventCard.tscn
 res://scenes/ui/ConstitutionScreen.tscn
 res://scenes/ui/EndingScreen.tscn
 res://shaders/paper_grain.gdshader
-res://scripts/autoload/GameState.gd       # true values, save/load
-res://scripts/autoload/Reporting.gd       # true -> displayed, transparency
+res://scripts/autoload/GameState.gd       # TRUE values, save/load
+res://scripts/autoload/Reporting.gd       # true -> displayed, per-minister bias
 res://scripts/autoload/AudioBus.gd
-res://scripts/sim/TurnResolver.gd         # the tick: needs, flows, grievance, factions
+res://scripts/sim/TurnResolver.gd         # the tick: chains, needs, grievance, factions
 res://scripts/sim/GridMap2D.gd
+res://scripts/sim/SupplyChain.gd          # food and materials chains
 res://scripts/sim/DistrictManager.gd
 res://scripts/sim/FactionManager.gd
+res://scripts/sim/MinisterManager.gd      # appointment, distortion, complaints
+res://scripts/sim/DebtManager.gd          # creditors, demanded laws, sealed slots
+res://scripts/sim/ThreatManager.gd        # Mersa, garrison, conscription, coup risk
+res://scripts/sim/BufferTracker.gd        # TAMPON in turns, true and displayed
 res://scripts/sim/AxisTracker.gd          # bands, drift trail, DÖNÜŞSÜZ countdown
 res://scripts/sim/CollapseWatcher.gd      # the four failure mechanics
 res://scripts/data/BuildingDef.gd         # class_name BuildingDef extends Resource
 res://scripts/data/LawDef.gd
 res://scripts/data/EventDef.gd
+res://scripts/data/MinisterDef.gd
 res://scripts/content/Buildings.gd        # all 30+ as data
 res://scripts/content/Laws.gd             # all 40 as data
 res://scripts/content/Decrees.gd
 res://scripts/content/Events.gd           # all 50 as data
+res://scripts/content/Ministers.gd
+res://scripts/content/Creditors.gd
 res://scripts/content/Headlines.gd
 res://scripts/content/Endings.gd
 ```
 
-- `GameState` and `Reporting` and `AudioBus` are **autoloads**. **Every UI read goes through `Reporting`, never straight to `GameState`** — that single rule is what makes the information system real instead of cosmetic.
-- Buildings, laws, decrees and events are **pure data tables**. Adding content must be a one-line data change, never new branching logic.
-- Save to `user://save.cfg` via `ConfigFile`, including the axis trail.
+- `GameState`, `Reporting`, `AudioBus` are **autoloads**. **Every UI read goes through `Reporting`.** Enforce it — no exceptions anywhere in the codebase.
+- Buildings, laws, decrees, events, ministers and creditors are **pure data tables**. New content must be a one-line data change, never new branching logic.
+- Save to `user://save.cfg` via `ConfigFile`, including the axis trail and each minister's identity and bias.
 
-## 11. QUALITY BAR
+## 14. QUALITY BAR
 
-Clean, commented, statically typed GDScript. No dead code, no placeholder content, no missing-resource errors. The simulation must be **legible**: every number in the ledger needs a tooltip that decomposes it into its contributing terms ("Yiyecek −40: nüfus 1200 (−48), çiftlikler (+30), kayıp %12 (−4)"). A player who cannot see why a number moved cannot learn the game, and this game is only interesting if it can be learned. Balance so that a first run reaches roughly turn 35 before collapsing, and `SÜRDÜRÜLEBİLİR ŞEHİR` demands several runs. Deliver every file in full.
+Clean, commented, statically typed GDScript. No dead code, no placeholder content, no missing-resource errors. The simulation must be **legible**: every ledger number needs a tooltip decomposing it into its terms ("Yiyecek −40: nüfus 1200 (−48), fırınlar (+30), değirmen tıkanıklığı (−18), kayıp %12 (−4)"). A player who cannot see why a number moved cannot learn the game, and this game is only worth playing if it can be learned.
+
+Balance targets: a first run reaches roughly turn 35 before collapsing. `SÜRDÜRÜLEBİLİR ŞEHİR` takes several runs. And verify this explicitly — **if a player can survive to turn 60 while keeping both axes under 40, the crisis costs are too low; raise them until the centre alone cannot pay.**
+
+Deliver every file in full.
 
 ---
