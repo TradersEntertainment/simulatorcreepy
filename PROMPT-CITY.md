@@ -4,12 +4,15 @@ Godot 4, 2D, İşleyici: **Uyumluluk**. Aşağıdaki metnin tamamını tek sefer
 
 ---
 
-You are generating a COMPLETE, FINISHED, playable **2D city-building and political-management game** inside an existing, EMPTY **Godot 4.4** project (Summer Engine, a Godot fork). Renderer is **Compatibility**, the game is **2D only**.
+You are generating a COMPLETE, FINISHED, playable **3D city-building and political-management game** inside an existing, EMPTY **Godot 4.4** project (Summer Engine, a Godot fork). Renderer is **Compatibility**.
+
+**Why Compatibility and not Forward+:** the game must also export to the web later for online co-op, and Godot's web export requires the Compatibility renderer. Compatibility fully supports 3D — you simply cannot use volumetric fog or SDFGI. Do not use them. Light the scene with a `DirectionalLight3D` plus baked-free ambient from `WorldEnvironment`, and get the mood from colour and shadow instead.
 
 Output every file with its **exact `res://` path** and its **full contents** — `.gd` scripts, `.tscn` scenes in Godot's text scene format, `.gdshader` files, and the exact lines to add to `project.godot`. Do not stub anything, do not leave TODOs, do not ask me questions, do not summarize — ship the entire game in one pass. If you run out of room, stop mid-file and I will say "continue"; never skip a file or replace it with a comment.
 
 **Hard constraints**
-- **Zero external assets.** No `.png`, `.wav`, `.ogg`, no downloaded fonts. Every visual is drawn in code (`_draw()`, `Polygon2D`, `Line2D`, `ColorRect`, `StyleBoxFlat`) or generated (`NoiseTexture2D`, `GradientTexture2D`, shaders). Every sound is synthesized at runtime into an `AudioStreamWAV`. Use Godot's built-in default font.
+- **Zero external assets.** No `.glb`, `.obj`, `.png`, `.wav`, no downloaded fonts. Every mesh is assembled in code from Godot primitives (`BoxMesh`, `CylinderMesh`, `SphereMesh`, `CapsuleMesh`, `PrismMesh`) with flat `StandardMaterial3D` colours. Every UI surface is a `Control` with `StyleBoxFlat`. Every texture is a `NoiseTexture2D`/`GradientTexture2D` or a shader. Every sound is synthesized at runtime into an `AudioStreamWAV`. Use Godot's built-in default font.
+- **Art direction: clean stylized low-poly.** Chunky readable shapes, flat colours, strong silhouettes, generous shadows — a crisp toy-city look, not an attempt at realism. Commit to it hard and it reads as a deliberate style rather than a limitation. Use `MultiMeshInstance3D` for anything repeated (people, cars, trees, windows) so the whole city stays at one or two dozen draw calls.
 - All in-game text is in **Turkish**. All code identifiers, comments and file names in English.
 - Static typing everywhere. No untyped `var`. No `get_node("../../..")` chains — communicate with signals.
 - Runs with zero errors and zero warnings in the Godot output panel on first F5.
@@ -45,7 +48,13 @@ You are the founder-governor of a new city on a river delta: 400 settlers, a sma
 
 ## 3. THE CITY LAYER
 
-**Map:** `48 × 32` tiles, 32 px each, top-down. Camera pans with middle-drag/WASD, zooms 0.5×–2.5×. River along one edge, fertile soil near it, ore in the hills, marsh that must be drained.
+**Map:** a `48 × 32` tile grid on the XZ plane, 1 tile = 4 metres. A **`Camera3D` in orthogonal projection**, pitched about 40° and yawed 45°, giving the clean isometric read of the reference image. Middle-drag or WASD pans, the wheel zooms the orthogonal `size`, and `Q`/`E` rotate the yaw in 90° steps. River along one edge, fertile soil near it, ore in the hills, marsh that must be drained.
+
+**The city must be alive — this is not decoration, it is the main readability channel.**
+- **Cars.** Vehicles spawn on road tiles and drive the road graph on simple splines, stopping at junctions. Fleet size scales with commerce and population; a traffic jam is a visible symptom of an unserviced district, not a separate stat.
+- **Pedestrians.** Small figures walk sidewalks and gather in plazas. **Density and behaviour encode the simulation:** employment fills the streets at shift change; unemployment leaves clusters standing still; grievance above 70 makes crowds converge and carry banners; a strike empties the industrial quarter completely. A player should be able to diagnose a district by watching it for five seconds without opening a panel.
+- Both are `MultiMeshInstance3D` instances of primitive-built meshes — a person is a capsule plus a sphere, a car is a box plus a smaller box plus four cylinders. Cap the total agent count at ~600 and thin them out as the camera zooms out.
+- Trees, streetlights, market stalls, laundry lines and rooftop units are placed procedurally so no two blocks look identical.
 
 **Districts — 6, pre-drawn and named**, each with its own `grievance`, `wealth`, `population` and faction affinity:
 **LİMAN** (docks, workers → İşçiler) · **TEPE** (wealthy hill → Tüccarlar) · **ESKİ ŞEHİR** (old town, market, temple → Gelenek) · **SANAYİ** (industry, smoke → İşçiler) · **ÜNİVERSİTE** (schools, press, clinics → Aydınlar) · **KIŞLA** (garrison, depots → Ordu).
@@ -217,12 +226,21 @@ the four collapses · `DARBE` (your own garrison) · `İŞGAL` (Mersa overruns y
 
 ## 11. PRESENTATION (2D, procedural)
 
-**A visual reference screenshot is attached to this prompt. Treat it as binding for layout, palette and information density**, and reproduce it closely: top ledger strip with stockpile-plus-flow per resource and a red `?` badge on any unreliable figure; the city occupying the left two thirds with named districts outlined in dashed lines and their grievance printed under the label; the governor's desk stacked down the right edge (safety-margin strip, two axis meters with the 15-turn drift trail, qualitative faction moods, five minister portraits with reliability badges, incoming telegrams); and the law book across the bottom as physical slots, with creditor-held slots sealed by a red wax stamp. The palette is parchment and sodium light against ink brown — `#EFE4C8` / `#D6C59E` paper, `#2A2419` ink, `#9C3524` for anything untrustworthy or dangerous, `#3E6B3A` for anything honest. Numbers are set in a monospace face, labels in a serif with wide letter-spacing.
+**A visual reference screenshot is attached to this prompt. Treat it as binding for layout, palette and information density.** Match it closely.
 
-- **The city looks like your politics.** As axes shift, buildings gain code-drawn overlays: `otorite` → banners, checkpoints, your statues, shuttered windows. `özgürlük` → graffiti, improvised extensions, awnings. `sermaye` → billboards, tall thin towers, private walls. `eşitlik` → murals, shared courtyards, laundry lines. Make it obvious enough that a player who never reads the meters can *see* what they became. Highest-payoff feature in the game.
-- Flat-color building geometry with clean silhouettes and a 1 px darker outline; roads pave as land value rises; seasons tint the palette; smoke particles scale with Kirlilik; tiny citizen dots walk the roads with density and speed reflecting employment.
-- UI is a governor's desk: parchment `StyleBoxFlat` panels, stamped decree cards, a newspaper overlay, a law book with physical slots (creditor-held slots visibly sealed with a foreign wax stamp), five minister portraits with a small `?` badge when their reports are unreliable. Both axis meters with the 15-turn drift trail, always visible. `TAMPON: N tur` strip always visible.
-- Full-screen paper-grain + vignette shader on the UI `CanvasLayer`. `1920×1080`, `canvas_items` stretch, aspect `expand`.
+**The 3D scene.** Isometric orthogonal camera over a low-poly city: flat-coloured box buildings 1–4 storeys with window quads lit warm at dusk, asphalt roads with lane dashes, grass, a river, trees, and visible cars and pedestrians on every street (see §3). Buildings sit on a dark ground plane so the city reads as an object floating in space, with a full-screen vignette pulling the corners down. District names float above the map as small dark rounded labels with a 1 px leader line down to the ground and grievance printed beneath in colour. Crises are marked in world space — a red dashed ellipse with a floating `AYAKLANMA · 3. TUR` tag.
+
+**The UI is a modern dark HUD, not a paper desk.** Floating translucent panels — `rgba(14,18,25,.85)`, 1 px `rgba(255,255,255,.09)` border, 14 px corner radius, soft drop shadow — over the 3D view, never a full-screen frame around it:
+- **Top left:** city identity plus turn number and season. **Top strip:** one row of resources, each an icon chip plus value plus per-turn flow, with a red `?` badge on any figure the ministers made unreliable.
+- **Right rail (≈370 px):** safety-margin card, the two axis meters, faction moods, the five minister avatars, incoming telegrams. Axis meters are thin rounded tracks coloured from grey in the centre to red at the extremes, with a white knob and the 15-turn drift trail as fading dots behind it.
+- **Bottom centre:** a build hotbar of icon tiles, the law book as small square slots (creditor-held slots tinted red with a lock), and the amber `TURU BİTİR` button with the next election countdown under it.
+- **Bottom left:** a context card for the selected building showing its function AND its political effect in this district.
+
+**Palette:** background `#0B0E13`, panels `#0E1219`, text `#E9EEF5`, muted `#7E8CA0`. Amber `#F5B33C` is the action colour, red `#F2564B` means dangerous or untrustworthy, green `#3FCF77` means honest or healthy, blue `#5AA9F5` is selection. Type is a clean sans (Godot's default is fine) with wide letter-spacing on small uppercase labels; all numbers tabular.
+
+- **The city looks like your politics — highest-payoff feature in the game.** As axes shift, buildings gain procedurally placed 3D props: `otorite` → red banners, street checkpoints, a statue of you, shuttered windows. `özgürlük` → graffiti decals, improvised extensions, awnings. `sermaye` → billboards, taller thinner towers, private walls and gates. `eşitlik` → murals, shared courtyards, laundry lines between blocks. Make it obvious enough that a player who never reads the meters can *see* what they became.
+- Roads repave as land value rises; the sky and light colour shift with the season; a `GPUParticles3D` smoke plume over industry scales with Kirlilik.
+- Display `1920×1080`, `canvas_items` stretch, aspect `expand`.
 
 ## 12. AUDIO (synthesized, no files)
 
@@ -234,7 +252,9 @@ Stamp thud for decrees, coin clink, construction taps, a low string drone whose 
 res://project.godot
 res://scenes/Main.tscn                    # screen router
 res://scenes/TitleScreen.tscn
-res://scenes/CityView.tscn                # grid, camera, placement
+res://scenes/CityView.tscn                # 3D world: grid, ortho camera, light, placement
+res://scenes/world/BuildingMesh.tscn      # primitive-built building, prop slots
+res://scenes/world/DistrictLabel3D.tscn   # floating label + leader line
 res://scenes/ui/HUD.tscn                  # ledger, axis meters, TAMPON strip, turn button
 res://scenes/ui/NewspaperPanel.tscn
 res://scenes/ui/LawBookPanel.tscn         # slots, creditor seals
@@ -250,7 +270,12 @@ res://scripts/autoload/GameState.gd       # TRUE values, save/load
 res://scripts/autoload/Reporting.gd       # true -> displayed, per-minister bias
 res://scripts/autoload/AudioBus.gd
 res://scripts/sim/TurnResolver.gd         # the tick: chains, needs, grievance, factions
-res://scripts/sim/GridMap2D.gd
+res://scripts/world/CityGrid3D.gd         # tile grid, placement, road graph
+res://scripts/world/MeshFactory.gd        # builds every mesh from primitives
+res://scripts/world/AgentTraffic.gd       # cars on the road graph, MultiMesh
+res://scripts/world/AgentCrowd.gd         # pedestrians; density encodes the sim
+res://scripts/world/IdeologyProps.gd      # banners, billboards, murals by axis
+res://scripts/world/IsoCamera.gd          # ortho camera: pan, zoom, 90° yaw steps
 res://scripts/sim/SupplyChain.gd          # food and materials chains
 res://scripts/sim/DistrictManager.gd
 res://scripts/sim/FactionManager.gd
@@ -283,6 +308,8 @@ res://scripts/content/Endings.gd
 ## 14. QUALITY BAR
 
 Clean, commented, statically typed GDScript. No dead code, no placeholder content, no missing-resource errors. The simulation must be **legible**: every ledger number needs a tooltip decomposing it into its terms ("Yiyecek −40: nüfus 1200 (−48), fırınlar (+30), değirmen tıkanıklığı (−18), kayıp %12 (−4)"). A player who cannot see why a number moved cannot learn the game, and this game is only worth playing if it can be learned.
+
+Performance: the city holds a few hundred buildings and up to ~600 agents and must stay at 60 FPS on integrated graphics. Use `MultiMeshInstance3D` for all repeated geometry, share materials, and never instance a `Node3D` per pedestrian.
 
 Balance targets: a first run reaches roughly turn 35 before collapsing. `SÜRDÜRÜLEBİLİR ŞEHİR` takes several runs. And verify this explicitly — **if a player can survive to turn 60 while keeping both axes under 40, the crisis costs are too low; raise them until the centre alone cannot pay.**
 

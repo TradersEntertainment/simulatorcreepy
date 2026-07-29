@@ -6,7 +6,7 @@ vermeye çalışmak neredeyse kesin yarım kalmış bir build üretir.
 
 ---
 
-You are adding **online co-op, AI players, and a web build** to the existing, working Godot 4.4 project "MEŞRUİYET" (2D, Compatibility renderer). The single-player game is complete and running. Do not rewrite it — extend it. Output every new file in full and, for every existing file you touch, output the complete modified file rather than a diff. Do not ask me questions; ship the whole feature in one pass.
+You are adding **online co-op, AI players, and a web build** to the existing, working Godot 4.4 project "MEŞRUİYET" (3D on the Compatibility renderer, isometric orthogonal camera, dark HUD). The single-player game is complete and running. Do not rewrite it — extend it. Output every new file in full and, for every existing file you touch, output the complete modified file rather than a diff. Do not ask me questions; ship the whole feature in one pass.
 
 ## 1. THE CO-OP PREMISE
 
@@ -60,7 +60,9 @@ Use **`WebSocketMultiplayerPeer`** with Godot's high-level multiplayer API. **Do
 - **Reconnect** by lobby code into the same seat; AI covers the gap (§2).
 - Support `--headless --server` so the host can be a dedicated process rather than a player (§9).
 
-**A visual reference screenshot of the minister screen is attached. Treat it as binding.** Reproduce it: the food chain across the top as four stages with the blocked stage filled red; two facing panels below it — **GERÇEK** outlined in red and stamped "SADECE SEN GÖRÜYORSUN", **RAPOR** outlined in green and stamped "VALİYE GİDECEK" — with a vertical truth↔flattery slider between them; the secret objective on a dark card with a wax seal; a red banner reminding the player that turn 60 will publish everything; and a divergence chart of their own reported-vs-true history, so a lying minister watches their own gap grow all game. Right column: telegram composer with clickable stock phrases, private channels, and the seat list showing which seats are human and which AI personality holds the rest.
+**A visual reference screenshot of the minister screen is attached. Treat it as binding.** Reproduce it: the food chain across the top as four stat cards with the blocked stage tinted red; two facing panels below — **GERÇEK** bordered red and stamped "SADECE SEN GÖRÜYORSUN", **RAPOR** bordered green and stamped "VALİYE GİDECEK" — with a vertical red→green truth↔flattery slider between them; the secret objective on a violet-bordered card; a red banner reminding the player that turn 60 publishes everything; and a bar chart of their own reported-vs-true history, so a lying minister watches their own gap widen all game. Right column: telegram composer with clickable stock phrase chips, private channels, the six-seat grid marking humans and AI personalities, and a card showing exactly what the Vali currently sees because of them.
+
+Use the same dark HUD language as the main game — panels `rgba(14,18,25,.86)`, 1 px `rgba(255,255,255,.09)` border, 14 px radius, background `#0B0E13`, amber `#F5B33C` for actions, red `#F2564B` for truth-side and danger, green `#3FCF77` for the report side and honesty, violet `#C48CFF` for secret objectives.
 
 ## 5. TURN FLOW IN CO-OP
 
@@ -102,7 +104,7 @@ Gate all of it behind `OS.is_debug_build()` and a `--test` flag so it never ship
 
 ## 9. WEB EXPORT + CLOUDFLARE (get this exactly right — it is where projects die)
 
-**Export:** Godot 4 Web preset, Compatibility renderer (already the project's renderer), threads enabled.
+**Export:** Godot 4 Web preset, Compatibility renderer (already the project's renderer), threads enabled. The game is 3D and that is fine — Compatibility 3D exports to the web; only Forward+ does not. Keep volumetric fog and SDFGI out, as the main prompt already requires.
 
 **Required HTTP headers.** A threaded Godot 4 web build needs `SharedArrayBuffer`, which requires a secure context plus two headers. Without them the game boots to a blank page with a cryptic console error. Commit a `_headers` file at the Pages output root:
 

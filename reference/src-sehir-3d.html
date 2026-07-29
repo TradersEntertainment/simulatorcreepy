@@ -1,0 +1,514 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>MEŞRUİYET — 3D görsel referans</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1920px; height:1080px; overflow:hidden; background:#0B0E13;
+    font-family:"Segoe UI",Inter,Roboto,system-ui,sans-serif; color:#E9EEF5;
+    -webkit-font-smoothing:antialiased; }
+  .stage { position:relative; width:1920px; height:1080px; }
+  #city { position:absolute; inset:0; }
+  .vig { position:absolute; inset:0; pointer-events:none;
+    background:radial-gradient(78% 68% at 50% 42%, rgba(0,0,0,0) 45%, rgba(6,9,14,.72) 100%); }
+
+  /* ---------- glass system ---------- */
+  .g { background:rgba(14,18,25,.82); border:1px solid rgba(255,255,255,.09);
+    border-radius:14px; box-shadow:0 12px 34px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.07); }
+  .lbl { font-size:10.5px; font-weight:600; letter-spacing:.13em; text-transform:uppercase;
+    color:#7E8CA0; }
+  .num { font-variant-numeric:tabular-nums; font-feature-settings:"tnum"; }
+  .amber { color:#F5B33C; } .red { color:#F2564B; } .green { color:#3FCF77; } .blue { color:#5AA9F5; }
+
+  /* ---------- top bar ---------- */
+  .top { position:absolute; top:20px; left:24px; right:24px; display:flex; gap:14px;
+    align-items:stretch; }
+  .ident { padding:13px 20px; display:flex; align-items:center; gap:16px; }
+  .ident .nm { font-size:19px; font-weight:700; letter-spacing:.03em; }
+  .ident .sub { font-size:11px; color:#7E8CA0; margin-top:2px; }
+  .ident .div { width:1px; align-self:stretch; background:rgba(255,255,255,.1); }
+  .ident .turn { font-size:26px; font-weight:700; line-height:1; }
+  .ident .season { font-size:10.5px; color:#7E8CA0; letter-spacing:.1em; margin-top:3px; }
+
+  .resbar { flex:1; padding:9px 8px; display:flex; align-items:center; }
+  .r { flex:1; padding:0 14px; display:flex; align-items:center; gap:11px;
+    border-right:1px solid rgba(255,255,255,.07); }
+  .r:last-child { border-right:none; }
+  .ic { width:30px; height:30px; border-radius:9px; flex:none; display:grid; place-items:center;
+    font-size:14px; }
+  .r .k { font-size:9.5px; letter-spacing:.11em; color:#7E8CA0; text-transform:uppercase; }
+  .r .v { font-size:17px; font-weight:650; line-height:1.15; }
+  .r .f { font-size:10.5px; color:#7E8CA0; }
+  .warnq { display:inline-grid; place-items:center; width:15px; height:15px; border-radius:50%;
+    background:#F2564B; color:#0B0E13; font-size:10px; font-weight:800; margin-left:6px;
+    vertical-align:1px; }
+
+  /* ---------- right rail ---------- */
+  .rail { position:absolute; top:110px; right:24px; width:372px; display:flex;
+    flex-direction:column; gap:12px; }
+  .card { padding:14px 16px; }
+  .card h3 { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+
+  .buf { display:flex; align-items:center; gap:13px; }
+  .buf .n { font-size:25px; font-weight:700; }
+  .segs { flex:1; display:flex; gap:3px; }
+  .segs i { flex:1; height:9px; border-radius:3px; background:rgba(255,255,255,.1); }
+  .segs i.on { background:#F5B33C; } .segs i.hot { background:#F2564B; }
+
+  .ax { margin-bottom:15px; }
+  .ax:last-child { margin-bottom:0; }
+  .axh { display:flex; justify-content:space-between; font-size:10.5px; font-weight:600;
+    letter-spacing:.11em; color:#9AA8BC; text-transform:uppercase; margin-bottom:7px; }
+  .trk { position:relative; height:8px; border-radius:4px; overflow:visible;
+    background:linear-gradient(90deg,#F2564B 0%,#E08A3C 8%,#4C5666 34%,#4C5666 66%,#E08A3C 92%,#F2564B 100%); }
+  .trk .mid { position:absolute; left:50%; top:-3px; bottom:-3px; width:1px;
+    background:rgba(255,255,255,.28); }
+  .tp { position:absolute; top:50%; width:4px; height:4px; border-radius:50%;
+    background:#C6D2E2; margin-top:-2px; }
+  .kn { position:absolute; top:-5px; width:18px; height:18px; border-radius:50%;
+    background:#fff; border:4px solid #F2564B; margin-left:-9px;
+    box-shadow:0 3px 10px rgba(0,0,0,.55); }
+  .axf { display:flex; justify-content:space-between; align-items:center; margin-top:9px; }
+  .axf .v { font-size:13px; font-weight:650; }
+  .pill { font-size:9.5px; font-weight:700; letter-spacing:.1em; padding:4px 9px; border-radius:20px; }
+  .pOk { background:rgba(63,207,119,.16); color:#3FCF77; }
+  .pWarn { background:rgba(245,179,60,.16); color:#F5B33C; }
+  .pBad { background:rgba(242,86,75,.18); color:#F2564B; }
+
+  .fx { display:flex; align-items:center; gap:10px; padding:6px 0; }
+  .fx .nm { flex:1; font-size:13px; }
+  .bar { width:88px; height:5px; border-radius:3px; background:rgba(255,255,255,.1); }
+  .bar i { display:block; height:100%; border-radius:3px; }
+  .mood { font-size:10px; font-weight:700; letter-spacing:.07em; width:74px; text-align:right; }
+
+  .mins { display:flex; gap:8px; }
+  .mn { flex:1; text-align:center; position:relative; }
+  .mn .av { width:100%; aspect-ratio:1; border-radius:11px; background:#1A212C;
+    border:1px solid rgba(255,255,255,.09); overflow:hidden; }
+  .mn .av svg { display:block; width:100%; height:100%; }
+  .mn .t { font-size:9px; letter-spacing:.08em; color:#7E8CA0; margin-top:5px;
+    text-transform:uppercase; }
+  .mn .bdg { position:absolute; top:-4px; right:-4px; width:16px; height:16px; border-radius:50%;
+    display:grid; place-items:center; font-size:9px; font-weight:800; color:#0B0E13; }
+  .bSad { background:#F2564B; } .bUzm { background:#3FCF77; }
+
+  .tg { display:flex; gap:10px; padding:8px 0; border-top:1px solid rgba(255,255,255,.07); }
+  .tg:first-of-type { border-top:none; }
+  .tg .who { font-size:9.5px; font-weight:700; letter-spacing:.09em; color:#7E8CA0; width:64px;
+    flex:none; padding-top:2px; }
+  .tg .msg { font-size:12px; line-height:1.42; color:#C9D4E2; }
+  .tg .msg em { font-style:normal; display:block; margin-top:3px; font-size:10.5px; }
+
+  /* ---------- left: selection ---------- */
+  .sel { position:absolute; left:24px; bottom:118px; width:326px; padding:15px 17px; }
+  .sel .nm { font-size:17px; font-weight:700; }
+  .sel .rw { display:flex; justify-content:space-between; font-size:12.5px; padding:6px 0;
+    border-top:1px solid rgba(255,255,255,.07); }
+  .sel .rw:first-of-type { border-top:none; }
+  .sel .rw span:last-child { font-weight:650; }
+  .tagline { display:inline-block; font-size:9.5px; font-weight:700; letter-spacing:.09em;
+    padding:3px 8px; border-radius:5px; margin-top:6px;
+    background:rgba(242,86,75,.18); color:#F2564B; }
+
+  /* ---------- bottom hotbar ---------- */
+  .dock { position:absolute; left:0; right:0; bottom:26px;
+    display:flex; gap:10px; align-items:center; justify-content:center; }
+  .tools { padding:9px 10px; display:flex; gap:6px; flex:none; }
+  .tl { width:66px; padding:9px 0 8px; border-radius:10px; text-align:center; cursor:default; }
+  .tl.on { background:rgba(90,169,245,.18); box-shadow:inset 0 0 0 1px rgba(90,169,245,.45); }
+  .tl .gi { font-size:17px; }
+  .tl .tx { font-size:9px; letter-spacing:.07em; color:#8E9CB0; margin-top:4px;
+    text-transform:uppercase; }
+  .tl.on .tx { color:#9FCBFA; }
+  .laws { padding:9px 12px; display:flex; gap:7px; align-items:center; flex:none; }
+  .ls { width:38px; height:38px; border-radius:9px; background:rgba(255,255,255,.05);
+    border:1px solid rgba(255,255,255,.09); display:grid; place-items:center; font-size:14px; }
+  .ls.seal { background:rgba(242,86,75,.16); border-color:rgba(242,86,75,.42); }
+  .ls.empty { border-style:dashed; color:#4B5566; }
+  .endt { padding:15px 30px; white-space:nowrap; flex:none; border-radius:14px; font-size:14px; font-weight:750;
+    letter-spacing:.13em; background:linear-gradient(180deg,#F5B33C,#DE8F1E); color:#1A1206;
+    box-shadow:0 10px 26px rgba(222,143,30,.34); }
+  .endt small { display:block; font-size:9px; font-weight:700; letter-spacing:.1em;
+    color:rgba(26,18,6,.62); margin-top:2px; }
+
+  /* ---------- floating map labels ---------- */
+  .mlab { position:absolute; transform:translate(-50%,-100%); text-align:center;
+    pointer-events:none; }
+  .mlab .b { display:inline-block; padding:5px 11px 6px; border-radius:9px;
+    background:rgba(11,14,19,.82); border:1px solid rgba(255,255,255,.11);
+    box-shadow:0 6px 18px rgba(0,0,0,.4); }
+  .mlab .n { font-size:11.5px; font-weight:700; letter-spacing:.08em; }
+  .mlab .g2 { font-size:9.5px; margin-top:1px; }
+  .mlab .stem { width:1px; height:16px; margin:0 auto;
+    background:linear-gradient(rgba(255,255,255,.34),rgba(255,255,255,0)); }
+  .alert { position:absolute; transform:translate(-50%,-50%); pointer-events:none; }
+  .alert .ring { width:96px; height:52px; border:2px solid #F2564B; border-radius:50%;
+    box-shadow:0 0 22px rgba(242,86,75,.4); }
+  .alert .tx { position:absolute; left:50%; top:-19px; transform:translateX(-50%);
+    font-size:10px; font-weight:800; letter-spacing:.12em; color:#F2564B;
+    background:rgba(11,14,19,.85); padding:3px 8px; border-radius:5px; white-space:nowrap; }
+</style>
+<div class="stage">
+  <svg id="city" viewBox="0 0 1920 1080"></svg>
+  <div class="vig"></div>
+
+  <!-- floating map labels -->
+  <div class="mlab" style="left:452px; top:452px">
+    <div class="b"><div class="n">LİMAN</div><div class="g2 red">hoşnutsuzluk 88 ⚠</div></div>
+    <div class="stem"></div>
+  </div>
+  <div class="mlab" style="left:840px; top:392px">
+    <div class="b"><div class="n">SANAYİ</div><div class="g2 amber">hoşnutsuzluk 74</div></div>
+    <div class="stem"></div>
+  </div>
+  <div class="mlab" style="left:1090px; top:286px">
+    <div class="b"><div class="n">ESKİ ŞEHİR</div><div class="g2" style="color:#9AA8BC">hoşnutsuzluk 41</div></div>
+    <div class="stem"></div>
+  </div>
+  <div class="mlab" style="left:1400px; top:452px">
+    <div class="b"><div class="n">TEPE</div><div class="g2 green">hoşnutsuzluk 12</div></div>
+    <div class="stem"></div>
+  </div>
+  <div class="alert" style="left:470px; top:600px">
+    <div class="ring"></div><div class="tx">AYAKLANMA · 3. TUR</div>
+  </div>
+
+  <!-- ============ TOP ============ -->
+  <div class="top">
+    <div class="g ident">
+      <div>
+        <div class="nm">MEŞRUİYET</div>
+        <div class="sub">Delta Şehri · Vali Ömer</div>
+      </div>
+      <div class="div"></div>
+      <div>
+        <div class="turn num">32</div>
+        <div class="season">SONBAHAR · 8. YIL</div>
+      </div>
+    </div>
+
+    <div class="g resbar">
+      <div class="r"><div class="ic" style="background:rgba(245,179,60,.16);color:#F5B33C">₺</div>
+        <div><div class="k">Para</div><div class="v num">2.240<span class="warnq">?</span></div><div class="f num green">▲ +180</div></div></div>
+      <div class="r"><div class="ic" style="background:rgba(63,207,119,.14);color:#3FCF77">🌾</div>
+        <div><div class="k">Yiyecek</div><div class="v num">~%40–70<span class="warnq">?</span></div><div class="f num red">▼ −34</div></div></div>
+      <div class="r"><div class="ic" style="background:rgba(90,169,245,.16);color:#5AA9F5">💧</div>
+        <div><div class="k">Su</div><div class="v num">881</div><div class="f num green">▲ +12</div></div></div>
+      <div class="r"><div class="ic" style="background:rgba(196,140,255,.16);color:#C48CFF">⚡</div>
+        <div><div class="k">Enerji</div><div class="v num">402</div><div class="f num red">▼ −8</div></div></div>
+      <div class="r"><div class="ic" style="background:rgba(255,255,255,.09);color:#B7C4D4">🧱</div>
+        <div><div class="k">Malzeme</div><div class="v num">156</div><div class="f num red">▼ −21</div></div></div>
+      <div class="r"><div class="ic" style="background:rgba(242,86,75,.16);color:#F2564B">👥</div>
+        <div><div class="k">İşgücü</div><div class="v num">640/812</div><div class="f num red">▼ askere alma −90</div></div></div>
+    </div>
+  </div>
+
+  <!-- ============ RIGHT RAIL ============ -->
+  <div class="rail">
+
+    <div class="g card">
+      <h3><span class="lbl">Güvenlik Payı</span><span class="pill pBad">KRİTİK</span></h3>
+      <div class="buf">
+        <div class="n num">3 <span style="font-size:13px;color:#7E8CA0">tur</span><span class="warnq">?</span></div>
+        <div class="segs"><i class="hot"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i></div>
+      </div>
+    </div>
+
+    <div class="g card">
+      <h3><span class="lbl">İdeolojik Konum</span><span class="lbl" style="color:#5A6678">son 15 tur</span></h3>
+      <div class="ax">
+        <div class="axh"><span>Otorite</span><span>Özgürlük</span></div>
+        <div class="trk"><div class="mid"></div><div id="t1"></div><div class="kn" style="left:19%"></div></div>
+        <div class="axf"><span class="v num">−62</span><span class="pill pWarn">KARARLI → RADİKAL</span></div>
+      </div>
+      <div class="ax">
+        <div class="axh"><span>Sermaye</span><span>Eşitlik</span></div>
+        <div class="trk"><div class="mid"></div><div id="t2"></div><div class="kn" style="left:12%"></div></div>
+        <div class="axf"><span class="v num">−76</span><span class="pill pBad">RADİKAL · 6 TUR KALDI</span></div>
+      </div>
+    </div>
+
+    <div class="g card">
+      <h3><span class="lbl">Fraksiyonlar</span><span class="lbl" style="color:#5A6678">yüz yüze · dürüst</span></h3>
+      <div class="fx"><span class="nm">Tüccarlar</span><span class="bar"><i style="width:78%;background:#3FCF77"></i></span><span class="mood green">HOŞNUT</span></div>
+      <div class="fx"><span class="nm">İşçiler</span><span class="bar"><i style="width:14%;background:#F2564B"></i></span><span class="mood red">ÖFKELİ</span></div>
+      <div class="fx"><span class="nm">Ordu <span class="warnq">?</span></span><span class="bar"><i style="width:62%;background:#4C5666"></i></span><span class="mood" style="color:#7E8CA0">BİLDİRİLEN</span></div>
+      <div class="fx"><span class="nm">Gelenek</span><span class="bar"><i style="width:52%;background:#F5B33C"></i></span><span class="mood amber">TEMKİNLİ</span></div>
+      <div class="fx"><span class="nm">Aydınlar</span><span class="bar"><i style="width:31%;background:#E08A3C"></i></span><span class="mood" style="color:#E08A3C">KAYGILI</span></div>
+    </div>
+
+    <div class="g card">
+      <h3><span class="lbl">Bakanlar</span><span class="lbl" style="color:#5A6678">rapor güvenilirliği</span></h3>
+      <div class="mins" id="mins"></div>
+    </div>
+
+    <div class="g card">
+      <h3><span class="lbl">Telgraflar</span><span class="lbl" style="color:#5A6678">32. tur</span></h3>
+      <div class="tg"><div class="who">TARIM</div><div class="msg">“Ambar durumu tatminkârdır, zât-ı âlinizi meşgul etmeye değmez.”<em class="red">bildirilen %64 · gerçek %21</em></div></div>
+      <div class="tg"><div class="who">GÜVENLİK</div><div class="msg">“Mersa ajanları fırında görülmüştür. İki tabur daha şarttır.”<em class="red">tehdit şişirildi</em></div></div>
+      <div class="tg"><div class="who">İMAR</div><div class="msg">“Depoda malzeme 3 tur sonra biter. Değirmen tıkalı. Yazılı bildiriyorum.”<em class="green">uzman · doğru</em></div></div>
+    </div>
+  </div>
+
+  <!-- ============ LEFT SELECTION ============ -->
+  <div class="g sel">
+    <div class="nm">Dokuma Atölyesi</div>
+    <div class="tagline">LİMAN'A KURULDU · +₺ AMA HOŞNUTSUZLUK</div>
+    <div style="height:10px"></div>
+    <div class="rw"><span style="color:#8E9CB0">Gelir</span><span class="green num">+64 ₺ / tur</span></div>
+    <div class="rw"><span style="color:#8E9CB0">İşgücü</span><span class="num">40 kişi</span></div>
+    <div class="rw"><span style="color:#8E9CB0">Kirlilik</span><span class="red num">+7</span></div>
+    <div class="rw"><span style="color:#8E9CB0">Tüccarlar</span><span class="green num">+3</span></div>
+    <div class="rw"><span style="color:#8E9CB0">İşçiler</span><span class="red num">−6</span></div>
+  </div>
+
+  <!-- ============ DOCK ============ -->
+  <div class="dock">
+    <div class="g tools">
+      <div class="tl on"><div class="gi">🏠</div><div class="tx">Konut</div></div>
+      <div class="tl"><div class="gi">🏭</div><div class="tx">Sanayi</div></div>
+      <div class="tl"><div class="gi">🌾</div><div class="tx">Tarım</div></div>
+      <div class="tl"><div class="gi">🛣️</div><div class="tx">Yol</div></div>
+      <div class="tl"><div class="gi">🏛️</div><div class="tx">Kamu</div></div>
+      <div class="tl"><div class="gi">🪖</div><div class="tx">Kışla</div></div>
+    </div>
+    <div class="g laws">
+      <span class="lbl" style="margin-right:3px">YASA</span>
+      <div class="ls">⚖️</div><div class="ls">🪖</div><div class="ls">🍞</div>
+      <div class="ls seal">🔒</div><div class="ls seal">🔒</div>
+      <div class="ls empty">+</div><div class="ls empty">+</div>
+    </div>
+    <div class="endt">TURU BİTİR<small>SEÇİM 4 TUR SONRA</small></div>
+  </div>
+</div>
+
+<script>
+/* ============ deterministic rng ============ */
+let S = 20260729;
+const rnd = () => (S = (S * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+const ri = (a,b) => a + Math.floor(rnd()*(b-a+1));
+const pick = a => a[ri(0,a.length-1)];
+
+const NS = 'http://www.w3.org/2000/svg';
+const svg = document.getElementById('city');
+const el = (t,a) => { const n = document.createElementNS(NS,t); for (const k in a) n.setAttribute(k,a[k]); return n; };
+const layers = {};
+['ground','shadow','road','build','agent','fx'].forEach(k => { layers[k] = el('g',{}); svg.appendChild(layers[k]); });
+const add = (L,n) => { layers[L].appendChild(n); return n; };
+
+/* ============ isometric projection ============ */
+const TW = 80, TH = 40, HU = 24;          // tile width, tile height, height unit
+const OX = 960, OY = 142;                 // screen origin
+const GW = 22, GH = 18;                   // grid size
+const P = (x,y,z=0) => [ OX + (x-y)*TW/2, OY + (x+y)*TH/2 - z*HU ];
+const pts = arr => arr.map(p => p.join(',')).join(' ');
+
+/* shade helper: darken a hex by k */
+function sh(hex,k){ const n=parseInt(hex.slice(1),16);
+  let r=(n>>16)&255,g=(n>>8)&255,b=n&255;
+  r=Math.round(r*k); g=Math.round(g*k); b=Math.round(b*k);
+  return '#'+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1); }
+
+/* ============ map layout ============ */
+const T = [];                              // 'grass' | 'road' | 'water' | 'plaza'
+for (let y=0;y<GH;y++){ T[y]=[]; for (let x=0;x<GW;x++) T[y][x]='grass'; }
+// water along the near-left edge
+for (let y=0;y<GH;y++) for (let x=0;x<GW;x++) if (x < 2 + Math.round(1.6*Math.sin(y/3))) T[y][x]='water';
+// road grid
+const ROADX = [4,9,14,19], ROADY = [3,8,13,17];
+ROADX.forEach(x => { for (let y=0;y<GH;y++) if (T[y][x]!=='water') T[y][x]='road'; });
+ROADY.forEach(y => { for (let x=0;x<GW;x++) if (T[y][x]!=='water') T[y][x]='road'; });
+T[8][9]='plaza'; T[8][14]='plaza';
+
+/* districts, for building palettes */
+function district(x,y){
+  if (y>10 && x<10) return 'liman';
+  if (y>10 && x>=10) return 'sanayi';
+  if (y<=10 && x<14) return 'eski';
+  return 'tepe';
+}
+const PAL = {
+  liman:  ['#8C93A3','#A0A7B6','#7C8494','#B5654A','#9A5C46'],
+  sanayi: ['#7A7266','#8A8175','#6E6659','#94513B','#7E6A54'],
+  eski:   ['#C0A882','#D2BC95','#AE9770','#B5654A','#C99C6A'],
+  tepe:   ['#D8DCE4','#E6E9EF','#C4CAD6','#A8B49C','#EDEFF3']
+};
+const HGT = { liman:[1,2], sanayi:[1,2], eski:[1,3], tepe:[2,4] };
+
+/* ============ ground ============ */
+const COL = { grass:'#6F8F5C', water:'#33566B', road:'#41454E', plaza:'#5A5F69' };
+for (let y=0;y<GH;y++) for (let x=0;x<GW;x++){
+  const t = T[y][x];
+  let c = COL[t];
+  if (t==='grass') c = sh(c, 0.92 + 0.16*rnd());
+  if (t==='water') c = sh(c, 0.9 + 0.2*rnd());
+  add('ground', el('polygon',{ points: pts([P(x,y),P(x+1,y),P(x+1,y+1),P(x,y+1)]),
+    fill:c, stroke:c, 'stroke-width':0.6 }));
+}
+/* road markings */
+for (let y=0;y<GH;y++) for (let x=0;x<GW;x++){
+  if (T[y][x]!=='road') continue;
+  const vert = ROADX.includes(x), horiz = ROADY.includes(y);
+  if (vert && horiz) continue;
+  const a = vert ? [P(x+0.5,y+0.15),P(x+0.5,y+0.45)] : [P(x+0.15,y+0.5),P(x+0.45,y+0.5)];
+  add('road', el('line',{ x1:a[0][0],y1:a[0][1],x2:a[1][0],y2:a[1][1],
+    stroke:'#C9CEDA', 'stroke-width':2, opacity:.42 }));
+}
+
+/* ============ buildings + agents, drawn far→near ============ */
+function box(x,y,w,d,h,base){
+  const t = sh(base,1.0), lft = sh(base,0.74), rgt = sh(base,0.56);
+  // shadow
+  add('shadow', el('polygon',{ points: pts([P(x,y),P(x+w+h*0.30,y-h*0.16),
+      P(x+w+h*0.30,y+d-h*0.16),P(x,y+d)]), fill:'#0A1508', opacity:.20 }));
+  // right face (towards +x)
+  add('build', el('polygon',{ points: pts([P(x+w,y,0),P(x+w,y+d,0),P(x+w,y+d,h),P(x+w,y,h)]),
+    fill:rgt }));
+  // left face (towards +y)
+  add('build', el('polygon',{ points: pts([P(x,y+d,0),P(x+w,y+d,0),P(x+w,y+d,h),P(x,y+d,h)]),
+    fill:lft }));
+  // top
+  add('build', el('polygon',{ points: pts([P(x,y,h),P(x+w,y,h),P(x+w,y+d,h),P(x,y+d,h)]),
+    fill:t }));
+  // windows on both visible faces
+  const rows = Math.max(1, Math.round(h*2.1));
+  for (let r=0;r<rows;r++){
+    const zz = (r+0.55)/rows*h;
+    for (let c=0;c<3;c++){
+      if (rnd()<.22) continue;
+      const u = (c+0.5)/3;
+      const wOn = rnd()<.5 ? '#FFD79A' : '#8FA6C0';
+      const op  = rnd()<.5 ? .82 : .34;
+      let q = [P(x+w, y+u*d-0.11, zz-0.055), P(x+w, y+u*d+0.11, zz-0.055),
+               P(x+w, y+u*d+0.11, zz+0.055), P(x+w, y+u*d-0.11, zz+0.055)];
+      add('build', el('polygon',{ points:pts(q), fill:wOn, opacity:op }));
+      q = [P(x+u*w-0.11, y+d, zz-0.055), P(x+u*w+0.11, y+d, zz-0.055),
+           P(x+u*w+0.11, y+d, zz+0.055), P(x+u*w-0.11, y+d, zz+0.055)];
+      add('build', el('polygon',{ points:pts(q), fill:wOn, opacity:op*0.8 }));
+    }
+  }
+  // rooftop detail
+  if (h>=2 && rnd()<.6){
+    const rx=x+0.28, ry=y+0.28, rw=w*0.34, rd=d*0.34, rh=0.28;
+    add('build', el('polygon',{ points: pts([P(rx+rw,ry,h),P(rx+rw,ry+rd,h),P(rx+rw,ry+rd,h+rh),P(rx+rw,ry,h+rh)]), fill:sh(base,.5) }));
+    add('build', el('polygon',{ points: pts([P(rx,ry+rd,h),P(rx+rw,ry+rd,h),P(rx+rw,ry+rd,h+rh),P(rx,ry+rd,h+rh)]), fill:sh(base,.62) }));
+    add('build', el('polygon',{ points: pts([P(rx,ry,h+rh),P(rx+rw,ry,h+rh),P(rx+rw,ry+rd,h+rh),P(rx,ry+rd,h+rh)]), fill:sh(base,.86) }));
+  }
+}
+
+function tree(x,y){
+  add('shadow', el('ellipse',{ cx:P(x,y)[0]+7, cy:P(x,y)[1]+3, rx:11, ry:5.5, fill:'#0A1508', opacity:.2 }));
+  const b = P(x,y,0), t1 = P(x,y,0.32), t2 = P(x,y,1.05);
+  add('build', el('line',{ x1:b[0],y1:b[1],x2:t1[0],y2:t1[1], stroke:'#5A4433','stroke-width':3.4 }));
+  add('build', el('polygon',{ points: pts([[t2[0],t2[1]],[t1[0]-11,t1[1]+2],[t1[0]+11,t1[1]+2]]),
+    fill: pick(['#4E7A44','#5C8A4C','#446E3E']) }));
+}
+
+function car(x,y,dir){
+  const c = pick(['#E4544A','#4E8FE0','#F0C24A','#EDEFF3','#3FBF7A','#2A2F38']);
+  const w = dir==='v' ? 0.28 : 0.46, d = dir==='v' ? 0.46 : 0.28, h = 0.30;
+  add('shadow', el('polygon',{ points: pts([P(x,y),P(x+w+0.1,y-0.05),P(x+w+0.1,y+d-0.05),P(x,y+d)]),
+    fill:'#0A1508', opacity:.22 }));
+  add('agent', el('polygon',{ points: pts([P(x+w,y,0),P(x+w,y+d,0),P(x+w,y+d,h),P(x+w,y,h)]), fill:sh(c,.6) }));
+  add('agent', el('polygon',{ points: pts([P(x,y+d,0),P(x+w,y+d,0),P(x+w,y+d,h),P(x,y+d,h)]), fill:sh(c,.78) }));
+  add('agent', el('polygon',{ points: pts([P(x,y,h),P(x+w,y,h),P(x+w,y+d,h),P(x,y+d,h)]), fill:c }));
+  // cabin
+  const ix=x+w*0.22, iy=y+d*0.22, iw=w*0.56, id=d*0.56, ih=h+0.19;
+  add('agent', el('polygon',{ points: pts([P(ix,iy,ih),P(ix+iw,iy,ih),P(ix+iw,iy+id,ih),P(ix,iy+id,ih)]), fill:sh(c,.9) }));
+  add('agent', el('polygon',{ points: pts([P(ix,iy+id,h),P(ix+iw,iy+id,h),P(ix+iw,iy+id,ih),P(ix,iy+id,ih)]), fill:'#9FB6CC', opacity:.9 }));
+}
+
+function person(x,y){
+  const sh_ = pick(['#E4544A','#4E8FE0','#F0C24A','#EDEFF3','#3FBF7A','#C48CFF','#F09A4A']);
+  add('shadow', el('ellipse',{ cx:P(x,y)[0], cy:P(x,y)[1]+1.5, rx:5.5, ry:2.8, fill:'#0A1508', opacity:.26 }));
+  const b = P(x,y,0), k = P(x,y,0.24), t = P(x,y,0.44), hd = P(x,y,0.56);
+  add('agent', el('line',{ x1:b[0],y1:b[1],x2:k[0],y2:k[1], stroke:'#2E3742','stroke-width':3.2,'stroke-linecap':'round' }));
+  add('agent', el('line',{ x1:k[0],y1:k[1],x2:t[0],y2:t[1], stroke:sh_,'stroke-width':4.6,'stroke-linecap':'round' }));
+  add('agent', el('circle',{ cx:hd[0], cy:hd[1], r:2.9, fill:'#E8B98F' }));
+}
+
+/* iterate far → near for correct occlusion */
+for (let s=0; s<=GW+GH; s++){
+  for (let y=0;y<GH;y++){
+    const x = s-y;
+    if (x<0||x>=GW) continue;
+    const t = T[y][x];
+
+    if (t==='grass'){
+      const d = district(x,y);
+      if (rnd()<.52){
+        const [h0,h1] = HGT[d];
+        const h = ri(h0,h1) + (rnd()<.07?1:0);
+        const w = 0.54+rnd()*0.22, dd = 0.54+rnd()*0.22;
+        box(x+(1-w)/2, y+(1-dd)/2, w, dd, h, pick(PAL[d]));
+      } else if (rnd()<.62){
+        tree(x+0.3+rnd()*0.4, y+0.3+rnd()*0.4);
+      }
+    }
+
+    if (t==='road'){
+      const vert = ROADX.includes(x), horiz = ROADY.includes(y);
+      // cars
+      if (rnd()<.34) car(x + (vert?0.36:0.1), y + (vert?0.1:0.36), vert?'v':'h');
+      if (rnd()<.14) car(x + (vert?0.36:0.55), y + (vert?0.55:0.36), vert?'v':'h');
+      // pedestrians on the verge
+      const n = ri(0,3);
+      for (let i=0;i<n;i++) person(x+0.08+rnd()*0.84, y+0.08+rnd()*0.84);
+    }
+    if (t==='plaza'){
+      const n = ri(3,7);
+      for (let i=0;i<n;i++) person(x+0.1+rnd()*0.8, y+0.1+rnd()*0.8);
+      if (rnd()<.6) tree(x+0.5,y+0.5);
+    }
+  }
+}
+
+/* smoke over the industrial quarter */
+for (let i=0;i<22;i++){
+  const p = P(11+rnd()*8, 12+rnd()*5, 2.2+rnd()*2.4);
+  add('fx', el('circle',{ cx:p[0], cy:p[1], r:12+rnd()*30, fill:'#B9C4CE', opacity:.05+rnd()*.06 }));
+}
+/* authority banners on some buildings — visible ideology */
+for (let i=0;i<26;i++){
+  const x = ri(5,20), y = ri(1,16);
+  if (T[y][x]!=='grass') continue;
+  const p = P(x+0.5,y+0.15, HGT[district(x,y)][1]*0.9);
+  add('fx', el('polygon',{ points: pts([[p[0],p[1]],[p[0],p[1]+15],[p[0]+11,p[1]+7]]), fill:'#E0402F' }));
+}
+
+/* ============ axis drift trails ============ */
+function trail(id, arr){
+  const h = document.getElementById(id);
+  arr.forEach((v,i) => {
+    const d = document.createElement('div');
+    d.className = 'tp';
+    d.style.left = v + '%';
+    d.style.opacity = (0.12 + 0.7*(i/(arr.length-1))).toFixed(2);
+    h.appendChild(d);
+  });
+}
+trail('t1',[48,47,45,44,41,40,37,35,34,30,28,26,24,21,19]);
+trail('t2',[49,47,46,42,40,37,33,30,27,24,21,18,16,14,12]);
+
+/* ============ minister avatars ============ */
+const MIN = [
+  { d:'Maliye',   sk:'#D8A87C', hr:'#3B2A1B', ac:'#F5B33C', b:'bSad', bt:'!' },
+  { d:'Tarım',    sk:'#C99368', hr:'#241A12', ac:'#3FCF77', b:'bSad', bt:'!' },
+  { d:'Güvenlik', sk:'#E0B589', hr:'#4A3A26', ac:'#5AA9F5', b:'bSad', bt:'!' },
+  { d:'İmar',     sk:'#CB9A6E', hr:'#5B4A33', ac:'#C48CFF', b:'bUzm', bt:'✓' },
+  { d:'Halk',     sk:'#D4A175', hr:'#2A1D12', ac:'#F2564B', b:'bSad', bt:'!' }
+];
+document.getElementById('mins').innerHTML = MIN.map(m => `
+  <div class="mn">
+    <div class="av"><svg viewBox="0 0 40 40">
+      <rect width="40" height="40" fill="#1A212C"/>
+      <circle cx="20" cy="17" r="9.5" fill="${m.sk}"/>
+      <path d="M10.5 15 Q20 4.5 29.5 15 Q25 10 20 10 Q15 10 10.5 15Z" fill="${m.hr}"/>
+      <rect x="16.4" y="15.4" width="2.7" height="2" rx="1" fill="#20262F"/>
+      <rect x="21" y="15.4" width="2.7" height="2" rx="1" fill="#20262F"/>
+      <path d="M6 40 Q20 25.5 34 40Z" fill="${m.ac}" opacity=".85"/>
+      <path d="M17 27 h6 v6 h-6z" fill="${m.sk}" opacity=".9"/>
+    </svg></div>
+    <div class="bdg ${m.b}">${m.bt}</div>
+    <div class="t">${m.d}</div>
+  </div>`).join('');
+</script>
