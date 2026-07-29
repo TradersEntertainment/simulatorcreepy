@@ -97,12 +97,22 @@ Render each as a horizontal meter with a marker and, behind it, **a faint trail 
 
 **Factions — 5, loyalty 0–100, all start 50:** `TÜCCARLAR`, `İŞÇİLER`, `ORDU`, `GELENEK`, `AYDINLAR`. Each grants a passive gift at ≥65 (Tüccarlar −15% build cost · İşçiler +10% işgücü · Ordu +Güvenlik and coup immunity · Gelenek faster grievance decay · Aydınlar +Şeffaflık) and a threat at ≤25 (sabotage, strike, coup clock, schism, leak). **Two hostile factions at once = a compound crisis.**
 
+**Faction loyalty is never shown as a number.** It is shown as a qualitative mood — `hoşnut / temkinli / kaygılı / öfkeli / düşman` — and these moods are **always honest**, because you meet these people face to face. This is the player's one reliable anchor; the fog must never be total or the game becomes unlearnable.
+
+**With exactly one exception: ORDU.** The army's mood reaches you only through your Güvenlik minister, so it is subject to that minister's distortion (§5). The player therefore has a single deadly blind spot rather than general blindness — and it is precisely the faction that can end them. A loyalist Güvenlik minister reports "ordu memnun" until the morning of the coup.
+
 **Instruments:**
 - **KARARNAME** — immediate, 2 per turn, shift axes 3–10. ~25 of them.
 - **YASA** — permanent and **slotted: 4 slots, expandable to 7**. Adopting a law means repealing one. This forces the city to have an identity instead of collecting every good idea. ~40 laws that shift axes persistently and modify formulas (tax yield, density caps, conscription, price controls, censorship, land rights).
 - **BÜTÇE** — tax rate 0–60% and funding sliders for Sağlık / Eğitim / Güvenlik / Kültür / Altyapı.
 - **MECLİS** — 21 seats derived from faction loyalty and district population. Laws need a majority; short of one, spend Meşruiyet. **The council debate is your best early-warning system** — members voice grievances your ministers are hiding. At `axis_order ≥ 75` you unlock "Meclisi Tatil Et": laws pass instantly and free, and you permanently lose the debate, i.e. your last honest channel. State the trade in the tooltip and make it devastating in practice.
 - **ANAYASA** — on turn 5, pick **3 founding clauses from a pool of 12** ("Mülkiyet Kutsaldır", "Herkese Ekmek", "Şehir Kendini Savunur", "Söz Serbesttir", …). Each sets run-long multipliers and one locked axis floor or ceiling. This is the main replayability lever.
+- **SEÇİM — the one channel that cannot lie.** Elections fall on turns **12, 24, 36, 48 and 60**. The result is computed from **true** district grievance and **cannot be distorted by any minister** — this is the only moment the player sees their real city, because the number comes from the population rather than from an official. Winning grants +Meşruiyet and a temporary faction goodwill bump; a heavy loss forces a concession (repeal a law, fund a district, or dismiss a minister of the winner's choosing). Three options each time:
+  - **YAP** — hold it. Honest, and if the city is worse than you were told, you find out here, publicly, at full cost.
+  - **ERTELE** — postpone. +12 `axis_order`, −15 Meşruiyet, every faction's mood drops one step. Cheap the first time, ruinous by the third.
+  - **HİLE YAP** — rig it. You get the win and no immediate cost — **but the true result is recorded**, and if the press is free or an auditor is active, the scandal surfaces within 1–4 turns for −35 Meşruiyet and a permanent Aydınlar and İşçiler penalty.
+  
+  Design intent, and make it land: the authoritarian player is pushed to cancel the exact instrument that would have cured their blindness. Rigging feels free precisely because the only witness is the press they already muzzled.
 
 ---
 
@@ -187,6 +197,17 @@ No sudden deaths. Every collapse is legible in the city long before it lands.
 
 **Pacing:** turns 1–10 no crises, learn the systems. 11–30 escalating single crises. 31–50 compound crises where the clean option genuinely cannot pay in time unless you built a buffer — this is where drift happens. 51–60 endgame; whatever you have become, you face it.
 
+**ONBOARDING — there are no tutorial screens.** Teaching is entirely diegetic: during turns 1–10 the five ministers introduce themselves and their domain by telegram, in character, one or two per turn. "Sayın Vali, ambarı ben takip ediyorum, zât-ı âliniz meşgul olmasın." Each telegram teaches one system and one piece of UI. Write ~14 of these. The design reason matters: this establishes the ministers as your information channel and teaches you to rely on them **before** you ever learn they distort. The tutorial and the trap are the same content.
+
+**THE FINAL TURN — HESAP VERME OTURUMU.** If the player reaches turn 60 alive, do not cut straight to an ending card. Hold a public accountability session:
+1. **Gerçek rakamlar.** Every true value is laid out beside what the player was told, turn by turn, as a scrolling ledger. Highlight the largest lifetime divergence per domain ("TARIM: 40 tur boyunca ortalama %31 şişirilmiş rapor").
+2. **Bakanların ifadesi.** Each of the five ministers speaks in turn — loyalists blame each other and the circumstances, experts state plainly what they told you and when.
+3. **Fraksiyonların ifadesi.** Each faction delivers one verdict paragraph on your term, shaped by its final mood.
+4. **The axis trail** is redrawn full-screen as a single line from turn 1 to turn 60, with the moment of each irreversible decision marked and labelled with the decree that caused it.
+5. Only then, the ending card.
+
+This is the payoff for the entire information system: the first time the player sees their own city truthfully is the moment they can no longer do anything about it. Write it to land hard and without a single word of moralising.
+
 **Endings — at least 11**, each a full screen with an epilogue paragraph, a final map snapshot and run statistics:
 the four collapses · `DARBE` (your own garrison) · `İŞGAL` (Mersa overruns you) · `BORÇLU ŞEHİR` (every law slot creditor-owned — you govern someone else's city) · `İFLAS` · `TERK EDİLMİŞ ŞEHİR` (population < 150) · `SÜRDÜRÜLEBİLİR ŞEHİR` (60 turns, both axes < 70, no district lost — the best ending, and it must be hard) · `DAYANIKLI ŞEHİR` (60 turns having reached RADİKAL and pulled back — the most interesting ending; say so on the screen).
 
@@ -230,6 +251,7 @@ res://scripts/sim/SupplyChain.gd          # food and materials chains
 res://scripts/sim/DistrictManager.gd
 res://scripts/sim/FactionManager.gd
 res://scripts/sim/MinisterManager.gd      # appointment, distortion, complaints
+res://scripts/sim/ElectionManager.gd      # turns 12/24/36/48/60, hold/postpone/rig
 res://scripts/sim/DebtManager.gd          # creditors, demanded laws, sealed slots
 res://scripts/sim/ThreatManager.gd        # Mersa, garrison, conscription, coup risk
 res://scripts/sim/BufferTracker.gd        # TAMPON in turns, true and displayed
@@ -250,6 +272,7 @@ res://scripts/content/Endings.gd
 ```
 
 - `GameState`, `Reporting`, `AudioBus` are **autoloads**. **Every UI read goes through `Reporting`.** Enforce it — no exceptions anywhere in the codebase.
+- Funnel all minister reporting through **one** function, `Reporting.report_for(domain: String) -> Dictionary`, and let the bias formula be its only current implementation. A later co-op mode will replace the *source* of that dictionary with a human player's submitted report; keep the plumbing indifferent to where the numbers came from.
 - Buildings, laws, decrees, events, ministers and creditors are **pure data tables**. New content must be a one-line data change, never new branching logic.
 - Save to `user://save.cfg` via `ConfigFile`, including the axis trail and each minister's identity and bias.
 
