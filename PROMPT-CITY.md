@@ -24,7 +24,9 @@ You are the founder-governor of a new city on a river delta: 400 settlers, a sma
 
 **Genre:** Turn-based city builder fused with a political-drift simulator. *SimCity* placement, *Frostpunk* law-book escalation, *Democracy*'s faction arithmetic — but the subject is **ideological drift under pressure**.
 
-**Tone:** Dry, bureaucratic, quietly ominous. The UI is a governor's desk: ledgers, stamped decrees, a newspaper, telegrams from ministers. Text is terse and official. Humour comes only from euphemism ("Gönüllü Yeniden Yerleşim Programı"), never from jokes.
+**Tone: comic characters, ice-cold consequences.** The framing is bureaucratic — a governor's desk, ledgers, stamped decrees, a newspaper, telegrams — but the *people* are funny. Ministers are venal, vain, petty and gloriously incompetent, each with a running gag (the Maliye minister who keeps proposing a new tax named after himself; the Güvenlik minister who sees Mersa's agents in the bakery). Events are absurd on the surface: a prize bull loose in the market, a rival city's ambassador who will not leave, a prophet forecasting the end of the world next Tuesday, a shipment of 4000 unwanted hats.
+
+**But the consequences are never funny.** Hunger is hunger, the coup is a coup, and the ledger never winks. The comedy lives entirely in voices, names, flavour text and event setups; the simulation underneath stays merciless and completely straight-faced. This is the RimWorld contract: laugh at the setup, get destroyed by the outcome. If a single mechanical effect is played for laughs — a crisis that resolves itself as a gag, a punishment that isn't real — the drift theme dies and the game becomes a toy. Hold the line: **funny mouths, honest math.**
 
 **Target session:** a full run is 90–120 minutes. Size all content and pacing to that.
 
