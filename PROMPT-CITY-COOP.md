@@ -60,6 +60,8 @@ Use **`WebSocketMultiplayerPeer`** with Godot's high-level multiplayer API. **Do
 - **Reconnect** by lobby code into the same seat; AI covers the gap (§2).
 - Support `--headless --server` so the host can be a dedicated process rather than a player (§9).
 
+**A visual reference screenshot of the minister screen is attached. Treat it as binding.** Reproduce it: the food chain across the top as four stages with the blocked stage filled red; two facing panels below it — **GERÇEK** outlined in red and stamped "SADECE SEN GÖRÜYORSUN", **RAPOR** outlined in green and stamped "VALİYE GİDECEK" — with a vertical truth↔flattery slider between them; the secret objective on a dark card with a wax seal; a red banner reminding the player that turn 60 will publish everything; and a divergence chart of their own reported-vs-true history, so a lying minister watches their own gap grow all game. Right column: telegram composer with clickable stock phrases, private channels, and the seat list showing which seats are human and which AI personality holds the rest.
+
 ## 5. TURN FLOW IN CO-OP
 
 1. **BAKAN FAZI** (simultaneous, 90-second timer, host-adjustable). Each minister sees their own true numbers and composes a report. The report UI has two columns — **GERÇEK**, visible only to them, and **RAPOR**, what the Vali will see — with direct entry or a truth↔flattery slider per figure, plus one free-text note. Early submit allowed; on timeout the current state is sent. AI ministers submit instantly but with a randomized 5–40 s delay so the phase feels populated.

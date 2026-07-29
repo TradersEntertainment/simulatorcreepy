@@ -1,0 +1,279 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>MEŞRUİYET — bakan ekranı</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1920px; height:1080px; overflow:hidden; background:#171410;
+    font-family:Georgia,'Times New Roman',serif; color:#2A2419; }
+  .stage { width:1920px; height:1080px; display:grid;
+    grid-template-columns:1256px 664px; grid-template-rows:78px 1fr; }
+  .p { background:radial-gradient(120% 90% at 30% 0%, #EFE4C8 0%, #E3D5B4 55%, #D6C59E 100%);
+    box-shadow:inset 0 0 0 1px #B7A47C, inset 0 2px 0 #F6EED8; }
+  .mono { font-family:'DejaVu Sans Mono',Consolas,monospace; }
+
+  /* header */
+  .hdr { grid-column:1/3; display:flex; align-items:center; border-bottom:2px solid #8C7A55;
+    background:linear-gradient(#3A2E1E,#241C12); color:#E8DCC0; padding:0 20px; gap:22px; }
+  .hdr .role { font-size:22px; letter-spacing:.22em; }
+  .hdr .who { font-size:12px; letter-spacing:.14em; color:#A79574; margin-top:3px; }
+  .hdr .spacer { flex:1; }
+  .chip { font-size:11px; letter-spacing:.14em; padding:5px 11px; border:1px solid #6E5C3C;
+    color:#D9C79E; }
+  .timer { font-size:30px; letter-spacing:.06em; color:#E8C27A; }
+  .timerLbl { font-size:10px; letter-spacing:.2em; color:#A79574; text-align:right; }
+
+  /* main */
+  .main { padding:14px; display:flex; flex-direction:column; gap:12px;
+    border-right:2px solid #8C7A55; background:#1E1B15; }
+  .cols { display:grid; grid-template-columns:1fr 78px 1fr; gap:0; align-items:start; }
+
+  .pane { padding:14px 16px; position:relative; }
+  .pane h2 { font-size:13px; letter-spacing:.2em; text-transform:uppercase; font-weight:normal;
+    padding-bottom:9px; margin-bottom:11px; border-bottom:1px solid #B7A47C;
+    display:flex; justify-content:space-between; align-items:center; }
+  .stamp { position:absolute; top:12px; right:14px; font-size:9px; letter-spacing:.16em;
+    padding:3px 7px; }
+  .sTruth { background:#9C3524; color:#F3E9D2; }
+  .sRep { background:#3E5A46; color:#E4EFE2; }
+  .truth { background:radial-gradient(120% 90% at 30% 0%, #F0E1C4 0%, #E4D0AE 55%, #D6BF9B 100%);
+    box-shadow:inset 0 0 0 2px #9C3524; }
+  .rep { background:radial-gradient(120% 90% at 30% 0%, #E8E7CE 0%, #DCDCB8 55%, #CBCDA4 100%);
+    box-shadow:inset 0 0 0 2px #3E5A46; }
+
+  .row { display:flex; justify-content:space-between; align-items:baseline;
+    padding:9px 0; border-bottom:1px dotted #B7A47C; }
+  .row:last-child { border-bottom:none; }
+  .row .k { font-size:13px; }
+  .row .k small { display:block; font-size:10px; color:#6E6047; letter-spacing:.06em; }
+  .row .v { font-size:23px; }
+  .bad { color:#9C3524; }
+  .ok { color:#3E6B3A; }
+  .field { border-bottom:2px solid #6E7A5C; padding:0 8px 1px; background:rgba(255,255,255,.35); }
+
+  .mid { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:9px; padding:60px 0;
+    background:#1E1B15; }
+  .arrow { color:#8C7A55; font-size:26px; }
+  .slider { width:26px; flex:1; max-height:190px; background:#3A3428; position:relative;
+    box-shadow:inset 0 0 0 1px #6E6047; }
+  .slider .fill { position:absolute; left:0; right:0; bottom:0; height:66%;
+    background:linear-gradient(#9C3524,#6E2418); }
+  .slider .knob { position:absolute; left:-6px; right:-6px; height:11px; bottom:66%;
+    background:#E8DCC0; box-shadow:0 1px 3px rgba(0,0,0,.5); }
+  .sliderLbl { font-size:9px; letter-spacing:.16em; color:#A79574; writing-mode:vertical-rl; }
+
+  /* chain */
+  .chain { display:flex; align-items:stretch; gap:0; }
+  .st { flex:1; padding:9px 10px; background:#DFD0AC; box-shadow:inset 0 0 0 1px #A28C60; }
+  .st.block { background:#C4553C; color:#F6E7DC; box-shadow:inset 0 0 0 2px #7C2114; }
+  .st .n { font-size:11px; letter-spacing:.1em; text-transform:uppercase; }
+  .st .q { font-size:19px; margin-top:2px; }
+  .st .s { font-size:9.5px; letter-spacing:.06em; opacity:.85; }
+  .lnk { width:26px; display:flex; align-items:center; justify-content:center;
+    color:#8C7A55; font-size:15px; }
+
+  /* objective */
+  .obj { padding:13px 16px; background:linear-gradient(#3A2E1E,#241C12); color:#E8DCC0;
+    box-shadow:inset 0 0 0 1px #6E5C3C; display:flex; align-items:center; gap:16px; }
+  .obj .seal { width:52px; height:52px; border-radius:50%; flex:none;
+    background:radial-gradient(circle at 35% 30%,#C2452E,#7C2114); color:#F0D9C8;
+    font-size:8px; letter-spacing:.08em; display:flex; align-items:center; justify-content:center;
+    text-align:center; box-shadow:0 2px 4px rgba(0,0,0,.5); }
+  .obj .t { font-size:10px; letter-spacing:.2em; color:#A79574; }
+  .obj .d { font-size:16px; margin-top:3px; }
+  .obj .n { font-size:11px; color:#A79574; margin-top:3px; }
+
+  /* right column */
+  .side { padding:14px; display:flex; flex-direction:column; gap:12px; background:#1E1B15; }
+  .card { padding:12px 14px; }
+  .card h3 { font-size:11px; letter-spacing:.18em; color:#6E6047; text-transform:uppercase;
+    font-weight:normal; margin-bottom:9px; display:flex; justify-content:space-between; }
+  .phr { display:flex; flex-wrap:wrap; gap:5px; }
+  .phr span { font-size:11px; padding:4px 8px; background:#CDBA92;
+    box-shadow:inset 0 0 0 1px #A28C60; }
+  .phr span.sel { background:#7E4B2A; color:#F1E6D2; }
+  .compose { margin-top:10px; padding:10px 12px; min-height:96px; background:rgba(255,255,255,.4);
+    box-shadow:inset 0 0 0 1px #A28C60; font-size:14px; line-height:1.5; }
+  .compose .cur { border-left:2px solid #2A2419; margin-left:1px; }
+  .send { margin-top:9px; padding:11px 0; text-align:center; font-size:13px; letter-spacing:.2em;
+    background:linear-gradient(#3A2E1E,#241C12); color:#E8DCC0; }
+
+  .prv { display:flex; align-items:center; gap:10px; font-size:12px; padding:7px 0;
+    border-bottom:1px dotted #B7A47C; }
+  .prv:last-child { border-bottom:none; }
+  .dot { width:9px; height:9px; border-radius:50%; background:#5C7A48; flex:none; }
+  .dot.off { background:#B0A07C; }
+
+  .warn { padding:11px 14px; background:#9C3524; color:#F6E7DC; font-size:12.5px;
+    line-height:1.45; box-shadow:inset 0 0 0 1px #6E1F14; }
+
+  /* divergence history */
+  .hist { padding:14px 16px; height:352px; flex:none; display:flex; flex-direction:column; }
+  .hist h2 { font-size:13px; letter-spacing:.2em; text-transform:uppercase; font-weight:normal;
+    padding-bottom:9px; margin-bottom:12px; border-bottom:1px solid #B7A47C;
+    display:flex; justify-content:space-between; }
+  .chart { height:266px; flex:none; display:flex; align-items:flex-end; gap:9px; padding:0 2px 24px;
+    position:relative; }
+  .chart .base { position:absolute; left:0; right:0; bottom:22px; height:1px; background:#A28C60; }
+  .col { flex:1; display:flex; align-items:flex-end; gap:3px; position:relative; height:100%; }
+  .col i { flex:1; display:block; }
+  .col .tr { background:#9C3524; box-shadow:inset 0 0 0 1px #6E1F14; }
+  .col .rp { background:#8A9459; box-shadow:inset 0 0 0 1px #5E6B3A; }
+  .col em { position:absolute; bottom:-20px; left:0; right:0; text-align:center;
+    font-size:9.5px; font-style:normal; color:#6E6047;
+    font-family:'DejaVu Sans Mono',monospace; }
+  .legend { display:flex; gap:18px; font-size:11px; align-items:center; }
+  .legend b { display:inline-block; width:11px; height:11px; margin-right:5px; vertical-align:-1px; }
+  .seats { display:grid; grid-template-columns:1fr 1fr; gap:6px; font-size:11.5px; }
+  .seat { padding:6px 8px; background:#DFD0AC; box-shadow:inset 0 0 0 1px #A28C60;
+    display:flex; justify-content:space-between; }
+  .seat b { font-weight:normal; }
+  .ai { color:#6E6047; font-size:10px; letter-spacing:.1em; }
+  .me { background:#7E4B2A; color:#F1E6D2; }
+  .me .ai { color:#E4C9A8; }
+</style>
+<div class="stage">
+
+  <div class="hdr">
+    <div>
+      <div class="role">TARIM BAKANI</div>
+      <div class="who">SIDIKA PERRAN · İŞÇİLER'E YAKIN · 32. TUR</div>
+    </div>
+    <div class="spacer"></div>
+    <div class="chip">CO-OP · 6 KOLTUK · 3 İNSAN 3 YAPAY ZEKÂ</div>
+    <div class="chip">LOBİ KODU · K7M2X</div>
+    <div>
+      <div class="timer mono">00:47</div>
+      <div class="timerLbl">BAKAN FAZI</div>
+    </div>
+  </div>
+
+  <!-- ============ LEFT: truth vs report ============ -->
+  <div class="main">
+
+    <div class="chain">
+      <div class="st"><div class="n">Tarlalar</div><div class="q mono">128 / 140</div><div class="s">işgücü −90 · askere alma</div></div>
+      <div class="lnk">▸</div>
+      <div class="st block"><div class="n">Değirmen</div><div class="q mono">TIKALI</div><div class="s">2 turdur duruyor · malzeme yok</div></div>
+      <div class="lnk">▸</div>
+      <div class="st"><div class="n">Fırın</div><div class="q mono">40 / 180</div><div class="s">girdi bekliyor</div></div>
+      <div class="lnk">▸</div>
+      <div class="st"><div class="n">Ekmek</div><div class="q mono">19 gün</div><div class="s">nüfusun %31'ine yetiyor</div></div>
+    </div>
+
+    <div class="cols">
+      <div class="pane truth">
+        <div class="stamp sTruth">SADECE SEN GÖRÜYORSUN</div>
+        <h2><span>Gerçek · Tarım</span></h2>
+        <div class="row"><div class="k">Ambar doluluğu<small>gerçek ölçüm, 32. tur</small></div><div class="v mono bad">%21</div></div>
+        <div class="row"><div class="k">Hasat verimi<small>kuraklık ve işgücü kaybı</small></div><div class="v mono bad">−34 / tur</div></div>
+        <div class="row"><div class="k">Zincir darboğazı<small>değirmen 2 turdur duruyor</small></div><div class="v mono bad">VAR</div></div>
+        <div class="row"><div class="k">Tampon<small>şok soğurma süresi</small></div><div class="v mono bad">1 tur</div></div>
+        <div class="row"><div class="k">Tohumluk stok<small>gelecek yıl için ayrılan</small></div><div class="v mono">yendi</div></div>
+      </div>
+
+      <div class="mid">
+        <div class="arrow">▶</div>
+        <div class="sliderLbl">DOĞRU ◂▸ HOŞA GİDEN</div>
+        <div class="slider"><div class="fill"></div><div class="knob"></div></div>
+        <div class="arrow">▶</div>
+      </div>
+
+      <div class="pane rep">
+        <div class="stamp sRep">VALİYE GİDECEK</div>
+        <h2><span>Rapor · Tarım</span></h2>
+        <div class="row"><div class="k">Ambar doluluğu<small>bildireceğin değer</small></div><div class="v mono field">%64</div></div>
+        <div class="row"><div class="k">Hasat verimi<small>bildireceğin değer</small></div><div class="v mono field">−8 / tur</div></div>
+        <div class="row"><div class="k">Zincir darboğazı<small>bildireceğin değer</small></div><div class="v mono field">yok</div></div>
+        <div class="row"><div class="k">Tampon<small>bildireceğin değer</small></div><div class="v mono field">4 tur</div></div>
+        <div class="row"><div class="k">Tohumluk stok<small>bildireceğin değer</small></div><div class="v mono field">yeterli</div></div>
+      </div>
+    </div>
+
+    <div class="obj">
+      <div class="seal">GİZLİ<br>HEDEF</div>
+      <div>
+        <div class="t">SANA VERİLEN GİZLİ HEDEF</div>
+        <div class="d">“Hiçbir bakan görevden alınmasın.”</div>
+        <div class="n">Şehir çökerse bu hedef de kaybeder. Kimse sabotajla görevli değil.</div>
+      </div>
+    </div>
+
+    <div class="warn">
+      <b>60. turda hesap verme oturumu yapılacak.</b> Bu ekranda bildirdiğin her sayı, gerçek değeriyle
+      yan yana, tur tur masaya konacak. Yazdığın telgraflar kelimesi kelimesine alıntılanacak.
+      Özel kanal yazışmaları da tamamen açılacak.
+    </div>
+
+    <div class="hist p">
+      <h2>
+        <span>Rapor Geçmişim · Ambar Doluluğu</span>
+        <span class="legend">
+          <span><b style="background:#9C3524"></b>gerçek</span>
+          <span><b style="background:#8A9459"></b>bildirdiğim</span>
+          <span class="mono" style="color:#9C3524">ortalama şişirme %31</span>
+        </span>
+      </h2>
+      <div class="chart" id="chart"><div class="base"></div></div>
+    </div>
+
+  </div>
+
+  <!-- ============ RIGHT: telegram + lobby ============ -->
+  <div class="side">
+
+    <div class="card p">
+      <h3><span>Resmî Telgraf → Vali</span><span>kalıp ifadeler</span></h3>
+      <div class="phr">
+        <span class="sel">durum tatminkârdır</span>
+        <span>tedbir alınmıştır</span>
+        <span class="sel">zât-ı âlinizi meşgul etmeye değmez</span>
+        <span>mesele tetkik edilmektedir</span>
+        <span>tahkikat başlatılmıştır</span>
+        <span>bütçe kifayetsizdir</span>
+        <span>şahsen kefilim</span>
+        <span>emirlerinizi bekliyorum</span>
+      </div>
+      <div class="compose">
+        Sayın Vali, ambar durumu tatminkârdır efendim. Değirmende ufak bir bakım
+        yapılmaktadır, zât-ı âlinizi meşgul etmeye değmez. Tohumluk stokumuz yeterlidir.<span class="cur">&nbsp;</span>
+      </div>
+      <div class="send">TELGRAFI GÖNDER</div>
+    </div>
+
+    <div class="card p">
+      <h3><span>Özel Kanallar</span><span>vali içeriği göremez</span></h3>
+      <div class="prv"><span class="dot"></span><span><b>GÜVENLİK (Reşit Nuri)</b> — “Sen ambarı toparla, ben tehdidi biraz yüksek göstereyim, bütçeyi ikimize de açar.”</span></div>
+      <div class="prv"><span class="dot off"></span><span><b>İMAR (Mahmut Zeki)</b> — kanal kapalı · uzman, açmayı reddetti</span></div>
+    </div>
+
+    <div class="card p">
+      <h3><span>Koltuklar</span><span>lobi K7M2X</span></h3>
+      <div class="seats">
+        <div class="seat"><b>VALİ</b><span class="ai">İNSAN · Ömer</span></div>
+        <div class="seat me"><b>TARIM</b><span class="ai">SEN</span></div>
+        <div class="seat"><b>MALİYE</b><span class="ai">YZ · ŞİŞİRİCİ</span></div>
+        <div class="seat"><b>GÜVENLİK</b><span class="ai">İNSAN</span></div>
+        <div class="seat"><b>İMAR</b><span class="ai">YZ · UZMAN</span></div>
+        <div class="seat"><b>HALK</b><span class="ai">YZ · YALAKA</span></div>
+      </div>
+    </div>
+
+    <div class="card p" style="flex:1">
+      <h3><span>Valinin Gördüğü</span><span>senin raporundan</span></h3>
+      <div class="row"><div class="k">Yiyecek<small>vali ekranında</small></div><div class="v mono">~%40–70 <span style="color:#9C3524">?</span></div></div>
+      <div class="row"><div class="k">Tampon<small>vali ekranında</small></div><div class="v mono">3 tur</div></div>
+      <div class="row"><div class="k">Kararı<small>32. turda</small></div><div class="v" style="font-size:15px">Kışla inşaatı<br>onaylandı</div></div>
+    </div>
+
+  </div>
+</div>
+<script>
+const TRUE = [72,70,66,63,58,55,52,48,44,39,33,27,21];
+const REP  = [72,70,68,66,64,62,62,60,60,58,60,62,64];
+document.getElementById('chart').insertAdjacentHTML('beforeend',
+  TRUE.map((t,i) => `<div class="col">
+      <i class="tr" style="height:${t}%"></i>
+      <i class="rp" style="height:${REP[i]}%"></i>
+      <em>${20+i}</em>
+    </div>`).join(''));
+</script>

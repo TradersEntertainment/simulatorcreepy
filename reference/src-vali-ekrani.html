@@ -1,0 +1,480 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>MEŞRUİYET — görsel referans</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1920px; height:1080px; overflow:hidden;
+    background:#171410; font-family:Georgia,'Times New Roman',serif; color:#2A2419; }
+  .stage { position:relative; width:1920px; height:1080px; display:grid;
+    grid-template-columns:1240px 680px; grid-template-rows:74px 796px 210px; }
+  /* ---------- shared parchment ---------- */
+  .p { background:
+      radial-gradient(120% 90% at 30% 0%, #EFE4C8 0%, #E3D5B4 55%, #D6C59E 100%);
+    box-shadow: inset 0 0 0 1px #B7A47C, inset 0 2px 0 #F6EED8; }
+  .ink { color:#2A2419; }
+  .mono { font-family:'DejaVu Sans Mono',Consolas,monospace; }
+  .lbl { font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:#6E6047; }
+
+  /* ---------- top ledger ---------- */
+  .ledger { grid-column:1/3; display:flex; align-items:stretch; gap:0; border-bottom:2px solid #8C7A55; }
+  .brand { width:236px; padding:11px 18px; border-right:1px solid #B7A47C;
+    background:linear-gradient(#3A2E1E,#241C12); color:#E8DCC0; }
+  .brand h1 { font-size:21px; letter-spacing:.30em; font-weight:normal; }
+  .brand .sub { font-size:10px; letter-spacing:.18em; color:#A79574; margin-top:3px; }
+  .res { flex:1; display:flex; align-items:center; }
+  .res .cell { flex:1; padding:0 16px; border-right:1px solid #C3B08A; height:100%;
+    display:flex; flex-direction:column; justify-content:center; }
+  .res .k { font-size:10px; letter-spacing:.14em; color:#6E6047; text-transform:uppercase; }
+  .res .v { font-size:22px; line-height:1.05; margin-top:2px; }
+  .res .f { font-size:12px; }
+  .up { color:#3E6B3A; } .dn { color:#9C3524; }
+  .q { display:inline-block; width:14px; height:14px; border-radius:50%; background:#9C3524;
+    color:#F3E9D2; font-size:10px; text-align:center; line-height:14px; vertical-align:2px;
+    margin-left:5px; font-family:sans-serif; }
+  .turn { width:196px; padding:10px 16px; background:linear-gradient(#3A2E1E,#241C12); color:#E8DCC0;
+    text-align:right; display:flex; flex-direction:column; justify-content:center; }
+  .turn .n { font-size:24px; } .turn .s { font-size:11px; letter-spacing:.16em; color:#A79574; }
+
+  /* ---------- city ---------- */
+  .cityWrap { position:relative; overflow:hidden; background:#25231D; border-right:2px solid #8C7A55; }
+  .paper { position:absolute; inset:0; pointer-events:none;
+    background:radial-gradient(70% 60% at 50% 45%, rgba(0,0,0,0) 40%, rgba(20,14,6,.55) 100%); }
+  .news { position:absolute; left:0; right:0; bottom:0; height:58px;
+    background:linear-gradient(#EFE5CB,#DCCDA8); border-top:2px solid #8C7A55;
+    display:flex; align-items:center; padding:0 18px; gap:16px; }
+  .news .mast { font-size:11px; letter-spacing:.2em; color:#6E6047; border-right:1px solid #B09A70;
+    padding-right:16px; }
+  .news .h { font-size:19px; font-weight:bold; }
+  .news .d { font-size:12px; color:#6E6047; margin-top:2px; }
+  .modeTag { position:absolute; top:12px; left:14px; font-size:10px; letter-spacing:.18em;
+    background:rgba(20,16,10,.72); color:#D9C79E; padding:5px 10px; border:1px solid #6E5C3C; }
+
+  /* ---------- right desk ---------- */
+  .desk { padding:10px 12px; display:flex; flex-direction:column; gap:8px; overflow:hidden; }
+  .card { padding:8px 11px; }
+  .card h3 { font-size:11px; letter-spacing:.18em; color:#6E6047; text-transform:uppercase;
+    font-weight:normal; margin-bottom:8px; display:flex; justify-content:space-between; }
+
+  /* buffer */
+  .bufRow { display:flex; align-items:center; gap:10px; }
+  .bufBar { flex:1; display:flex; gap:3px; }
+  .bufBar i { flex:1; height:16px; background:#C9B68E; box-shadow:inset 0 0 0 1px #A28C60; }
+  .bufBar i.on { background:#7E4B2A; }
+  .bufBar i.warn { background:#9C3524; }
+  .bufNum { font-size:20px; }
+
+  /* axes */
+  .axis { margin-bottom:12px; }
+  .axis:last-child { margin-bottom:0; }
+  .axisTop { display:flex; justify-content:space-between; font-size:11px; letter-spacing:.12em;
+    color:#4A3F2C; text-transform:uppercase; margin-bottom:5px; }
+  .track { position:relative; height:26px; background:#CDBA92; box-shadow:inset 0 0 0 1px #A28C60; }
+  .track .band { position:absolute; top:0; bottom:0; }
+  .b1 { background:#D8C9A4; } .b2 { background:#C9AE7E; } .b3 { background:#B9884F; } .b4 { background:#9C3524; }
+  .track .mid { position:absolute; left:50%; top:0; bottom:0; width:1px; background:#7A6844; }
+  .trail { position:absolute; top:50%; width:5px; height:5px; margin-top:-2px; border-radius:50%;
+    background:#4A3F2C; }
+  .mark { position:absolute; top:-4px; bottom:-4px; width:4px; background:#241C12;
+    box-shadow:0 0 0 2px #EFE4C8; }
+  .axisFoot { display:flex; justify-content:space-between; font-size:12px; margin-top:6px; }
+  .badge { font-size:10px; letter-spacing:.14em; padding:2px 7px; background:#B9884F; color:#231B10; }
+  .badge.rad { background:#9C3524; color:#F3E9D2; }
+
+  /* factions */
+  .fx { display:flex; justify-content:space-between; align-items:center; padding:4px 0;
+    border-bottom:1px dotted #B7A47C; font-size:13px; }
+  .fx:last-child { border-bottom:none; }
+  .mood { font-size:11px; letter-spacing:.1em; padding:2px 8px; }
+  .m1 { background:#5C7A48; color:#F1EAD6; } .m2 { background:#8A7C4E; color:#F1EAD6; }
+  .m3 { background:#A5723A; color:#F1EAD6; } .m4 { background:#9C3524; color:#F3E9D2; }
+  .m0 { background:#CDBA92; color:#4A3F2C; }
+
+  /* ministers */
+  .mins { display:grid; grid-template-columns:repeat(5,1fr); gap:7px; }
+  .min { text-align:center; position:relative; }
+  .min svg { display:block; width:100%; height:76px; background:#DFD0AC;
+    box-shadow:inset 0 0 0 1px #A28C60; }
+  .min .nm { font-size:10px; margin-top:3px; line-height:1.15; }
+  .min .dm { font-size:9px; letter-spacing:.1em; color:#6E6047; text-transform:uppercase; }
+  .min .qb { position:absolute; top:3px; right:3px; }
+  .tag { font-size:8px; letter-spacing:.1em; padding:1px 4px; margin-top:2px; display:inline-block; }
+  .tSad { background:#9C3524; color:#F3E9D2; } .tUzm { background:#40603C; color:#EDF2E4; }
+
+  /* telegrams */
+  .tg { font-size:11.5px; line-height:1.3; padding:3px 0; border-bottom:1px dotted #B7A47C; }
+  .tg:last-child { border-bottom:none; }
+  .tg b { font-size:10px; letter-spacing:.12em; }
+  .tg em { display:block; font-size:10px; color:#9C3524; font-style:normal;
+    font-family:'DejaVu Sans Mono',monospace; margin-top:1px; }
+  .tg.uz em { color:#40603C; }
+
+  /* small stats */
+  .grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+  .stat { padding:7px 9px; background:#DFD0AC; box-shadow:inset 0 0 0 1px #A28C60; }
+  .stat .k { font-size:9px; letter-spacing:.12em; color:#6E6047; text-transform:uppercase; }
+  .stat .v { font-size:17px; margin-top:1px; }
+  .meterS { height:6px; background:#C3AE84; margin-top:5px; }
+  .meterS i { display:block; height:100%; background:#9C3524; }
+
+  /* ---------- footer lawbook ---------- */
+  .foot { grid-column:1/3; display:flex; border-top:2px solid #8C7A55; }
+  .laws { flex:1; padding:9px 14px; }
+  .slotRow { display:flex; gap:8px; margin-top:6px; }
+  .slot { flex:1; height:72px; background:#DFD0AC; box-shadow:inset 0 0 0 1px #A28C60;
+    padding:7px 8px; position:relative; }
+  .slot .t { font-size:12px; line-height:1.2; }
+  .slot .ax { font-size:10px; color:#6E6047; margin-top:3px; }
+  .slot.empty { background:repeating-linear-gradient(45deg,#D3C29C 0 6px,#CBB891 6px 12px); }
+  .slot.empty span { font-size:10px; letter-spacing:.14em; color:#7A6844; }
+  .wax { position:absolute; right:6px; bottom:6px; width:30px; height:30px; border-radius:50%;
+    background:radial-gradient(circle at 35% 30%,#C2452E,#7C2114); box-shadow:0 1px 2px rgba(0,0,0,.4);
+    color:#F0D9C8; font-size:7px; letter-spacing:.06em; display:flex; align-items:center;
+    justify-content:center; text-align:center; }
+  .acts { width:404px; padding:8px 14px; border-left:1px solid #B7A47C; display:flex;
+    flex-direction:column; gap:5px; }
+  .btnRow { display:flex; gap:6px; }
+  .btn { flex:1; padding:7px 0; text-align:center; font-size:11px; letter-spacing:.12em;
+    background:#CDBA92; box-shadow:inset 0 0 0 1px #A28C60; text-transform:uppercase; }
+  .btn.warn { background:#B9884F; }
+  .endBtn { padding:13px 0; text-align:center; font-size:15px; letter-spacing:.22em;
+    background:linear-gradient(#3A2E1E,#241C12); color:#E8DCC0; }
+  .elec { font-size:11px; color:#9C3524; letter-spacing:.1em; text-align:center; }
+</style>
+<div class="stage">
+
+  <!-- ================= LEDGER ================= -->
+  <div class="ledger p">
+    <div class="brand">
+      <h1>MEŞRUİYET</h1>
+      <div class="sub">VALİLİK DEFTERİ</div>
+    </div>
+    <div class="res">
+      <div class="cell"><div class="k">Para</div><div class="v mono">2.240 ₺<span class="q">?</span></div><div class="f mono up">▲ +180 / tur</div></div>
+      <div class="cell"><div class="k">Yiyecek</div><div class="v mono">~%40–70<span class="q">?</span></div><div class="f mono dn">▼ −34 / tur</div></div>
+      <div class="cell"><div class="k">Su</div><div class="v mono">881</div><div class="f mono up">▲ +12</div></div>
+      <div class="cell"><div class="k">Enerji</div><div class="v mono">402</div><div class="f mono dn">▼ −8</div></div>
+      <div class="cell"><div class="k">Malzeme</div><div class="v mono">156</div><div class="f mono dn">▼ −21</div></div>
+      <div class="cell"><div class="k">İşgücü</div><div class="v mono">640 / 812</div><div class="f mono dn">▼ askere alma −90</div></div>
+    </div>
+    <div class="turn">
+      <div class="n mono">32. TUR</div>
+      <div class="s">SONBAHAR · 8. YIL</div>
+    </div>
+  </div>
+
+  <!-- ================= CITY ================= -->
+  <div class="cityWrap">
+    <svg id="city" viewBox="0 0 1240 856" width="1240" height="796" preserveAspectRatio="none"></svg>
+    <div class="paper"></div>
+    <div class="modeTag">ŞEHİR GÖRÜNÜMÜ · 48 × 32 KARE · YERLEŞTİRME SİYASİ BİR EYLEMDİR</div>
+    <div class="news">
+      <div class="mast">DELTA<br>HABER</div>
+      <div>
+        <div class="h">KADRA DÜŞTÜ: KAPIDA 1.400 KİŞİ BEKLİYOR</div>
+        <div class="d">Alacaklılar faizi yükseltti · Mersa sınıra iki tabur yığdı · Vali sükûnet çağrısında bulundu</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= DESK ================= -->
+  <div class="desk">
+
+    <div class="card p">
+      <h3><span>Güvenlik Payı</span><span class="mono" style="color:#9C3524">KRİTİK</span></h3>
+      <div class="bufRow">
+        <div class="bufNum mono">3 tur<span class="q">?</span></div>
+        <div class="bufBar">
+          <i class="warn"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i>
+        </div>
+      </div>
+    </div>
+
+    <div class="card p">
+      <h3><span>İdeolojik Konum</span><span>son 15 tur</span></h3>
+
+      <div class="axis">
+        <div class="axisTop"><span>◄ Otorite</span><span>Özgürlük ►</span></div>
+        <div class="track">
+          <div class="band b1" style="left:0;width:100%"></div>
+          <div class="band b2" style="left:0;width:31%"></div>
+          <div class="band b3" style="left:0;width:16%"></div>
+          <div class="band b4" style="left:0;width:6%"></div>
+          <div class="mid"></div>
+          <div id="trailA"></div>
+          <div class="mark" style="left:19%"></div>
+        </div>
+        <div class="axisFoot"><span class="mono">−62</span><span class="badge">KARARLI → RADİKAL</span></div>
+      </div>
+
+      <div class="axis">
+        <div class="axisTop"><span>◄ Sermaye</span><span>Eşitlik ►</span></div>
+        <div class="track">
+          <div class="band b1" style="left:0;width:100%"></div>
+          <div class="band b2" style="left:0;width:31%"></div>
+          <div class="band b3" style="left:0;width:16%"></div>
+          <div class="band b4" style="left:0;width:6%"></div>
+          <div class="mid"></div>
+          <div id="trailB"></div>
+          <div class="mark" style="left:12%"></div>
+        </div>
+        <div class="axisFoot"><span class="mono">−76</span><span class="badge rad">RADİKAL · 6 TUR</span></div>
+      </div>
+    </div>
+
+    <div class="card p">
+      <h3><span>Fraksiyonlar</span><span>yüz yüze · dürüst</span></h3>
+      <div class="fx"><span>TÜCCARLAR</span><span class="mood m1">hoşnut</span></div>
+      <div class="fx"><span>İŞÇİLER</span><span class="mood m4">öfkeli</span></div>
+      <div class="fx"><span>ORDU <span class="q">?</span></span><span class="mood m0">bildirilen: hoşnut</span></div>
+      <div class="fx"><span>GELENEK</span><span class="mood m2">temkinli</span></div>
+      <div class="fx"><span>AYDINLAR</span><span class="mood m3">kaygılı</span></div>
+    </div>
+
+    <div class="card p">
+      <h3><span>Bakanlar Kurulu</span><span>rapor güvenilirliği</span></h3>
+      <div class="mins" id="mins"></div>
+    </div>
+
+    <div class="grid3">
+      <div class="stat"><div class="k">Mersa Tehdidi</div><div class="v mono">71<span class="q">?</span></div><div class="meterS"><i style="width:71%"></i></div></div>
+      <div class="stat"><div class="k">Garnizon</div><div class="v mono">1.180</div><div class="meterS"><i style="width:64%;background:#7E4B2A"></i></div></div>
+      <div class="stat"><div class="k">Meşruiyet</div><div class="v mono">38</div><div class="meterS"><i style="width:38%;background:#8A7C4E"></i></div></div>
+    </div>
+
+    <div class="card p" style="flex:1">
+      <h3><span>Gelen Telgraflar · 32. Tur</span><span>seçili 3 · toplam 5</span></h3>
+      <div class="tg"><b>TARIM</b> — “Ambar durumu tatminkârdır efendim, zât-ı âlinizi meşgul etmeye değmez.” <em>bildirilen: %64</em></div>
+      <div class="tg"><b>GÜVENLİK</b> — “Mersa ajanları fırında görülmüştür. Garnizona iki tabur daha şarttır.” <em>bildirilen tehdit: 71</em></div>
+      <div class="tg uz"><b>İMAR</b> — “Depoda malzeme 3 tur sonra biter. Değirmen tıkalı. Bunu yazılı bildiriyorum.” <em>UZMAN · doğru</em></div>
+    </div>
+
+  </div>
+
+  <!-- ================= FOOTER ================= -->
+  <div class="foot p">
+    <div class="laws">
+      <h3 class="lbl">Yasa Kitabı · 7 yuvadan 5'i dolu · 2'si alacaklı mührü altında</h3>
+      <div class="slotRow">
+        <div class="slot"><div class="t">Olağanüstü Hâl<br>Kararnamesi</div><div class="ax mono">otorite +18 · güvenlik +12</div></div>
+        <div class="slot"><div class="t">Zorunlu<br>Askerlik</div><div class="ax mono">garnizon +· işgücü −90</div></div>
+        <div class="slot"><div class="t">Tayınlama<br>Usulü</div><div class="ax mono">eşitlik +9 · tüccar −6</div></div>
+        <div class="slot"><div class="t">Liman<br>İmtiyazı</div><div class="ax mono">sermaye +22 · kaldırılamaz</div><div class="wax">ALACAK<br>LI</div></div>
+        <div class="slot"><div class="t">Basın Nizam<br>Kaidesi</div><div class="ax mono">şeffaflık −40 · aydın −15</div></div>
+        <div class="slot empty"><span>BOŞ YUVA</span></div>
+        <div class="slot empty"><span>BOŞ YUVA</span></div>
+      </div>
+    </div>
+    <div class="acts">
+      <div class="btnRow">
+        <div class="btn">Kararname</div><div class="btn">Bütçe</div><div class="btn">Meclis</div>
+      </div>
+      <div class="btnRow">
+        <div class="btn warn">Tahıl El Koyma</div><div class="btn warn">Sokağa Çıkma Yasağı</div>
+      </div>
+      <div class="elec">SEÇİM: 4 TUR SONRA · ERTELE / HİLE YAP</div>
+      <div class="endBtn">TURU BİTİR</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// deterministic pseudo-random so the reference render is stable
+let s = 20260729;
+const rnd = () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+const ri = (a, b) => a + Math.floor(rnd() * (b - a + 1));
+const pick = a => a[ri(0, a.length - 1)];
+
+/* ---------- axis drift trails ---------- */
+function trail(id, pts) {
+  const host = document.getElementById(id);
+  pts.forEach((p, i) => {
+    const d = document.createElement('div');
+    d.className = 'trail';
+    d.style.left = p + '%';
+    d.style.opacity = (0.15 + 0.75 * (i / (pts.length - 1))).toFixed(2);
+    host.appendChild(d);
+  });
+}
+trail('trailA', [48, 47, 45, 44, 41, 40, 37, 35, 34, 30, 28, 26, 24, 21, 19]);
+trail('trailB', [49, 47, 46, 42, 40, 37, 33, 30, 27, 24, 21, 18, 16, 14, 12]);
+
+/* ---------- minister portraits ---------- */
+const MIN = [
+  { n: 'Vehbi<br>Kâmuran', d: 'Maliye', q: 1, tag: 'tSad', t: 'SADIK', skin: '#C9A277', hair: '#3B2A1B', hat: 'fez' },
+  { n: 'Sıdıka<br>Perran', d: 'Tarım', q: 1, tag: 'tSad', t: 'SADIK', skin: '#B98C63', hair: '#1F1710', hat: 'scarf' },
+  { n: 'Reşit<br>Nuri', d: 'Güvenlik', q: 1, tag: 'tSad', t: 'SADIK', skin: '#D0AC85', hair: '#4A3A26', hat: 'kepi' },
+  { n: 'Mahmut<br>Zeki', d: 'İmar', q: 0, tag: 'tUzm', t: 'UZMAN', skin: '#BE9066', hair: '#5B4A33', hat: 'none' },
+  { n: 'Nermin<br>Hâle', d: 'Halk', q: 1, tag: 'tSad', t: 'SADIK', skin: '#C59A70', hair: '#2A1D12', hat: 'none' }
+];
+document.getElementById('mins').innerHTML = MIN.map(m => `
+  <div class="min">
+    <svg viewBox="0 0 60 60" preserveAspectRatio="xMidYMid slice">
+      <rect x="0" y="0" width="60" height="60" fill="#DFD0AC"/>
+      <path d="M8 60 Q30 40 52 60Z" fill="#4A3F2C"/>
+      <rect x="21" y="30" width="18" height="12" fill="${m.skin}"/>
+      <ellipse cx="30" cy="24" rx="13" ry="15" fill="${m.skin}"/>
+      ${m.hair === '#1F1710' || m.hair === '#2A1D12'
+        ? `<path d="M17 22 Q30 4 43 22 Q43 12 30 9 Q17 12 17 22Z" fill="${m.hair}"/>`
+        : `<path d="M18 18 Q30 7 42 18 Q36 13 30 13 Q24 13 18 18Z" fill="${m.hair}"/>`}
+      ${m.hat === 'fez' ? `<rect x="21" y="4" width="18" height="10" fill="#8E2A1C"/><rect x="19" y="13" width="22" height="3" fill="#6E1F14"/>` : ''}
+      ${m.hat === 'kepi' ? `<rect x="18" y="7" width="24" height="8" fill="#3E4A32"/><rect x="16" y="14" width="28" height="3" fill="#26301E"/>` : ''}
+      ${m.hat === 'scarf' ? `<path d="M15 24 Q15 6 30 6 Q45 6 45 24 L45 32 L38 26 Q30 15 22 26 L15 32Z" fill="#6E4B5C"/>` : ''}
+      <rect x="24" y="22" width="4" height="3" fill="#241C12"/>
+      <rect x="33" y="22" width="4" height="3" fill="#241C12"/>
+      <rect x="27" y="31" width="7" height="2" fill="#8A5A44"/>
+      ${m.d === 'Maliye' ? `<path d="M23 27 q7 3 14 0" fill="none" stroke="#241C12" stroke-width="3"/>` : ''}
+      ${m.d === 'İmar' ? `<g fill="none" stroke="#241C12" stroke-width="1.4"><rect x="21" y="20" width="8" height="7"/><rect x="32" y="20" width="8" height="7"/><path d="M29 23h3"/></g>` : ''}
+      <path d="M14 60 Q30 44 46 60 L40 60 Q30 50 20 60Z" fill="#E4D8B8"/>
+      ${m.d === 'Güvenlik' ? `<path d="M26 46 l4 6 l4 -6" fill="#8E2A1C"/>` : `<path d="M28 46 h4 v9 h-4z" fill="#4A3F2C"/>`}
+    </svg>
+    ${m.q ? '<span class="q qb">?</span>' : ''}
+    <div class="nm">${m.n}</div>
+    <div class="dm">${m.d}</div>
+    <span class="tag ${m.tag}">${m.t}</span>
+  </div>`).join('');
+
+/* ---------- procedural city ---------- */
+const SVG = document.getElementById('city');
+const W = 1240, H = 856;
+const el = (t, a) => { const n = document.createElementNS('http://www.w3.org/2000/svg', t);
+  for (const k in a) n.setAttribute(k, a[k]); return n; };
+const add = n => SVG.appendChild(n);
+
+add(el('rect', { x: 0, y: 0, width: W, height: H, fill: '#6F7A55' }));
+
+// river along the left/bottom edge
+let riv = 'M0,0 ';
+for (let y = 0; y <= H; y += 40) riv += `L${70 + 46 * Math.sin(y / 150)},${y} `;
+riv += `L0,${H} Z`;
+add(el('path', { d: riv, fill: '#3F5C6B' }));
+add(el('path', { d: riv, fill: 'none', stroke: '#5C7C8A', 'stroke-width': 3 }));
+
+// hills (ore) top-right
+add(el('path', { d: `M${W},0 L${W},250 Q${W - 300},210 ${W - 420},0 Z`, fill: '#7C7358' }));
+for (let i = 0; i < 26; i++) {
+  const x = W - ri(20, 400), y = ri(10, 230);
+  add(el('circle', { cx: x, cy: y, r: ri(3, 7), fill: '#5E5744', opacity: .55 }));
+}
+// marsh bottom-left
+add(el('path', { d: `M110,${H} Q260,${H - 150} 430,${H} Z`, fill: '#5E6B4A' }));
+
+// districts
+// farm belt in the open ground (food chain, stage 1)
+add(el('rect', { x: 96, y: 232, width: 276, height: 214, fill: '#96A268', opacity: .5 }));
+for (let fy = 240; fy < 440; fy += 26) {
+  add(el('rect', { x: 104, y: fy, width: 260, height: 13, fill: '#A8B07A', stroke: '#7A8253', 'stroke-width': 1 }));
+  for (let fx = 112; fx < 356; fx += 9)
+    add(el('rect', { x: fx, y: fy + 3, width: 3, height: 7, fill: '#8A9459' }));
+}
+[[130, 250], [300, 400]].forEach(([x, y]) => {
+  add(el('rect', { x, y, width: 34, height: 26, fill: '#9E8A63', stroke: '#6E5E40', 'stroke-width': 1.5 }));
+  add(el('path', { d: `M${x},${y} l17,-13 l17,13Z`, fill: '#8A6A52', stroke: '#5E4736', 'stroke-width': 1.4 }));
+});
+{
+  const t = el('text', { x: 108, y: 226, fill: '#F3E9D2', 'font-size': 13, 'letter-spacing': '2',
+    'font-family': 'Georgia, serif', stroke: '#241C12', 'stroke-width': 3.2, 'paint-order': 'stroke' });
+  t.textContent = 'TARLALAR → DEĞİRMEN → FIRIN';
+  add(t);
+}
+
+const D = [
+  { n: 'LİMAN',      x: 90,  y: 462, w: 300, h: 318, c: '#3F5C6B', g: 88 },
+  { n: 'SANAYİ',     x: 400, y: 486, w: 320, h: 294, c: '#6B5F4A', g: 74 },
+  { n: 'ESKİ ŞEHİR', x: 390, y: 224, w: 300, h: 250, c: '#8A6E44', g: 41 },
+  { n: 'TEPE',       x: 830, y: 224, w: 330, h: 250, c: '#7E8A5C', g: 12 },
+  { n: 'ÜNİVERSİTE', x: 730, y: 494, w: 250, h: 286, c: '#5C6B7E', g: 55 },
+  { n: 'KIŞLA',      x: 995, y: 494, w: 200, h: 286, c: '#4A5240', g: 30 }
+];
+D.forEach(d => {
+  add(el('rect', { x: d.x, y: d.y, width: d.w, height: d.h, fill: d.c, opacity: .28 }));
+  add(el('rect', { x: d.x, y: d.y, width: d.w, height: d.h, fill: 'none',
+    stroke: '#241C12', 'stroke-width': 2, 'stroke-dasharray': '9 7', opacity: .55 }));
+});
+
+// roads
+for (let gx = 60; gx < W; gx += 100)
+  add(el('rect', { x: gx, y: 200, width: 13, height: H - 260, fill: '#57503F' }));
+for (let gy = 240; gy < H - 60; gy += 90)
+  add(el('rect', { x: 80, y: gy, width: W - 120, height: 13, fill: '#57503F' }));
+
+// buildings
+const KIND = [
+  { c: '#C4B48C', o: '#8C7E5C', w: 2, h: 2 },   // housing low
+  { c: '#B9A377', o: '#83714C', w: 2, h: 3 },   // housing mid
+  { c: '#9E8A63', o: '#6E5E40', w: 3, h: 4 },   // housing high
+  { c: '#8A6A52', o: '#5E4736', w: 4, h: 3 },   // industry
+  { c: '#A8B07A', o: '#767C52', w: 4, h: 3 },   // farm
+  { c: '#6E7C8A', o: '#4A5560', w: 3, h: 3 }    // civic
+];
+D.forEach(d => {
+  const n = Math.round((d.w * d.h) / 1500);
+  for (let i = 0; i < n; i++) {
+    const k = pick(KIND);
+    const bw = k.w * 11 + ri(0, 8), bh = k.h * 9 + ri(0, 8);
+    const x = d.x + ri(10, d.w - bw - 10), y = d.y + ri(10, d.h - bh - 10);
+    add(el('rect', { x, y, width: bw, height: bh, fill: k.c, stroke: k.o, 'stroke-width': 1.4 }));
+    add(el('rect', { x: x + 2, y: y + 2, width: bw - 4, height: 3, fill: k.o, opacity: .5 }));
+    // AUTHORITY OVERLAY: banners appear as axis_order rises
+    if (rnd() < .34) {
+      add(el('path', { d: `M${x + bw - 5},${y} l0,11 l-6,-4 Z`, fill: '#9C3524' }));
+    }
+    // CAPITAL OVERLAY: billboards in TEPE
+    if (d.n === 'TEPE' && rnd() < .3)
+      add(el('rect', { x: x + 1, y: y - 7, width: bw - 2, height: 6, fill: '#D8C9A4', stroke: '#8C7E5C' }));
+    // EQUALITY OVERLAY: laundry lines in LİMAN
+    if (d.n === 'LİMAN' && rnd() < .4)
+      add(el('path', { d: `M${x},${y - 4} q${bw / 2},7 ${bw},0`, fill: 'none', stroke: '#E8DCC0', 'stroke-width': 1.2 }));
+  }
+});
+
+// checkpoints (authority overlay on roads)
+[[160, 420], [560, 420], [860, 600], [1060, 330]].forEach(([x, y]) => {
+  add(el('rect', { x: x - 9, y: y - 5, width: 30, height: 15, fill: '#8C3A26', stroke: '#5E2317', 'stroke-width': 1.5 }));
+  add(el('rect', { x: x - 4, y: y - 14, width: 4, height: 11, fill: '#241C12' }));
+});
+
+// your statue in ESKİ ŞEHİR
+add(el('rect', { x: 520, y: 330, width: 34, height: 34, fill: '#8A8270', stroke: '#5E5744', 'stroke-width': 2 }));
+add(el('circle', { cx: 537, cy: 322, r: 9, fill: '#A39A82', stroke: '#5E5744', 'stroke-width': 2 }));
+
+// industry smoke (scales with pollution)
+for (let i = 0; i < 16; i++) {
+  const x = 430 + ri(0, 280), y = 520 + ri(0, 60);
+  add(el('circle', { cx: x, cy: y - ri(0, 90), r: ri(9, 26), fill: '#2E2A22', opacity: .1 + rnd() * .12 }));
+}
+
+// citizen dots
+for (let i = 0; i < 230; i++) {
+  const gx = 60 + 100 * ri(0, 11) + 6, gy = 240 + 90 * ri(0, 6) + 6;
+  const along = rnd() < .5;
+  const x = along ? gx + ri(-46, 46) : gx, y = along ? gy : gy + ri(-40, 40);
+  if (x < 80 || x > W - 30 || y < 210 || y > H - 70) continue;
+  add(el('circle', { cx: x, cy: y, r: 1.9, fill: '#2A2419', opacity: .62 }));
+}
+
+// unrest marker on LİMAN
+add(el('circle', { cx: 240, cy: 630, r: 46, fill: 'none', stroke: '#9C3524', 'stroke-width': 3, 'stroke-dasharray': '7 6' }));
+add(el('text', { x: 240, y: 636, fill: '#F3E9D2', 'font-size': 15, 'text-anchor': 'middle',
+  'font-family': 'Georgia, serif', stroke: '#241C12', 'stroke-width': 3, 'paint-order': 'stroke' })).textContent = 'AYAKLANMA';
+
+// refugee column at the gate
+for (let i = 0; i < 34; i++)
+  add(el('circle', { cx: 1195 + ri(-14, 14), cy: 760 + i * 3.2 + ri(-2, 2), r: 2.4, fill: '#4A3F2C', opacity: .85 }));
+add(el('text', { x: 1150, y: 745, fill: '#F3E9D2', 'font-size': 13, 'text-anchor': 'end',
+  'font-family': 'Georgia, serif', stroke: '#241C12', 'stroke-width': 3, 'paint-order': 'stroke' })).textContent = 'MÜLTECİLER ▸';
+
+// district labels
+D.forEach(d => {
+  const t = el('text', { x: d.x + 12, y: d.y + 24, fill: '#F3E9D2', 'font-size': 15,
+    'letter-spacing': '2.5', 'font-family': 'Georgia, serif',
+    stroke: '#241C12', 'stroke-width': 3.4, 'paint-order': 'stroke' });
+  t.textContent = d.n;
+  add(t);
+  const g = el('text', { x: d.x + 12, y: d.y + 41, fill: d.g > 70 ? '#FF9A86' : '#D9C79E',
+    'font-size': 11, 'font-family': 'DejaVu Sans Mono, monospace',
+    stroke: '#241C12', 'stroke-width': 3, 'paint-order': 'stroke' });
+  g.textContent = 'hoşnutsuzluk ' + d.g + (d.g > 70 ? '  ⚠' : '');
+  add(g);
+});
+</script>
