@@ -182,6 +182,12 @@ namespace Mesruiyet.Agent
                     // that only appear under pressure, without playing twenty turns first.
                     return AgentInput.SetThreat(c.n, out string threatWhy) ? Ok() : Err(threatWhy);
 
+                case "tax":
+                    return AgentInput.Tax(c.n, out string taxWhy) ? Ok() : Err(taxWhy);
+
+                case "clause":
+                    return AgentInput.Clause(c.id, out string clauseWhy) ? Ok() : Err(clauseWhy);
+
                 case "decree":
                     return AgentInput.Decree(c.id, out string decreeWhy) ? Ok() : Err(decreeWhy);
 
@@ -265,4 +271,5 @@ namespace Mesruiyet.Agent
     }
 #endif
 }
+
 

@@ -197,6 +197,18 @@ namespace Mesruiyet.Agent
             Num(sb, "consent", g.Consent); sb.Append(',');
             Num(sb, "lostDistricts", g.LostDistricts); sb.Append(',');
             Num(sb, "historyRows", g.History.Count); sb.Append(',');
+            Num(sb, "taxRate", g.TaxRate); sb.Append(',');
+            Num(sb, "fundingCost", g.FundingCost); sb.Append(',');
+            Bool(sb, "charterPending", g.CharterPending); sb.Append(',');
+            Num(sb, "orderCeiling", g.OrderCeiling); sb.Append(',');
+            Num(sb, "orderFloor", g.OrderFloor); sb.Append(',');
+            sb.Append("\"charter\":[");
+            for (int i = 0; i < g.Charter.Count; i++)
+            {
+                if (i > 0) sb.Append(',');
+                sb.Append('"').Append(g.Charter[i].Id).Append('"');
+            }
+            sb.Append("],");
 
             sb.Append("\"factions\":{");
             for (int f = 0; f < 5; f++)
@@ -373,6 +385,26 @@ namespace Mesruiyet.Agent
             return true;
         }
 
+        /// <summary>Set the tax rate, 0..0.60, as a percentage.</summary>
+        public static bool Tax(int percent, out string message)
+        {
+            var state = GameState.Current;
+            if (state == null) { message = "state not bound"; return false; }
+            state.TaxRate = Mathf.Clamp(percent / 100f, 0f, 0.60f);
+            Sim.TurnResolver.Instance.Recompute();
+            message = $"vergi %{state.TaxRate * 100:0}";
+            return true;
+        }
+
+        /// <summary>Write a founding clause into the charter.</summary>
+        public static bool Clause(string id, out string message)
+        {
+            var def = Constitution.Get(id);
+            if (def == null) { message = $"bilinmeyen madde '{id}'"; return false; }
+            if (Sim.GovernanceManager.Instance == null) { message = "governance not ready"; return false; }
+            return Sim.GovernanceManager.Instance.AdoptClause(def, out message);
+        }
+
         /// <summary>Issue a decree by id — the same two-a-turn allowance the player has.</summary>
         public static bool Decree(string id, out string message)
         {
@@ -448,6 +480,7 @@ namespace Mesruiyet.Agent
     }
 }
 #endif
+
 
 
 

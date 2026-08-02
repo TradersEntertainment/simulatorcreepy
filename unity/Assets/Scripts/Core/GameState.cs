@@ -211,6 +211,36 @@ namespace Mesruiyet.Core
             }
         }
 
+        // ---------------------------------------------------------------- the budget
+        /// <summary>Tax rate, 0 to 0.60. The only lever on income the governor actually holds.</summary>
+        public float TaxRate = 0.22f;
+
+        /// <summary>Funding 0..1 for Sağlık · Eğitim · Güvenlik · Kültür · Altyapı.</summary>
+        public readonly float[] Funding = { 0.2f, 0.2f, 0.2f, 0.15f, 0.25f };
+
+        public static readonly string[] FundingNames =
+            { "Sağlık", "Eğitim", "Güvenlik", "Kültür", "Altyapı" };
+
+        /// <summary>What the funding sliders cost per turn, at the current population.</summary>
+        public float FundingCost
+        {
+            get
+            {
+                float total = 0;
+                foreach (var f in Funding) total += f;
+                return total * Population * 0.05f;
+            }
+        }
+
+        // ---------------------------------------------------------------- the charter
+        /// <summary>Three clauses, chosen on turn five and never revisited.</summary>
+        public readonly List<ClauseDef> Charter = new List<ClauseDef>();
+        public bool CharterPending;
+
+        /// <summary>Walls the charter puts on the axes. Nothing may cross them, ever.</summary>
+        public int OrderFloor = -100, OrderCeiling = 100;
+        public int EconomyFloor = -100, EconomyCeiling = 100;
+
         public int DecreeAllowance => Decrees.PerTurn + Modifiers.ExtraDecrees;
 
         public float EffectMagnitude(DecreeEffect kind)
@@ -319,8 +349,23 @@ namespace Mesruiyet.Core
         /// <summary>Clamp an axis and remember that it moved. Everything that shifts politics comes here.</summary>
         public void ShiftAxes(int order, int economy)
         {
-            AxisOrder = Mathf.Clamp(AxisOrder + order, -100, 100);
-            AxisEconomy = Mathf.Clamp(AxisEconomy + economy, -100, 100);
+            // Every axis change in the game passes through here, which is what lets the charter
+            // be a wall rather than a suggestion. A city that wrote "Söz Serbesttir" cannot
+            // legislate its way past 55 on order however badly it needs to on turn forty.
+            AxisOrder = Mathf.Clamp(AxisOrder + order, Mathf.Max(-100, OrderFloor), Mathf.Min(100, OrderCeiling));
+            AxisEconomy = Mathf.Clamp(AxisEconomy + economy, Mathf.Max(-100, EconomyFloor), Mathf.Min(100, EconomyCeiling));
+        }
+
+        /// <summary>Adopt a founding clause. Applied once, on turn five, and never undone.</summary>
+        public void AddClause(ClauseDef clause)
+        {
+            Charter.Add(clause);
+            OrderFloor = Mathf.Max(OrderFloor, clause.OrderFloor);
+            OrderCeiling = Mathf.Min(OrderCeiling, clause.OrderCeiling);
+            EconomyFloor = Mathf.Max(EconomyFloor, clause.EconomyFloor);
+            EconomyCeiling = Mathf.Min(EconomyCeiling, clause.EconomyCeiling);
+            LawSlots += clause.ExtraLawSlots;
+            ShiftAxes(0, 0);                 // pull the current position inside the new walls
         }
 
         public void ShiftFaction(Faction f, int delta)
@@ -333,5 +378,6 @@ namespace Mesruiyet.Core
         }
     }
 }
+
 
 

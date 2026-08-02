@@ -44,9 +44,26 @@ namespace Mesruiyet.Core
             GrainCapacity = 1f,
         };
 
-        public static LawModifiers From(IReadOnlyList<LawDef> book)
+        /// <summary>
+        /// The law book and the founding charter, folded into one set of numbers. Recomputed
+        /// every tick from both lists, so nothing accumulates and a repeal is exact.
+        /// </summary>
+        public static LawModifiers From(IReadOnlyList<LawDef> book, IReadOnlyList<ClauseDef> charter = null)
         {
             var m = Neutral;
+
+            if (charter != null)
+                for (int i = 0; i < charter.Count; i++)
+                {
+                    var c = charter[i];
+                    m.Tax *= c.TaxMultiplier;
+                    m.ChainThroughput *= c.ChainThroughputMultiplier;
+                    m.BuildCost *= c.BuildCostMultiplier;
+                    m.FoodDemand *= c.FoodDemandMultiplier;
+                    m.Transparency += c.TransparencyDelta;
+                    m.GrievanceSettle += c.GrievanceSettleBonus;
+                }
+
             for (int i = 0; i < book.Count; i++)
             {
                 var l = book[i];
@@ -90,3 +107,4 @@ namespace Mesruiyet.Core
         public string Note = "";
     }
 }
+

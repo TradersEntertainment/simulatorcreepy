@@ -29,7 +29,7 @@ namespace Mesruiyet.Sim
         /// <summary>Rebuild the law modifiers and the chamber. Cheap, and always exact.</summary>
         public void Recompute()
         {
-            _state.Modifiers = LawModifiers.From(_state.LawBook);
+            _state.Modifiers = LawModifiers.From(_state.LawBook, _state.Charter);
         }
 
         // ---------------------------------------------------------------- the tick
@@ -64,6 +64,7 @@ namespace Mesruiyet.Sim
             SurfaceScandal();
 
             if (g.IsElectionTurn) g.ElectionPending = true;
+            if (g.Turn == Constitution.Turn && g.Charter.Count == 0) g.CharterPending = true;
         }
 
         /// <summary>
@@ -278,6 +279,31 @@ namespace Mesruiyet.Sim
             Changed?.Invoke();
         }
 
+        // ---------------------------------------------------------------- the charter
+
+        /// <summary>
+        /// Write a founding clause into the charter. Three of these, on turn five, and they are
+        /// never revisited — they are walls, not laws.
+        /// </summary>
+        public bool AdoptClause(ClauseDef clause, out string message)
+        {
+            var g = _state;
+            message = "";
+
+            if (!g.CharterPending) { message = "Anayasa yazım süresi geçti."; return false; }
+            if (g.Charter.Contains(clause)) { message = "Bu madde zaten yazıldı."; return false; }
+            if (g.Charter.Count >= Constitution.Picks) { message = "Üç madde doldu."; return false; }
+
+            g.AddClause(clause);
+            if (g.Charter.Count >= Constitution.Picks) g.CharterPending = false;
+
+            Recompute();
+            TurnResolver.Instance.Recompute();
+            Changed?.Invoke();
+            message = $"{clause.Name} anayasaya yazıldı.";
+            return true;
+        }
+
         // ---------------------------------------------------------------- elections
 
         /// <summary>
@@ -385,5 +411,6 @@ namespace Mesruiyet.Sim
         }
     }
 }
+
 
 

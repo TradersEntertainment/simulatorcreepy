@@ -161,6 +161,7 @@ namespace Mesruiyet.Sim
             // Tax. Wealthier districts yield more per head; the rate itself becomes a slider
             // when the budget panel lands.
             flow[(int)Res.Para] += Tax();
+            flow[(int)Res.Para] -= g.FundingCost;
 
             return flow;
         }
@@ -282,7 +283,7 @@ namespace Mesruiyet.Sim
             {
                 // A district that has passed to a local strongman keeps its own taxes.
                 if (d.Lost) continue;
-                t += d.Population * 0.22f * (0.5f + d.Def.Wealth / 100f);
+                t += d.Population * _state.TaxRate * (0.5f + d.Def.Wealth / 100f);
             }
             return t * _state.Modifiers.Tax;
         }
@@ -368,6 +369,12 @@ namespace Mesruiyet.Sim
                 target += joblessShare * jobWeight;
 
                 target += (LocalPollution(d) + g.Modifiers.Pollution) * 1.15f;
+
+                // The budget, felt. A city with no clinics and no watch is a city that has
+                // noticed, and the tax rate above a quarter is felt everywhere at once.
+                target += Mathf.Max(0f, 50f - g.Saglik) * 0.10f;
+                target += Mathf.Max(0f, 50f - g.Guvenlik) * 0.08f;
+                target += Mathf.Max(0f, g.TaxRate - 0.25f) * 130f;
                 // A curfew does not fix anything; it makes the street quiet for a few turns.
                 target -= g.EffectMagnitude(DecreeEffect.CalmStreets);
                 target -= LocalAmenity(d) * 0.55f;                  // parks, temples, clinics
@@ -446,11 +453,13 @@ namespace Mesruiyet.Sim
                 pollution += b.Def.Pollution;
             }
 
+            // Buildings and the budget both feed the indices; a city can buy a clinic or fund
+            // the ones it has, and both show up in the same number.
             float perCapita = Mathf.Max(1f, g.Population / 100f);
-            g.Saglik = Mathf.Clamp(30 + health / perCapita * 4f, 0, 100);
-            g.Egitim = Mathf.Clamp(28 + education / perCapita * 4f, 0, 100);
-            g.Guvenlik = Mathf.Clamp(34 + security / perCapita * 3.4f, 0, 100);
-            g.Kultur = Mathf.Clamp(30 + culture / perCapita * 4f, 0, 100);
+            g.Saglik = Mathf.Clamp(18 + health / perCapita * 4f + g.Funding[0] * 55f, 0, 100);
+            g.Egitim = Mathf.Clamp(16 + education / perCapita * 4f + g.Funding[1] * 55f, 0, 100);
+            g.Guvenlik = Mathf.Clamp(20 + security / perCapita * 3.4f + g.Funding[2] * 55f, 0, 100);
+            g.Kultur = Mathf.Clamp(18 + culture / perCapita * 4f + g.Funding[3] * 55f, 0, 100);
             g.Kirlilik = Mathf.Clamp(pollution / perCapita * 3.2f, 0, 100);
         }
 
@@ -626,6 +635,7 @@ namespace Mesruiyet.Sim
         }
     }
 }
+
 
 
 

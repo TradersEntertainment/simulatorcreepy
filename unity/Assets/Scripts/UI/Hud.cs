@@ -38,7 +38,7 @@ namespace Mesruiyet.UI
         VisualElement _ministerRow, _telegramList, _telegramHead;
         VisualElement _councilHead, _councilBody, _outsideBody;
         VisualElement _appointmentCard, _modal, _scrim, _finalSession;
-        VisualElement _lawSlotRow;
+        VisualElement _lawSlotRow, _budgetSummary;
         Button _decreeButton;
         readonly List<VisualElement> _resCell = new List<VisualElement>();
         VisualElement _selectionCard;
@@ -1288,6 +1288,197 @@ namespace Mesruiyet.UI
             return row;
         }
 
+        // ---- the budget
+        //
+        // The only lever on income the governor holds, and the only one that touches every
+        // district at once. Above a quarter the rate is felt everywhere; below it the clinics
+        // and the watch go unfunded and the streets notice that instead.
+
+        void OpenBudget()
+        {
+            var card = OpenModal("panel_budget", "BÜTÇE",
+                "Vergi her mahallede aynı anda hissedilir. Ödenekler her tur hazineden çıkar.", 680);
+            card.style.bottom = StyleKeyword.Auto;
+
+            var g = _state;
+
+            var taxRow = UiKit.Row();
+            taxRow.style.justifyContent = Justify.SpaceBetween;
+            taxRow.Add(UiKit.Caption("Vergi oranı"));
+            var taxValue = UiKit.Text($"%{g.TaxRate * 100:0}", 15, UiKit.Amber, FontStyle.Bold);
+            taxRow.Add(taxValue);
+            card.Add(taxRow);
+
+            var tax = new Slider(0f, 0.60f) { name = "sld_tax", value = g.TaxRate };
+            tax.style.marginTop = 4; tax.style.marginBottom = 4;
+            tax.style.marginLeft = 0; tax.style.marginRight = 0;
+            tax.RegisterValueChangedCallback(e =>
+            {
+                g.TaxRate = e.newValue;
+                taxValue.text = $"%{g.TaxRate * 100:0}";
+                TurnResolver.Instance.Recompute();
+                RefreshBudgetSummary();
+            });
+            card.Add(tax);
+
+            var hint = UiKit.Text(
+                "Çeyreğin üstündeki her puan bütün mahallelerde hoşnutsuzluk doğurur.",
+                10.5f, UiKit.Dim).Margin(bottom: 14);
+            hint.style.whiteSpace = WhiteSpace.Normal;
+            card.Add(hint);
+
+            card.Add(UiKit.Caption("Ödenekler").Margin(bottom: 8));
+            for (int i = 0; i < g.Funding.Length; i++)
+            {
+                int index = i;
+
+                var row = UiKit.Row();
+                row.style.justifyContent = Justify.SpaceBetween;
+                row.Add(UiKit.Text(GameState.FundingNames[i], 12.5f, UiKit.Ink));
+                var value = UiKit.Text($"%{g.Funding[i] * 100:0}", 12, UiKit.Muted, FontStyle.Bold);
+                row.Add(value);
+                card.Add(row);
+
+                var slider = new Slider(0f, 1f)
+                {
+                    name = "sld_funding_" + i,
+                    value = g.Funding[i],
+                };
+                slider.style.marginTop = 2; slider.style.marginBottom = 8;
+                slider.style.marginLeft = 0; slider.style.marginRight = 0;
+                slider.RegisterValueChangedCallback(e =>
+                {
+                    g.Funding[index] = e.newValue;
+                    value.text = $"%{g.Funding[index] * 100:0}";
+                    TurnResolver.Instance.Recompute();
+                    RefreshBudgetSummary();
+                });
+                card.Add(slider);
+            }
+
+            _budgetSummary = UiKit.Column().Margin(top: 6);
+            card.Add(_budgetSummary);
+            RefreshBudgetSummary();
+        }
+
+        void RefreshBudgetSummary()
+        {
+            if (_budgetSummary == null) return;
+            _budgetSummary.Clear();
+
+            var flow = Reporting.Flow(Res.Para);
+            void Row(string k, string v, Color colour)
+            {
+                var row = UiKit.Row();
+                row.style.justifyContent = Justify.SpaceBetween;
+                row.style.paddingTop = 5; row.style.paddingBottom = 5;
+                row.style.borderTopWidth = 1;
+                row.style.borderTopColor = new Color(1, 1, 1, 0.07f);
+                row.Add(UiKit.Text(k, 12, UiKit.Hex("#8E9CB0")));
+                row.Add(UiKit.Text(v, 12, colour, FontStyle.Bold));
+                _budgetSummary.Add(row);
+            }
+
+            Row("Ödenek gideri", $"−{_state.FundingCost:0} ₺ / tur", UiKit.Red);
+            Row("Hazine akışı", UiKit.Signed(flow.Value) + " ₺ / tur", UiKit.FlowColour(flow.Value));
+            Row("Sağlık · Güvenlik", $"{_state.Saglik:0} · {_state.Guvenlik:0}",
+                _state.Saglik < 35 || _state.Guvenlik < 35 ? UiKit.Red : UiKit.Green);
+        }
+
+        // ---- the founding charter
+
+        void OpenCharter()
+        {
+            var g = _state;
+            var card = OpenModal("panel_charter", "ANAYASA",
+                $"Üç madde seçin ({g.Charter.Count}/{Constitution.Picks}). Bunlar kanun değil, " +
+                "duvardır: bir daha değiştirilemezler ve eksenlerinizi ömür boyu sınırlarlar.", 860);
+
+            var list = ModalList();
+            foreach (var clause in Constitution.All) list.Add(ClauseRow(clause));
+            card.Add(list);
+        }
+
+        VisualElement ClauseRow(ClauseDef clause)
+        {
+            var g = _state;
+            bool taken = g.Charter.Contains(clause);
+            bool full = g.Charter.Count >= Constitution.Picks;
+
+            var row = UiKit.Row();
+            row.style.alignItems = Align.FlexStart;
+            row.style.marginBottom = 8;
+            row.style.backgroundColor = taken
+                ? UiKit.Alpha(UiKit.Amber, 0.12f) : new Color(1, 1, 1, 0.04f);
+            row.Radius(10).Border(1, taken ? UiKit.Alpha(UiKit.Amber, 0.4f) : UiKit.Hairline).Pad(11, 13);
+            row.style.opacity = taken || !full ? 1f : 0.45f;
+
+            var text = UiKit.Column();
+            text.style.flexGrow = 1;
+            text.style.flexShrink = 1;
+            text.Add(UiKit.Text(clause.Name, 13.5f, UiKit.Ink, FontStyle.Bold));
+
+            var blurb = UiKit.Text(clause.Blurb, 11.5f, UiKit.Hex("#9AA8BC")).Margin(top: 3);
+            blurb.style.whiteSpace = WhiteSpace.Normal;
+            text.Add(blurb);
+
+            var terms = UiKit.Row();
+            terms.style.flexWrap = Wrap.Wrap;
+            terms.style.marginTop = 7;
+            void Term(string s, Color colour)
+            {
+                var chip = UiKit.Text(s, 9.5f, colour, FontStyle.Bold);
+                chip.style.backgroundColor = UiKit.Alpha(colour, 0.16f);
+                chip.Radius(5).Pad(3, 7).Margin(right: 5, top: 3);
+                terms.Add(chip);
+            }
+
+            // The wall is the important part, so it is stated first and in red.
+            if (clause.OrderCeiling < 100) Term($"otorite tavanı {clause.OrderCeiling}", UiKit.Red);
+            if (clause.OrderFloor > -100) Term($"özgürlük tabanı {clause.OrderFloor}", UiKit.Red);
+            if (clause.EconomyCeiling < 100) Term($"sermaye tavanı {clause.EconomyCeiling}", UiKit.Red);
+            if (clause.EconomyFloor > -100) Term($"eşitlik tabanı {clause.EconomyFloor}", UiKit.Red);
+
+            if (System.Math.Abs(clause.TaxMultiplier - 1f) > 0.001f)
+                Term($"vergi ×{clause.TaxMultiplier:0.00}", UiKit.Amber);
+            if (System.Math.Abs(clause.ChainThroughputMultiplier - 1f) > 0.001f)
+                Term($"üretim ×{clause.ChainThroughputMultiplier:0.00}", UiKit.Green);
+            if (System.Math.Abs(clause.BuildCostMultiplier - 1f) > 0.001f)
+                Term($"inşaat ×{clause.BuildCostMultiplier:0.00}", UiKit.Blue);
+            if (System.Math.Abs(clause.FoodDemandMultiplier - 1f) > 0.001f)
+                Term($"ekmek talebi ×{clause.FoodDemandMultiplier:0.00}", UiKit.Green);
+            if (System.Math.Abs(clause.TransparencyDelta) > 0.001f)
+                Term($"şeffaflık +{clause.TransparencyDelta:0.00}", UiKit.Green);
+            if (clause.ExtraLawSlots > 0) Term($"+{clause.ExtraLawSlots} yasa yuvası", UiKit.Amber);
+            text.Add(terms);
+            row.Add(text);
+
+            var pick = new Button
+            {
+                name = "btn_clause_" + clause.Id,
+                text = taken ? "YAZILDI" : "SEÇ",
+            };
+            pick.style.marginLeft = 12;
+            pick.style.marginTop = 0; pick.style.marginBottom = 0; pick.style.marginRight = 0;
+            pick.style.paddingTop = 9; pick.style.paddingBottom = 9;
+            pick.style.paddingLeft = 16; pick.style.paddingRight = 16;
+            pick.style.fontSize = 11;
+            pick.style.unityFontStyleAndWeight = FontStyle.Bold;
+            pick.style.flexShrink = 0;
+            pick.style.color = taken ? UiKit.Muted : UiKit.Bg;
+            pick.style.backgroundColor = taken ? new Color(1, 1, 1, 0.06f) : UiKit.Amber;
+            pick.Radius(9).Border(0, Color.clear);
+            pick.SetEnabled(!taken && !full);
+            pick.clicked += () =>
+            {
+                GovernanceManager.Instance.AdoptClause(clause, out _);
+                if (_state.CharterPending) OpenCharter(); else CloseModal();
+                Refresh();
+            };
+            row.Add(pick);
+            return row;
+        }
+
         // ---- the election
         //
         // The one channel that cannot lie. The number below comes from true district grievance
@@ -1799,6 +1990,19 @@ namespace Mesruiyet.UI
             _decreeButton.clicked += OpenDecrees;
             instruments.Add(_decreeButton);
 
+            var budget = new Button { name = "btn_budget", text = "BÜTÇE" };
+            budget.style.marginTop = 0; budget.style.marginBottom = 0;
+            budget.style.marginLeft = 0; budget.style.marginRight = 14;
+            budget.style.paddingTop = 10; budget.style.paddingBottom = 10;
+            budget.style.paddingLeft = 11; budget.style.paddingRight = 11;
+            budget.style.fontSize = 9.5f;
+            budget.style.unityFontStyleAndWeight = FontStyle.Bold;
+            budget.style.color = UiKit.Ink;
+            budget.style.backgroundColor = new Color(1, 1, 1, 0.06f);
+            budget.Radius(9).Border(1, UiKit.Hairline);
+            budget.clicked += OpenBudget;
+            instruments.Add(budget);
+
             var lawButton = new Button { name = "btn_lawbook" };
             lawButton.text = string.Empty;
             lawButton.style.flexDirection = FlexDirection.Row;
@@ -2075,6 +2279,10 @@ namespace Mesruiyet.UI
                 return;
             }
 
+            bool charterOpen = _modal != null && _modal.name == "panel_charter";
+            if (_state.CharterPending && !charterOpen) { OpenCharter(); return; }
+            if (!_state.CharterPending && charterOpen) CloseModal();
+
             bool electionOpen = _modal != null && _modal.name == "panel_election";
             if (_state.ElectionPending && !electionOpen) OpenElection();
             else if (!_state.ElectionPending && electionOpen) CloseModal();
@@ -2146,6 +2354,8 @@ namespace Mesruiyet.UI
         }
     }
 }
+
+
 
 
 

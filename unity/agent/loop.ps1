@@ -704,6 +704,92 @@ switch ($Scenario) {
         $state = $final
     }
 
+    # The two levers the governor holds from turn one: the charter that decides what they will
+    # never be allowed to do, and the budget that decides what the city can afford this year.
+    "butce" {
+        function Field([string] $json, [string] $key) {
+            if ($json -match "`"$key`":(-?[\d.]+)") { return [double]$Matches[1] }
+            return [double]::NaN
+        }
+        $ok = $true
+        function Check([bool] $pass, [string] $label) {
+            if ($pass) { Write-Host "  ✔ $label" -ForegroundColor Green }
+            else { Write-Host "  ✘ $label" -ForegroundColor Red; $script:ok = $false }
+        }
+
+        # ---- 1. the charter arrives on turn five and blocks the turn until it is written
+        Write-Host "`n[loop] ANAYASA:" -ForegroundColor Cyan
+        $t = Get-Turn
+        Send-Cmd ('{"cmd":"endturn","n":' + (5 - $t) + '}') | Out-Null
+        Wait-Turn 5 60 | Out-Null
+        Start-Sleep -Milliseconds 700
+        $atCharter = Send-Cmd '{"cmd":"state"}'
+        Shot "01-anayasa.png"
+        Check ($atCharter -match '"charterPending":true') "5. turda anayasa açıldı"
+
+        # "Söz Serbesttir" is the interesting one: it caps authority for the whole run.
+        Send-Cmd '{"cmd":"clause","id":"soz_serbest"}'  | Out-Null
+        Send-Cmd '{"cmd":"clause","id":"herkese_ekmek"}' | Out-Null
+        Send-Cmd '{"cmd":"clause","id":"meclis_ustundur"}' | Out-Null
+        $written = Send-Cmd '{"cmd":"state"}'
+        Write-Host ("  otorite tavanı {0:N0} · yasa yuvası {1:N0}" -f `
+                    (Field $written "orderCeiling"), (Field $written "lawSlots"))
+        Check ($written -notmatch '"charterPending":true') "üç madde yazıldı"
+        Check ((Field $written "orderCeiling") -le 55) "anayasa otoriteye tavan koydu"
+        Check ((Field $written "lawSlots") -eq 5) "meclis maddesi bir yuva daha açtı"
+
+        # ---- 2. the wall holds against everything
+        Write-Host "`n[loop] DUVAR:" -ForegroundColor Cyan
+        foreach ($i in 1..10) {
+            Send-Cmd '{"cmd":"decree","id":"sokaga_cikma"}' | Out-Null
+            Send-Cmd '{"cmd":"decree","id":"basin_talimatnamesi"}' | Out-Null
+            $t = Get-Turn
+            $s = Send-Cmd '{"cmd":"state"}'
+            if ($s -notmatch '"pendingEvent":""') { Send-Cmd '{"cmd":"event","n":0}' | Out-Null }
+            if ($s -match '"electionPending":true') { Send-Cmd '{"cmd":"election","id":"yap"}' | Out-Null }
+            Send-Cmd '{"cmd":"endturn","n":1}' | Out-Null
+            Wait-Turn ($t + 1) 40 | Out-Null
+        }
+        $walled = Send-Cmd '{"cmd":"state"}'
+        Shot "02-duvar.png"
+        Write-Host ("  yirmi kararname sonrası otorite {0:N0} (tavan {1:N0})" -f `
+                    (Field $walled "axisOrder"), (Field $walled "orderCeiling"))
+        Check ((Field $walled "axisOrder") -le (Field $walled "orderCeiling")) `
+              "eksen anayasal tavanı aşamadı"
+
+        # ---- 3. the budget is a real lever in both directions
+        Write-Host "`n[loop] BÜTÇE:" -ForegroundColor Cyan
+        $before = Send-Cmd '{"cmd":"state"}'
+        Send-Cmd '{"cmd":"tax","n":50}' | Out-Null
+        $high = Send-Cmd '{"cmd":"state"}'
+        Write-Host ("  vergi oranı %{0:N0} -> %{1:N0} · ödenek gideri {2:N0} ₺/tur" -f `
+                    ((Field $before "taxRate") * 100), ((Field $high "taxRate") * 100), `
+                    (Field $high "fundingCost"))
+        Check ((Field $high "taxRate") -gt 0.45) "vergi oranı ayarlandı"
+
+        $t = Get-Turn
+        Send-Cmd '{"cmd":"endturn","n":3}' | Out-Null
+        Wait-Turn ($t + 3) 60 | Out-Null
+        $taxed = Send-Cmd '{"cmd":"state"}'
+        Shot "03-vergi.png"
+
+        $worst = 0
+        foreach ($m in ([regex]::Matches($taxed, '"grievance":([\d.]+)'))) {
+            $v = [double]$m.Groups[1].Value
+            if ($v -gt $worst) { $worst = $v }
+        }
+        $worstBefore = 0
+        foreach ($m in ([regex]::Matches($before, '"grievance":([\d.]+)'))) {
+            $v = [double]$m.Groups[1].Value
+            if ($v -gt $worstBefore) { $worstBefore = $v }
+        }
+        Write-Host ("  en yüksek hoşnutsuzluk {0:N0} -> {1:N0}" -f $worstBefore, $worst)
+        Check ($worst -gt $worstBefore) "yüksek vergi her mahallede hissedildi"
+
+        if (-not $ok) { $chainBroken = $true }
+        $state = $taxed
+    }
+
     "turns40" {
         $t = Get-Turn
         Send-Cmd '{"cmd":"endturn","n":40}' | Out-Null
@@ -746,6 +832,7 @@ if ($chainBroken) {
 }
 
 Write-Host "`n[loop] temiz. Görüntüler: agent\shots\" -ForegroundColor Green
+
 
 
 
