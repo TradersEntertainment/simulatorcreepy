@@ -628,9 +628,146 @@ namespace Mesruiyet.World
                     if (market && CityGrid.Hash(x, y, 13) < 0.14f)
                         AddStall(CityGrid.World(x, y), CityGrid.Hash(x, y, 17));
                 }
+
+                // And the quarter's own furniture. §3 asks that a player be able to diagnose a
+                // district by watching it for five seconds; palette and storey height alone gave
+                // six quarters that differed by tint, which is not the same as differing by
+                // character. A crane says docks before you have read the label.
+                if (t == TileKind.Cayir || t == TileKind.Verimli || t == TileKind.Tepelik)
+                {
+                    var quarter = Districts.At(x, y);
+                    if (quarter != null) AddDistrictProp(quarter.Id, x, y);
+                }
             }
 
             _builder.Into(_propMesh);
+        }
+
+        /// <summary>
+        /// One piece of quarter-specific furniture on an empty plot. Each is a handful of boxes,
+        /// each is unmistakable from the air, and each says what the district is *for* — which is
+        /// the readability the design asks for and which colour alone was never going to carry.
+        /// </summary>
+        void AddDistrictProp(DistrictId id, int x, int y)
+        {
+            float r = CityGrid.Hash(x, y, 91);
+            float s = CityGrid.Hash(x, y, 97);
+            Vector3 at = CityGrid.World(x, y) + new Vector3((s - 0.5f) * 2.2f, 0, (r - 0.5f) * 2.2f);
+
+            switch (id)
+            {
+                case DistrictId.Liman when r < 0.05f:
+                {
+                    // A quayside crane: a mast, a counterweight and a jib reaching out over the
+                    // water side. Nothing else on this map has a horizontal arm in the air.
+                    _builder.AddBox(at, new Vector3(0.9f, 0.35f, 0.9f), Hex("#4A4F57"));
+                    _builder.AddBox(at + Vector3.up * 0.35f, new Vector3(0.34f, 5.2f, 0.34f), Hex("#B8703A"));
+                    _builder.AddBox(at + new Vector3(1.5f, 5.2f, 0), new Vector3(3.6f, 0.26f, 0.26f), Hex("#B8703A"));
+                    _builder.AddBox(at + new Vector3(-0.7f, 5.2f, 0), new Vector3(0.8f, 0.5f, 0.5f), Hex("#4A4F57"));
+                    _builder.AddBox(at + new Vector3(2.9f, 4.3f, 0), new Vector3(0.1f, 1.6f, 0.1f), Hex("#3A3E44"));
+                    break;
+                }
+                case DistrictId.Liman when r < 0.13f:
+                {
+                    // Stacked cargo. Three crates, never the same three.
+                    for (int i = 0; i < 3; i++)
+                    {
+                        float k = CityGrid.Hash(x, y, 101 + i);
+                        if (k < 0.3f) continue;
+                        _builder.AddBox(at + new Vector3((k - 0.5f) * 1.3f, i * 0.62f, (i - 1) * 0.4f),
+                                        new Vector3(0.75f, 0.6f, 0.75f),
+                                        k > 0.6f ? Hex("#8A6E44") : Hex("#6E5B3C"));
+                    }
+                    break;
+                }
+
+                case DistrictId.Tepe when r < 0.10f:
+                {
+                    // A garden wall with a gate post at each end. Wealth, expressed as a boundary.
+                    _builder.AddBox(at, new Vector3(4.2f, 1.1f, 0.24f), Hex("#B9AE97"));
+                    _builder.AddBox(at + new Vector3(-2.1f, 0, 0), new Vector3(0.42f, 1.7f, 0.42f), Hex("#A3987F"));
+                    _builder.AddBox(at + new Vector3(2.1f, 0, 0), new Vector3(0.42f, 1.7f, 0.42f), Hex("#A3987F"));
+                    break;
+                }
+                case DistrictId.Tepe when r < 0.20f:
+                {
+                    // A clipped ornamental hedge — a ball on a stem, which reads as money.
+                    _builder.AddBox(at, new Vector3(0.22f, 0.9f, 0.22f), Hex("#5A4433"));
+                    _builder.AddBox(at + Vector3.up * 0.9f, new Vector3(1.15f, 1.0f, 1.15f), Hex("#4B6F49"));
+                    break;
+                }
+
+                case DistrictId.EskiSehir when r < 0.10f:
+                {
+                    // A courtyard wall with an arched opening, faked as two piers and a lintel.
+                    _builder.AddBox(at + new Vector3(-1.3f, 0, 0), new Vector3(0.9f, 2.3f, 0.7f), Hex("#B49E7E"));
+                    _builder.AddBox(at + new Vector3(1.3f, 0, 0), new Vector3(0.9f, 2.3f, 0.7f), Hex("#B49E7E"));
+                    _builder.AddBox(at + Vector3.up * 2.3f, new Vector3(3.5f, 0.5f, 0.7f), Hex("#C0AB8B"));
+                    break;
+                }
+                case DistrictId.EskiSehir when r < 0.19f:
+                {
+                    // A well head. Old towns are organised around water.
+                    _builder.AddBox(at, new Vector3(1.3f, 0.7f, 1.3f), Hex("#9A9086"));
+                    _builder.AddBox(at + new Vector3(-0.55f, 0.7f, 0), new Vector3(0.12f, 1.5f, 0.12f), Hex("#5A4433"));
+                    _builder.AddBox(at + new Vector3(0.55f, 0.7f, 0), new Vector3(0.12f, 1.5f, 0.12f), Hex("#5A4433"));
+                    _builder.AddBox(at + Vector3.up * 2.2f, new Vector3(1.5f, 0.14f, 0.5f), Hex("#6E5B3C"));
+                    break;
+                }
+
+                case DistrictId.Sanayi when r < 0.08f:
+                {
+                    // A pipe rack straddling the plot. Industry, in one silhouette.
+                    _builder.AddBox(at + new Vector3(-1.6f, 0, 0), new Vector3(0.3f, 3.2f, 0.3f), Hex("#5B5F66"));
+                    _builder.AddBox(at + new Vector3(1.6f, 0, 0), new Vector3(0.3f, 3.2f, 0.3f), Hex("#5B5F66"));
+                    _builder.AddBox(at + Vector3.up * 3.0f, new Vector3(3.8f, 0.34f, 0.34f), Hex("#7A6A52"));
+                    _builder.AddBox(at + Vector3.up * 2.55f, new Vector3(3.8f, 0.26f, 0.26f), Hex("#6A5C48"));
+                    break;
+                }
+                case DistrictId.Sanayi when r < 0.18f:
+                {
+                    // A spoil heap and a drum or two.
+                    _builder.AddPyramid(at, 1.4f, 1.5f, Hex("#57514A"));
+                    _builder.AddBox(at + new Vector3(1.5f, 0, 0.7f), new Vector3(0.6f, 0.85f, 0.6f), Hex("#7A5B3C"));
+                    break;
+                }
+
+                case DistrictId.Universite when r < 0.09f:
+                {
+                    // A bench under a lamp. Students, sitting about.
+                    _builder.AddBox(at + Vector3.up * 0.36f, new Vector3(1.7f, 0.12f, 0.5f), Hex("#7A6244"));
+                    _builder.AddBox(at + new Vector3(-0.7f, 0, 0), new Vector3(0.12f, 0.36f, 0.42f), Hex("#4A4034"));
+                    _builder.AddBox(at + new Vector3(0.7f, 0, 0), new Vector3(0.12f, 0.36f, 0.42f), Hex("#4A4034"));
+                    _builder.AddBox(at + new Vector3(0, 0.48f, -0.22f), new Vector3(1.7f, 0.55f, 0.1f), Hex("#8A7050"));
+                    break;
+                }
+                case DistrictId.Universite when r < 0.16f:
+                {
+                    // A noticeboard, papered over. Where an argument starts.
+                    _builder.AddBox(at + new Vector3(-0.55f, 0, 0), new Vector3(0.12f, 1.5f, 0.12f), Hex("#4A4034"));
+                    _builder.AddBox(at + new Vector3(0.55f, 0, 0), new Vector3(0.12f, 1.5f, 0.12f), Hex("#4A4034"));
+                    _builder.AddBox(at + Vector3.up * 1.05f, new Vector3(1.1f, 0.75f, 0.1f), Hex("#A79E8C"));
+                    break;
+                }
+
+                case DistrictId.Kisla when r < 0.06f:
+                {
+                    // A flagpole. Nothing says garrison faster.
+                    _builder.AddBox(at, new Vector3(0.7f, 0.3f, 0.7f), Hex("#6E7A6A"));
+                    _builder.AddBox(at + Vector3.up * 0.3f, new Vector3(0.14f, 6.0f, 0.14f), Hex("#C8C2B4"));
+                    _builder.AddBox(at + new Vector3(0.55f, 5.4f, 0), new Vector3(1.1f, 0.7f, 0.06f), Hex("#C43A2A"));
+                    break;
+                }
+                case DistrictId.Kisla when r < 0.16f:
+                {
+                    // Sandbags and a stack of crates against the wall.
+                    for (int i = 0; i < 3; i++)
+                        _builder.AddBox(at + new Vector3((i - 1) * 0.62f, 0, 0),
+                                        new Vector3(0.68f, 0.4f, 0.5f), Hex("#8C8468"));
+                    _builder.AddBox(at + new Vector3(0, 0.4f, 0), new Vector3(0.68f, 0.4f, 0.5f), Hex("#7E7660"));
+                    break;
+                }
+            }
         }
 
         static readonly Color[] StallCanopy =

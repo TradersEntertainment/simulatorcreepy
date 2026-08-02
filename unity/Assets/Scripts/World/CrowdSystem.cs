@@ -364,6 +364,15 @@ namespace Mesruiyet.World
             int wanted = Mathf.Clamp(_state.Population / 3, 40, MaxAgents);
             uint seed = 0x9E3779B9u;
 
+            // "Fleet size scales with commerce and population", §3. Population was already in
+            // `wanted`; commerce was not, so a trading city and a subsistence one put the same
+            // number of cars on the same streets. One in eight when nothing is moving, one in
+            // three when the market quarters are full — visible from the air without a panel.
+            int trade = 0;
+            foreach (var b in _state.Buildings)
+                if (b.Staffed && b.Def.Output[(int)Res.Para] > 0) trade++;
+            int carEvery = Mathf.Clamp(8 - trade / 3, 3, 8);
+
             for (int i = 0; i < wanted; i++)
             {
                 int district = i % _state.Districts.Length;
@@ -373,7 +382,7 @@ namespace Mesruiyet.World
                 float y = bounds.yMin + Rand(ref seed) * bounds.height;
                 Vector3 world = CityGrid.World(Mathf.RoundToInt(x), Mathf.RoundToInt(y));
 
-                bool car = i % 5 == 0;
+                bool car = i % carEvery == 0;
                 var agent = new CrowdAgent
                 {
                     Pos = new float3(world.x, car ? 0.05f : 0f, world.z),
