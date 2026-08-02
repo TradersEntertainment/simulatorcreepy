@@ -112,6 +112,46 @@ namespace Mesruiyet.World
         }
 
         /// <summary>
+        /// A gable roof: two pitched slopes meeting at a ridge, with a triangular gable at each
+        /// end. A pyramid gives a hipped roof, which is fine for a tower and wrong for a house —
+        /// a row of flat-topped boxes is what makes a low-poly town read as an office park.
+        /// <paramref name="alongX"/> runs the ridge along the x axis.
+        /// </summary>
+        public void AddGable(Vector3 groundCentre, float width, float depth, float height,
+                             Color color, bool alongX, float overhang = 0.12f)
+        {
+            float hw = width * 0.5f + overhang;
+            float hd = depth * 0.5f + overhang;
+
+            // Ridge endpoints, along whichever axis was asked for.
+            Vector3 r0, r1;
+            Vector3 a, b, c, d;   // eaves corners, wound so each slope is a quad
+            if (alongX)
+            {
+                r0 = groundCentre + new Vector3(-hw, height, 0);
+                r1 = groundCentre + new Vector3(hw, height, 0);
+                a = groundCentre + new Vector3(-hw, 0, -hd);
+                b = groundCentre + new Vector3(hw, 0, -hd);
+                c = groundCentre + new Vector3(hw, 0, hd);
+                d = groundCentre + new Vector3(-hw, 0, hd);
+            }
+            else
+            {
+                r0 = groundCentre + new Vector3(0, height, -hd);
+                r1 = groundCentre + new Vector3(0, height, hd);
+                a = groundCentre + new Vector3(-hw, 0, -hd);
+                b = groundCentre + new Vector3(-hw, 0, hd);
+                c = groundCentre + new Vector3(hw, 0, hd);
+                d = groundCentre + new Vector3(hw, 0, -hd);
+            }
+
+            AddQuad(a, b, r1, r0, Shade(color, 1.06f));   // sunward slope
+            AddQuad(c, d, r0, r1, Shade(color, 0.82f));   // shaded slope
+            AddTriangle(d, a, r0, Shade(color, 0.92f));   // gable ends
+            AddTriangle(b, c, r1, Shade(color, 0.92f));
+        }
+
+        /// <summary>
         /// A window: a quad pushed a hair off the wall with alpha 0, which CityLit reads as
         /// "emissive". Lit windows are the whole reason the city reads as inhabited at dusk.
         /// </summary>

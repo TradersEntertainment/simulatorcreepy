@@ -212,6 +212,14 @@ switch ($Scenario) {
         Send-Cmd '{"cmd":"endturn","n":3}' | Out-Null
         Wait-Turn ($t + 3) 40 | Out-Null
         Shot "02-3tur.png"
+
+        # An ordinary quarter, close up. Everything about the roofs, doors, stalls, people and
+        # cars is invisible from the default framing, and "it renders" is not the same claim as
+        # "it looks like a town", so the loop takes a picture that can settle the second one.
+        foreach ($i in 1..8) { Send-Cmd '{"cmd":"press","key":"zoomin"}' | Out-Null }
+        Start-Sleep -Milliseconds 900
+        Shot "03-yakin.png"
+
         $state = Send-Cmd '{"cmd":"state"}'
     }
 

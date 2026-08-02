@@ -254,16 +254,31 @@ namespace Mesruiyet.World
                     storeys = Mathf.Clamp(district.Storeys.x + Mathf.FloorToInt(hash2 * (district.Storeys.y - district.Storeys.x + 1)),
                                           1, 6);
 
-                float footprint = CityGrid.TileSize * (0.56f + 0.2f * hash);
-                float depth = CityGrid.TileSize * (0.56f + 0.2f * hash2);
-                float height = storeys * 3.1f;
+                // Homes are wider and their floors are lower than a civic building's. At the old
+                // uniform ratio a three-storey house came out nine metres tall and two wide —
+                // a chimney with windows, not somewhere a family lives.
+                float spread = residential ? 0.66f : 0.56f;
+                float vary = residential ? 0.24f : 0.2f;
+                float storeyHeight = residential ? 2.6f : 3.1f;
+
+                float footprint = CityGrid.TileSize * (spread + vary * hash);
+                float depth = CityGrid.TileSize * (spread + vary * hash2);
+                float height = storeys * storeyHeight;
 
                 if (!b.Staffed) tint = Color.Lerp(tint, ColVoid, 0.45f);
 
                 _builder.AddBox(ground, new Vector3(footprint, height, depth), tint);
                 AddWindows(ground, footprint, depth, height, storeys, b.Tile);
 
-                if (storeys >= 2) AddRoofClutter(ground, footprint, depth, height, tint, b.Tile);
+                // Houses get a pitched roof, a chimney and a front door; everything above four
+                // storeys and every civic building keeps a flat top, because that is the honest
+                // difference between a home and an institution. A town of flat-topped boxes
+                // reads as an office park, which is not what four hundred settlers built.
+                bool cottage = residential && storeys <= 3;
+                if (cottage) AddCottageTop(ground, footprint, depth, height, tint, b.Tile);
+                else if (storeys >= 2) AddRoofClutter(ground, footprint, depth, height, tint, b.Tile);
+
+                if (residential) AddDoor(ground, footprint, depth, b.Tile);
 
                 if (def.Id == "anit")
                     _builder.AddPyramid(ground + Vector3.up * height, footprint * 0.5f, 4.2f, MeshBuilder.Shade(tint, 1.1f));
@@ -354,6 +369,66 @@ namespace Mesruiyet.World
                                     new Vector3(0.36f, 0.5f, 0.04f),
                                     MeshBuilder.Shade(PropLaundry, 0.85f + i * 0.06f));
             }
+        }
+
+        static readonly Color[] RoofTiles =
+        {
+            Hex("#8C4A38"), Hex("#A45B3E"), Hex("#6E4436"), Hex("#B0704A"), Hex("#5E4A44"),
+        };
+
+        /// <summary>
+        /// A pitched roof, a chimney and — on about half of them — a dormer poking out of the
+        /// slope. The roof colour comes from a small warm palette rather than the wall tint, so
+        /// a quarter reads as a roofscape from above instead of a field of coloured lids.
+        /// </summary>
+        void AddCottageTop(Vector3 ground, float w, float d, float height, Color tint, Vector2Int tile)
+        {
+            float h1 = CityGrid.Hash(tile.x, tile.y, 61);
+            float h2 = CityGrid.Hash(tile.x, tile.y, 67);
+            float h3 = CityGrid.Hash(tile.x, tile.y, 71);
+
+            Color roof = RoofTiles[Mathf.FloorToInt(h1 * RoofTiles.Length) % RoofTiles.Length];
+            bool alongX = w >= d;                       // ridge runs the long way, as roofs do
+            // Kept under half the wall height. A steeper roof looks better in isolation and, from
+            // a camera pitched at forty degrees, swallows the walls it is supposed to sit on.
+            float pitch = Mathf.Min(1.1f + h2 * 1.0f, height * 0.45f);
+
+            Vector3 eaves = ground + Vector3.up * height;
+            _builder.AddGable(eaves, w, d, pitch, roof, alongX);
+
+            // A chimney, offset from the ridge so it does not look like a spine.
+            Vector3 stack = eaves + new Vector3(
+                alongX ? (h2 - 0.5f) * w * 0.55f : w * 0.26f,
+                0,
+                alongX ? d * 0.26f : (h3 - 0.5f) * d * 0.55f);
+            _builder.AddBox(stack, new Vector3(0.42f, pitch + 0.7f, 0.42f), MeshBuilder.Shade(tint, 0.72f));
+            _builder.AddBox(stack + Vector3.up * (pitch + 0.7f), new Vector3(0.55f, 0.16f, 0.55f),
+                            MeshBuilder.Shade(roof, 0.7f));
+
+            // A dormer: a little box in the slope with its own lit window. This is the piece
+            // that makes a roof read as somewhere people sleep.
+            if (h3 > 0.45f)
+            {
+                Vector3 side = alongX ? new Vector3(0, 0, d * 0.30f) : new Vector3(w * 0.30f, 0, 0);
+                Vector3 at = eaves + side + Vector3.up * (pitch * 0.34f);
+                _builder.AddBox(at, new Vector3(0.85f, 0.8f, 0.85f), MeshBuilder.Shade(tint, 1.04f));
+                _builder.AddWindow(at + (alongX ? new Vector3(0, 0.45f, 0.44f) : new Vector3(0.44f, 0.45f, 0)),
+                                   alongX ? Vector3.forward : Vector3.right,
+                                   0.5f, 0.5f, Hex("#FFD79A"));
+            }
+        }
+
+        /// <summary>A door at the foot of the wall, with a step and a lamp beside it.</summary>
+        void AddDoor(Vector3 ground, float w, float d, Vector2Int tile)
+        {
+            float h = CityGrid.Hash(tile.x, tile.y, 73);
+            Vector3 face = ground + new Vector3((h - 0.5f) * w * 0.4f, 0, d * 0.5f);
+
+            _builder.AddBox(face + new Vector3(0, 0, 0.02f), new Vector3(0.62f, 1.35f, 0.1f), Hex("#4A3527"));
+            _builder.AddBox(face + new Vector3(0, 0, 0.16f), new Vector3(0.9f, 0.12f, 0.35f), Hex("#7C7062"));
+            // A porch lamp, self-lit. Small, warm, and the reason a street looks occupied.
+            _builder.AddBox(face + new Vector3(0.5f, 1.5f, 0.1f), new Vector3(0.16f, 0.16f, 0.16f),
+                            new Color(1f, 0.86f, 0.62f, 0f));
         }
 
         /// <summary>
@@ -491,7 +566,7 @@ namespace Mesruiyet.World
                 {
                     var d = Districts.At(x, y);
                     bool market = d != null && (d.Id == DistrictId.EskiSehir || d.Id == DistrictId.Liman);
-                    if (market && CityGrid.Hash(x, y, 13) < 0.3f)
+                    if (market && CityGrid.Hash(x, y, 13) < 0.14f)
                         AddStall(CityGrid.World(x, y), CityGrid.Hash(x, y, 17));
                 }
             }
@@ -504,16 +579,25 @@ namespace Mesruiyet.World
             Hex("#C4553F"), Hex("#3E8C6E"), Hex("#D0A24A"), Hex("#8B6BA8"),
         };
 
-        /// <summary>A market stall: a table, two posts and a coloured canopy over them.</summary>
+        /// <summary>
+        /// A market stall: a table, two posts and a coloured canopy over them.
+        ///
+        /// Sized against a house, not against a real market stall. A tile is four metres and a
+        /// house is only two and a bit wide, so a life-sized canopy came out as broad as the
+        /// building behind it and the quarter read as a car park full of parasols. Two thirds
+        /// of that is small enough to be furniture and big enough to see.
+        /// </summary>
         void AddStall(Vector3 at, float hash)
         {
             Vector3 p = at + new Vector3((hash - 0.5f) * 2.4f, 0, (hash - 0.5f) * 2.4f);
             Color canopy = StallCanopy[Mathf.FloorToInt(hash * StallCanopy.Length) % StallCanopy.Length];
 
-            _builder.AddBox(p + Vector3.up * 0.5f, new Vector3(2.1f, 0.16f, 1.3f), Hex("#6B5A45"));
-            _builder.AddBox(p + new Vector3(-0.9f, 0.85f, 0), new Vector3(0.12f, 1.7f, 0.12f), Hex("#4A4034"));
-            _builder.AddBox(p + new Vector3(0.9f, 0.85f, 0), new Vector3(0.12f, 1.7f, 0.12f), Hex("#4A4034"));
-            _builder.AddBox(p + Vector3.up * 1.75f, new Vector3(2.4f, 0.14f, 1.6f), canopy);
+            _builder.AddBox(p + Vector3.up * 0.42f, new Vector3(1.25f, 0.12f, 0.75f), Hex("#6B5A45"));
+            _builder.AddBox(p + new Vector3(-0.52f, 0.62f, 0), new Vector3(0.09f, 1.24f, 0.09f), Hex("#4A4034"));
+            _builder.AddBox(p + new Vector3(0.52f, 0.62f, 0), new Vector3(0.09f, 1.24f, 0.09f), Hex("#4A4034"));
+            _builder.AddBox(p + Vector3.up * 1.28f, new Vector3(1.45f, 0.11f, 0.95f), canopy);
+            // Crates under the table, so it reads as a stall with something to sell.
+            _builder.AddBox(p + new Vector3(0.3f, 0, 0.28f), new Vector3(0.3f, 0.3f, 0.3f), Hex("#7A6647"));
         }
 
         /// <summary>
@@ -533,11 +617,26 @@ namespace Mesruiyet.World
                 _builder.AddBox(at + Vector3.up * 2f, new Vector3(0.12f, 3f, 0.12f), Hex("#4A4034"));
         }
 
+        static readonly Color[] Foliage =
+        {
+            Hex("#4E7A44"), Hex("#5C8A4C"), Hex("#41693C"), Hex("#6B9455"), Hex("#3C5F3A"),
+        };
+
+        /// <summary>
+        /// A tree: a trunk and two tiers of canopy rather than one cone. Trees cover more of this
+        /// map than buildings do, so a single cone repeated four hundred times was the strongest
+        /// thing on screen and the least interesting — two tiers and five greens fix both.
+        /// </summary>
         void AddTree(Vector3 at, float scale)
         {
-            _builder.AddBox(at, new Vector3(0.4f * scale, 1.6f * scale, 0.4f * scale), Hex("#5A4433"));
-            _builder.AddPyramid(at + Vector3.up * 1.4f * scale, 1.25f * scale, 3.1f * scale,
-                                MeshBuilder.Shade(Hex("#4E7A44"), 0.9f + 0.25f * scale));
+            float k = Mathf.Repeat(at.x * 0.31f + at.z * 0.17f, 1f);
+            Color leaf = Foliage[Mathf.FloorToInt(k * Foliage.Length) % Foliage.Length];
+
+            _builder.AddBox(at, new Vector3(0.38f * scale, 1.5f * scale, 0.38f * scale), Hex("#5A4433"));
+            _builder.AddPyramid(at + Vector3.up * 1.15f * scale, 1.3f * scale, 2.1f * scale,
+                                MeshBuilder.Shade(leaf, 0.82f));
+            _builder.AddPyramid(at + Vector3.up * 2.05f * scale, 0.95f * scale, 2.0f * scale,
+                                MeshBuilder.Shade(leaf, 1.06f));
         }
     }
 }

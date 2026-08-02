@@ -198,22 +198,56 @@ namespace Mesruiyet.World
 
         void BuildMeshes()
         {
-            // A person is a body and a head; a car is a body, a cabin and four wheels. Built
-            // from the same primitives as everything else, so there is still not one imported
-            // asset anywhere in the project.
+            // Both are still built from the same primitives as everything else — there is not one
+            // imported asset in this project — but a person was two stacked boxes and a car was
+            // three, and at this camera distance that reads as gravel. The proportions below are
+            // deliberately toy-like: a big head on a short body is what makes a two-centimetre
+            // figure legible and, not incidentally, likeable.
+            var white = Color.white;                       // tinted per colour bucket at draw time
+            var skin = new Color(0.93f, 0.76f, 0.60f);
+            var hair = new Color(0.24f, 0.18f, 0.15f);
+            var shoe = new Color(0.16f, 0.14f, 0.13f);
+
             var b = new MeshBuilder();
-            b.AddBox(new Vector3(0, 0, 0), new Vector3(0.55f, 1.15f, 0.42f), Color.white);
-            b.AddBox(new Vector3(0, 1.15f, 0), new Vector3(0.45f, 0.42f, 0.42f), new Color(0.91f, 0.73f, 0.56f));
+            // Legs, kept dark so the figure has a base and does not float.
+            b.AddBox(new Vector3(-0.13f, 0f, 0), new Vector3(0.19f, 0.34f, 0.22f), shoe);
+            b.AddBox(new Vector3(0.13f, 0f, 0), new Vector3(0.19f, 0.34f, 0.22f), shoe);
+            // Body, slightly tapered by stacking a narrower block on a wider one.
+            b.AddBox(new Vector3(0, 0.34f, 0), new Vector3(0.52f, 0.52f, 0.40f), white);
+            b.AddBox(new Vector3(0, 0.86f, 0), new Vector3(0.46f, 0.14f, 0.36f), white);
+            // Arms, out at the sides so the silhouette is not a pillar.
+            b.AddBox(new Vector3(-0.32f, 0.42f, 0), new Vector3(0.13f, 0.44f, 0.18f), white);
+            b.AddBox(new Vector3(0.32f, 0.42f, 0), new Vector3(0.13f, 0.44f, 0.18f), white);
+            // Head — oversized on purpose — with a cap of hair.
+            b.AddBox(new Vector3(0, 1.0f, 0), new Vector3(0.44f, 0.40f, 0.40f), skin);
+            b.AddBox(new Vector3(0, 1.33f, 0), new Vector3(0.47f, 0.11f, 0.43f), hair);
             _personMesh = b.ToMesh("Person");
 
             b.Clear();
-            b.AddBox(new Vector3(0, 0.22f, 0), new Vector3(1.7f, 0.62f, 0.95f), Color.white);
-            b.AddBox(new Vector3(-0.1f, 0.84f, 0), new Vector3(0.95f, 0.5f, 0.85f),
-                     new Color(0.62f, 0.71f, 0.80f));
-            foreach (float dx in new[] { -0.55f, 0.55f })
-            foreach (float dz in new[] { -0.45f, 0.45f })
-                b.AddBox(new Vector3(dx, 0, dz), new Vector3(0.3f, 0.26f, 0.18f),
-                         new Color(0.14f, 0.15f, 0.18f));
+            var glass = new Color(0.40f, 0.52f, 0.64f);
+            var tyre = new Color(0.12f, 0.13f, 0.15f);
+            var lamp = new Color(1f, 0.92f, 0.72f, 0f);     // alpha 0 → self-lit headlights
+            var tail = new Color(1f, 0.36f, 0.28f, 0f);
+
+            // A bonnet, a cabin set back on it, and a boot: three stacked blocks instead of one,
+            // which is all it takes for a box to read as a car from above.
+            b.AddBox(new Vector3(0, 0.20f, 0), new Vector3(1.85f, 0.42f, 0.92f), white);
+            b.AddBox(new Vector3(0.62f, 0.14f, 0), new Vector3(0.62f, 0.20f, 0.86f), white);   // bonnet
+            b.AddBox(new Vector3(-0.72f, 0.16f, 0), new Vector3(0.42f, 0.24f, 0.86f), white);  // boot
+            b.AddBox(new Vector3(-0.08f, 0.62f, 0), new Vector3(0.92f, 0.34f, 0.80f), white);  // cabin
+            // Glass on both flanks and the windscreen, so it catches the light like a car.
+            b.AddBox(new Vector3(-0.08f, 0.70f, 0.41f), new Vector3(0.80f, 0.22f, 0.04f), glass);
+            b.AddBox(new Vector3(-0.08f, 0.70f, -0.41f), new Vector3(0.80f, 0.22f, 0.04f), glass);
+            b.AddBox(new Vector3(0.39f, 0.70f, 0), new Vector3(0.06f, 0.22f, 0.72f), glass);
+            // Lights. Tiny, and the whole reason a night street reads as traffic.
+            foreach (float dz in new[] { -0.28f, 0.28f })
+            {
+                b.AddBox(new Vector3(0.93f, 0.26f, dz), new Vector3(0.10f, 0.14f, 0.20f), lamp);
+                b.AddBox(new Vector3(-0.93f, 0.26f, dz), new Vector3(0.08f, 0.12f, 0.18f), tail);
+            }
+            foreach (float dx in new[] { -0.58f, 0.62f })
+            foreach (float dz in new[] { -0.46f, 0.46f })
+                b.AddBox(new Vector3(dx, 0, dz), new Vector3(0.34f, 0.30f, 0.16f), tyre);
             _carMesh = b.ToMesh("Car");
 
             // A banner on a pole. Only marching crowds carry them, so seeing one at all is
