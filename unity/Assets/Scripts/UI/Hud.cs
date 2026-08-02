@@ -27,7 +27,8 @@ namespace Mesruiyet.UI
         VisualElement _root;
 
         // Live pieces the tick refreshes.
-        Label _turn, _season, _bufferValue, _bufferPill, _refusal;
+        Label _turn, _season, _bufferValue, _bufferPill, _refusal, _legit;
+        VisualElement _legitBar;
         readonly List<VisualElement> _bufferSegments = new List<VisualElement>();
         readonly List<Label> _resValue = new List<Label>();
         readonly List<Label> _resFlow = new List<Label>();
@@ -120,8 +121,43 @@ namespace Mesruiyet.UI
             bar.style.flexDirection = FlexDirection.Row;
             bar.style.alignItems = Align.Center;
 
+            // Legitimacy leads the ledger. The player spends it on every law forced through the
+            // council and every scandal absorbed, and until now it existed only as a "−4 meşruiyet"
+            // price tag on a button — a currency with no visible balance, in a game named after it.
+            // It sits with the other spendables rather than beside the title, where the word would
+            // simply appear twice. Unlike them it is honest: ministers shade the granary, not
+            // whether the city thinks you may rule it.
+            bar.Add(LegitimacyChip());
+
             for (int i = 0; i < 6; i++) bar.Add(ResourceChip((Res)i, i < 5));
             top.Add(bar);
+        }
+
+        VisualElement LegitimacyChip()
+        {
+            var chip = UiKit.Row(0);
+            chip.style.alignItems = Align.Center;
+            chip.style.paddingLeft = 10; chip.style.paddingRight = 14;
+
+            var col = UiKit.Column();
+            col.Add(UiKit.Text("MEŞRUİYET", 9.5f, UiKit.Muted));
+            var row = UiKit.Row(9);
+            row.style.alignItems = Align.Center;
+            row.style.marginTop = 3;
+            _legit = UiKit.Text("60", 19, UiKit.Ink, FontStyle.Bold);
+            _legitBar = UiKit.Bar(0.6f, UiKit.Green, 64, 5);
+            row.Add(_legit); row.Add(_legitBar);
+            col.Add(row);
+            chip.Add(col);
+
+            var divider = new VisualElement();
+            divider.style.width = 1;
+            divider.style.height = 30;
+            divider.style.marginLeft = 14;
+            divider.style.backgroundColor = UiKit.Hairline;
+            chip.Add(divider);
+
+            return chip;
         }
 
         VisualElement ResourceChip(Res r, bool divider)
@@ -2200,6 +2236,15 @@ namespace Mesruiyet.UI
         {
             _turn.text = _state.Turn.ToString();
             _season.text = $"{_state.SeasonName} · {_state.Year}. YIL";
+
+            // Through Reporting like everything else, though this one comes back undistorted:
+            // ministers can shade the granary, not whether the city thinks you may rule it.
+            int leg = Reporting.Legitimacy;
+            _legit.text = leg.ToString();
+            var legColour = leg >= 55 ? UiKit.Green : leg >= 30 ? UiKit.Amber : UiKit.Red;
+            _legit.style.color = legColour;
+            _legitBar[0].style.width = Length.Percent(Mathf.Clamp01(leg / 100f) * 100f);
+            _legitBar[0].style.backgroundColor = legColour;
 
             for (int r = 0; r < 6; r++)
             {

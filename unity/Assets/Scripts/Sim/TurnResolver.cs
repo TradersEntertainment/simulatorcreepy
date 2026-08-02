@@ -597,16 +597,34 @@ namespace Mesruiyet.Sim
             });
         }
 
+        /// <summary>
+        /// Legitimacy is the belief that you have the right to rule, and the design says where it
+        /// comes from: meeting needs, winning crises, holding elections. Mood alone is not enough.
+        /// A quiet city with an empty bakery is not a legitimate city, it is one that has not
+        /// rioted yet — so what the districts actually received gates what their mood can earn.
+        /// Without that gate a governor who does nothing for fifteen years drifts to 100.
+        /// </summary>
         int LegitimacyDelta()
         {
             var g = _state;
             float avg = g.AverageGrievance;
 
-            if (avg < 25) return 2;
-            if (avg < 45) return 1;
-            if (avg < 62) return 0;
-            if (avg < 78) return -2;
-            return -4;
+            int delta = avg < 25 ? 2 : avg < 45 ? 1 : avg < 62 ? 0 : avg < 78 ? -2 : -4;
+
+            // Bread is counted in loaves handed out, never in the granary total — the whole
+            // point of the chain is that a city can starve with a full ledger.
+            float bread = _breadDemand <= 0.01f ? 1f : Mathf.Clamp01(_breadServed / _breadDemand);
+            float water = Satisfaction(Res.Su, g.Population * 0.10f);
+            float power = Satisfaction(Res.Enerji, g.Population * 0.045f);
+            float met = Mathf.Min(bread, Mathf.Min(water, power));
+
+            // Fall short of what the city needs and there is nothing to earn, however calm the
+            // streets look. Fall badly short and the term is being spent rather than earned.
+            if (met < 0.95f) delta = Mathf.Min(delta, 0);
+            if (met < 0.80f) delta -= 1;
+            if (met < 0.55f) delta -= 2;
+
+            return delta;
         }
 
         /// <summary>Applied the moment a building lands, so the political cost is felt, not deferred.</summary>
