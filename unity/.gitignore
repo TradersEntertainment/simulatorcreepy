@@ -1,15 +1,19 @@
-# Unity project (Game/) generated dirs
-Game/[Ll]ibrary/
-Game/[Tt]emp/
-Game/[Oo]bj/
-Game/[Bb]uild/
-Game/[Bb]uilds/
-Game/[Ll]ogs/
-Game/[Uu]ser[Ss]ettings/
-Game/[Mm]emoryCaptures/
-Game/.vs/
-Game/*.csproj
-Game/*.sln
+# Unity generated folders — matched at any depth so the project folder can be
+# named anything (Game, cityGame, ...) without silently committing Library/.
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+[Mm]emoryCaptures/
+[Rr]ecordings/
+.vs/
+.vsconfig
+*.csproj
+*.sln
+*.user
 
 # agent loop output
 agent/build/

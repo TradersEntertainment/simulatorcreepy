@@ -15,7 +15,17 @@ param(
 $ErrorActionPreference = "Stop"
 $root  = Split-Path -Parent $PSScriptRoot
 $agent = Join-Path $root "agent"
-$game  = Join-Path $root "Game"
+
+# Find the Unity project by looking for Assets + ProjectSettings, so the folder can be
+# called Game, cityGame or anything else without editing this script.
+$game = (Get-ChildItem -Path $root -Directory |
+         Where-Object { (Test-Path (Join-Path $_.FullName "Assets")) -and
+                        (Test-Path (Join-Path $_.FullName "ProjectSettings")) } |
+         Select-Object -First 1).FullName
+if (-not $game) {
+    throw "Unity projesi bulunamadı. $root altında Assets ve ProjectSettings içeren bir klasör olmalı."
+}
+Write-Host "[loop] proje: $game" -ForegroundColor DarkGray
 
 # Adjust if your Unity version differs — Hub installs under Editor\<version>\Editor\Unity.exe
 $UnityExe = (Get-ChildItem "C:\Program Files\Unity\Hub\Editor\*\Editor\Unity.exe" |

@@ -35,13 +35,16 @@ cd mesruiyet\unity
 
 ## 4. Unity projesini oluştur
 
-Unity Hub → New Project → **Universal 3D (URP)** → konum olarak `mesruiyet\unity\Game` seç,
-isim `Game`. Oluşunca Unity'yi **kapat**.
+Unity Hub → New Project → **Core → Universal 3D** → konum `mesruiyet\unity`, isim ne olursa
+(`Game`, `cityGame`, fark etmez — script'ler projeyi `Assets` + `ProjectSettings` klasörlerine
+bakarak kendi buluyor). **Source control provider'ı boş bırak** — proje zaten bir git deposunun
+içinde. **Use AI Assistant** işaretsiz kalsın. Oluşunca Unity'yi **kapat**.
 
-Sonra bu klasördeki `Assets` içeriğini yeni projeye kopyala:
+Sonra bu klasördeki `Assets` içeriğini yeni projeye kopyala (aşağıda `<Proje>` yerine kendi
+klasör adını yaz):
 
 ```powershell
-Copy-Item -Recurse -Force .\Assets\* .\Game\Assets\
+Copy-Item -Recurse -Force .\Assets\* .\<Proje>\Assets\
 ```
 
 ## 5. Claude'u başlat
