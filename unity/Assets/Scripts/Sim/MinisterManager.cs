@@ -127,7 +127,7 @@ namespace Mesruiyet.Sim
                     return diagnosis == "akıyor"
                         ? $"Zincir akıyor. Fırında {chain.Final.Stock:0} ekmek var, " +
                           $"halk {g.Population * 0.12f:0} istiyor."
-                        : $"Zincirde {diagnosis}. Ambarda toplam {Fmt(total)} görünüyor ama " +
+                        : $"Zincir: {diagnosis}. Ambarda toplam {Fmt(total)} görünüyor ama " +
                           $"fırına inen {chain.Final.Stock:0} — halk toplamı yiyemez.";
                 }
 
@@ -181,3 +181,4 @@ namespace Mesruiyet.Sim
                 : r.Value.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
     }
 }
+

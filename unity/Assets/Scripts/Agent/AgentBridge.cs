@@ -163,6 +163,25 @@ namespace Mesruiyet.Agent
                     // Placement is the whole first slice, so the agent has to be able to do it.
                     return AgentInput.Build(c.id, c.x, c.y, out string why) ? Ok() : Err(why);
 
+                case "event":
+                    // {"cmd":"event","n":0} — answer the card by option index.
+                    return AgentInput.Event(c.n, out string eventWhy)
+                        ? Ok(JsonUtility.ToJson(new Wrap { v = eventWhy })) : Err(eventWhy);
+
+                case "loan":
+                    // n != 0 signs, n == 0 settles.
+                    return AgentInput.Loan(c.id, c.n != 0, out string loanWhy)
+                        ? Ok(JsonUtility.ToJson(new Wrap { v = loanWhy })) : Err(loanWhy);
+
+                case "card":
+                    // Test affordance: deal a named card instead of waiting for the draw.
+                    return AgentInput.Card(c.id, out string cardWhy) ? Ok() : Err(cardWhy);
+
+                case "threat":
+                    // Test affordance: drive Mersa to a level so a scenario can reach the cards
+                    // that only appear under pressure, without playing twenty turns first.
+                    return AgentInput.SetThreat(c.n, out string threatWhy) ? Ok() : Err(threatWhy);
+
                 case "decree":
                     return AgentInput.Decree(c.id, out string decreeWhy) ? Ok() : Err(decreeWhy);
 
@@ -246,3 +265,4 @@ namespace Mesruiyet.Agent
     }
 #endif
 }
+

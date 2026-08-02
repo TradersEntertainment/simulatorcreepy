@@ -77,6 +77,10 @@ namespace Mesruiyet.Sim
             // numbers are, and the chamber has to hear the city as it stands now.
             GovernanceManager.Instance.Tick();
 
+            // The outside world last of the simulation steps: Mersa reads the city as it now
+            // stands, and the event it deals is answered against this turn's numbers.
+            OutsideWorld.Instance.Tick();
+
             // Transparency after that, so this turn's new printing press counts, and the
             // telegrams last, so ministers quote the figures the player is about to be shown.
             MinisterManager.Instance.Refresh();
@@ -107,6 +111,12 @@ namespace Mesruiyet.Sim
             // A mobilisation order puts more hands to work for a few turns; conscription
             // takes them away again. Both arrive here as the same signed number.
             pool += Mathf.RoundToInt(g.EffectMagnitude(DecreeEffect.LabourSurge));
+
+            // Conscription takes bodies straight out of the farms and the mills. This is the
+            // first link of the chain the whole game turns on: arming against Mersa is what
+            // starves the city, and the ledger will call it a food crisis.
+            pool -= g.Conscripts;
+
             g.LabourPool = Mathf.Max(0, pool);
 
             int used = 0;
@@ -154,6 +164,11 @@ namespace Mesruiyet.Sim
         void SurveyChains()
         {
             foreach (var c in _state.Chains) c.Survey(_state);
+
+            // Tell each chain what is being asked of it, so it can say "yetmiyor" rather than
+            // "akıyor" when the city has simply outgrown it.
+            _state.FoodChain.Demand = BreadDemand();
+            _state.MaterialChain.Demand = 0f;      // construction is player-driven, not per-turn
         }
 
         void TickChains()
@@ -244,6 +259,8 @@ namespace Mesruiyet.Sim
             foreach (var b in g.Buildings) if (!b.Staffed) unstaffed++;
             if (unstaffed > 0)
                 g.Ledger[(int)Res.Isgucu].Add($"{unstaffed} yapı işçisiz duruyor");
+            if (g.Conscripts > 0)
+                g.Ledger[(int)Res.Isgucu].Add($"askere alınan {g.Conscripts} kişi havuzdan düştü");
         }
 
         string[] StageSummary(Chain c)
@@ -570,6 +587,8 @@ namespace Mesruiyet.Sim
         }
     }
 }
+
+
 
 
 

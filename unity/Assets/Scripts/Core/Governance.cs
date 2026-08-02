@@ -66,6 +66,18 @@ namespace Mesruiyet.Core
         }
     }
 
+    /// <summary>
+    /// An outstanding credit line. The debt is money, but the collateral is a law slot — and
+    /// that slot stays theirs whatever the council, the electorate or you have to say about it.
+    /// </summary>
+    public sealed class Loan
+    {
+        public CreditorDef Def;
+        public float Owed;
+        /// <summary>Interest per turn. Creditors reprice risk when the region gets worse.</summary>
+        public float Rate;
+    }
+
     /// <summary>How an election went, kept so the accountability session can read it back.</summary>
     public sealed class ElectionRecord
     {

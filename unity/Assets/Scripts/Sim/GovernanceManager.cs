@@ -239,6 +239,15 @@ namespace Mesruiyet.Sim
         public bool Repeal(LawDef law, out string message)
         {
             var g = _state;
+
+            // The rule that makes foreign debt matter. A creditor law is not yours to repeal:
+            // not by decree, not by a council majority, not by losing an election over it.
+            if (OutsideWorld.IsSealed(g, law))
+            {
+                message = $"{law.Name} bir alacaklının teminatı. Borç kapanmadan kaldırılamaz.";
+                return false;
+            }
+
             if (!g.LawBook.Remove(law)) { message = "Bu kanun yürürlükte değil."; return false; }
 
             g.ShiftAxes(-law.Order, -law.Economy);
@@ -338,13 +347,26 @@ namespace Mesruiyet.Sim
                         g.Legitimacy = Mathf.Clamp(g.Legitimacy - 12, 0, 100);
                         // A heavy loss forces a concession. With nothing else to give, the
                         // council takes a law off the book.
-                        if (g.LawBook.Count > 0)
+                        // The concession can only touch a law that is actually yours. If every
+                        // slot is collateral there is nothing left to give, and the council
+                        // takes it out of your standing instead.
+                        LawDef forced = null;
+                        for (int i = g.LawBook.Count - 1; i >= 0; i--)
+                            if (!OutsideWorld.IsSealed(g, g.LawBook[i])) { forced = g.LawBook[i]; break; }
+
+                        if (forced != null)
                         {
-                            var forced = g.LawBook[g.LawBook.Count - 1];
                             Repeal(forced, out _);
                             record.Note = $"tâviz: {forced.Name} kaldırıldı";
                             result = $"Seçimi %{support:0} ile kaybettiniz. " +
                                      $"Meclis {forced.Name} kanununun kaldırılmasını şart koştu.";
+                        }
+                        else if (g.LawBook.Count > 0)
+                        {
+                            g.Legitimacy = Mathf.Clamp(g.Legitimacy - 8, 0, 100);
+                            record.Note = "tâviz verilemedi: yasa kitabı alacaklıların";
+                            result = $"Seçimi %{support:0} ile kaybettiniz. Meclis bir kanunun " +
+                                     "kaldırılmasını istedi; kaldırabileceğiniz kanun kalmamış.";
                         }
                         else
                         {
@@ -363,4 +385,5 @@ namespace Mesruiyet.Sim
         }
     }
 }
+
 

@@ -54,6 +54,9 @@ namespace Mesruiyet.Core
             var governance = gameObject.AddComponent<GovernanceManager>();
             governance.Init(state);
 
+            var outside = gameObject.AddComponent<OutsideWorld>();
+            outside.Init(state);
+
             var resolver = gameObject.AddComponent<TurnResolver>();
             resolver.Init(state);
 
@@ -163,4 +166,5 @@ namespace Mesruiyet.Core
         }
     }
 }
+
 

@@ -117,6 +117,39 @@ namespace Mesruiyet.Core
         /// <summary>An election is due and the governor has not answered it yet.</summary>
         public bool ElectionPending;
 
+        // ---------------------------------------------------------------- the outside world
+        /// <summary>Mersa, 0..100. Rises on its own schedule and on your weakness.</summary>
+        public float Threat;
+
+        /// <summary>Garrison strength, from barracks and conscripts.</summary>
+        public float Garrison;
+        /// <summary>People taken out of the shared İşgücü pool and put in uniform.</summary>
+        public int Conscripts;
+
+        /// <summary>Turns until the garrison acts, or 0. You may not be told about it.</summary>
+        public int CoupCountdown;
+
+        public readonly List<Loan> Loans = new List<Loan>();
+
+        /// <summary>The card on the desk, waiting to be answered.</summary>
+        public EventDef PendingEvent;
+        public readonly HashSet<string> FiredEvents = new HashSet<string>();
+        /// <summary>What the last answered card did, for the report line.</summary>
+        public string LastEventOutcome = "";
+
+        public float TotalOwed
+        {
+            get
+            {
+                float t = 0;
+                foreach (var l in Loans) t += l.Owed;
+                return t;
+            }
+        }
+
+        /// <summary>Law slots a creditor is sitting on. Half the book and you govern someone else's city.</summary>
+        public int SealedSlots => Loans.Count;
+
         public bool IsElectionTurn
         {
             get

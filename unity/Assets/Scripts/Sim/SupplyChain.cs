@@ -44,6 +44,9 @@ namespace Mesruiyet.Core
         public ChainDef Def;
         public ChainStage[] Stages;
 
+        /// <summary>What the city asks of this chain each turn. Set by the resolver.</summary>
+        public float Demand;
+
         /// <summary>The product the city actually consumes — bread, dressed material.</summary>
         public ChainStage Final => Stages[Stages.Length - 1];
 
@@ -228,13 +231,19 @@ namespace Mesruiyet.Core
             return widest - narrowest.Throughput > 0.5f ? narrowest : null;
         }
 
-        /// <summary>One line of plain Turkish for the panel and, later, for a minister to distort.</summary>
+        /// <summary>One line of plain Turkish for the panel, and for a minister to decline to give.</summary>
         public string Diagnosis()
         {
             var b = Bottleneck();
-            if (b == null) return "akıyor";
-            if (b.Dead) return $"{b.Name} durdu";
-            return $"{b.Name} dar boğaz";
+            if (b != null && b.Dead) return $"{b.Name} durdu";
+
+            // A balanced chain can still be too small. Saying "akıyor" while the city outgrows
+            // its farms is technically true and completely useless — this is the reading a
+            // player needs when the population has doubled and nothing is broken.
+            if (Demand > 0.01f && EffectiveRate < Demand - 0.5f)
+                return b != null ? $"{b.Name} yetmiyor" : "üretim talebi karşılamıyor";
+
+            return b != null ? $"{b.Name} dar boğaz" : "akıyor";
         }
 
         public string ToJson()
@@ -264,4 +273,6 @@ namespace Mesruiyet.Core
         static string F(float v) => v.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
     }
 }
+
+
 

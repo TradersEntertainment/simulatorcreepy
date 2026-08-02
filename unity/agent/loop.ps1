@@ -423,6 +423,115 @@ switch ($Scenario) {
         $state = Send-Cmd '{"cmd":"state"}'
     }
 
+    # The outside world, and the causal loop the whole game turns on. Nothing here picks an
+    # ideology either: it borrows because the treasury is short, and it conscripts because
+    # Mersa is at the door. The axis moves anyway.
+    "dis" {
+        function Field([string] $json, [string] $key) {
+            if ($json -match "`"$key`":(-?[\d.]+)") { return [double]$Matches[1] }
+            return [double]::NaN
+        }
+        $ok = $true
+        function Check([bool] $pass, [string] $label) {
+            if ($pass) { Write-Host "  ✔ $label" -ForegroundColor Green }
+            else { Write-Host "  ✘ $label" -ForegroundColor Red; $script:ok = $false }
+        }
+
+        Shot "01-acilis.png"
+
+        # ---- 1. the loan whose collateral is a law slot
+        Write-Host "`n[loop] BORÇ VE YASA YUVASI:" -ForegroundColor Cyan
+        $before = Send-Cmd '{"cmd":"state"}'
+        $reply = Send-Cmd '{"cmd":"loan","id":"yabanci_konsorsiyum","n":1}'
+        $after = Send-Cmd '{"cmd":"state"}'
+        Write-Host "  $reply"
+        Check ((Field $after "para") -gt (Field $before "para")) "para hazineye girdi"
+        Check ($after -match '"laws":\[[^\]]*grev_yasagi') "alacaklının kanunu yuvaya kondu"
+        Check ((Field $after "sealedSlots") -ge 1) "yuva mühürlendi"
+
+        # The rule that makes debt matter: you cannot take that law back.
+        $repeal = Send-Cmd '{"cmd":"law","id":"grev_yasagi","n":0}'
+        Check ($repeal -match '"ok":false') "mühürlü kanun kaldırılamadı"
+        Write-Host "  $repeal"
+        Shot "02-borclu.png"
+
+        # ---- 2. the causal loop the whole game turns on:
+        #        Mersa'nın tehdidi ↑ → askere alma → tarlalarda işgücü ↓ → yiyecek açığı
+        Write-Host "`n[loop] TEHDİT → ASKERE ALMA → TARLA:" -ForegroundColor Cyan
+        Send-Cmd '{"cmd":"threat","n":60}' | Out-Null
+
+        # Get past the learning turns so the card is legal, answering anything that shows up.
+        $t = Get-Turn
+        while ($t -lt 14) {
+            $s = Send-Cmd '{"cmd":"state"}'
+            if ($s -notmatch '"pendingEvent":""') { Send-Cmd '{"cmd":"event","n":0}' | Out-Null }
+            Send-Cmd '{"cmd":"endturn","n":1}' | Out-Null
+            Wait-Turn ($t + 1) 40 | Out-Null
+            $t = Get-Turn
+        }
+        $s = Send-Cmd '{"cmd":"state"}'
+        if ($s -notmatch '"pendingEvent":""') { Send-Cmd '{"cmd":"event","n":0}' | Out-Null }
+
+        $peace = Send-Cmd '{"cmd":"state"}'
+        $poolBefore = Field $peace "labourPool"
+        $farmBefore = 0
+        if ($peace -match '"name":"Tarla","stock":[\d.]+,"capacity":[\d.]+,"throughput":([\d.]+)') {
+            $farmBefore = [double]$Matches[1]
+        }
+
+        # Mersa is at the door and the ministry wants a battalion. Take the direct answer.
+        Send-Cmd '{"cmd":"card","id":"askere_alma"}' | Out-Null
+        $r = Send-Cmd '{"cmd":"event","n":0}'
+        Write-Host "  [olay] askere_alma -> $r"
+        $t = Get-Turn
+        Send-Cmd '{"cmd":"endturn","n":1}' | Out-Null
+        Wait-Turn ($t + 1) 40 | Out-Null
+
+        $armed = Send-Cmd '{"cmd":"state"}'
+        Shot "03-garnizon.png"
+        $conscripts = Field $armed "conscripts"
+        $garrison = Field $armed "garrison"
+        $poolAfter = Field $armed "labourPool"
+        Write-Host ("  garnizon {0:N0} · asker {1:N0} · işgücü havuzu {2:N0} -> {3:N0}" -f `
+                    $garrison, $conscripts, $poolBefore, $poolAfter)
+        Check ($garrison -gt 22) "garnizon büyüdü"
+        Check ($conscripts -gt 0) "asker alındı"
+        Check ($poolAfter -lt $poolBefore) "askere alınanlar işgücü havuzundan düştü"
+
+        # ---- 4. the Kadra squeeze
+        Write-Host "`n[loop] KADRA:" -ForegroundColor Cyan
+        $t = Get-Turn
+        while ($t -lt 30) {
+            $s = Send-Cmd '{"cmd":"state"}'
+            if ($s -match '"pendingEvent":"[^"]+"' -and $s -notmatch '"pendingEvent":""') {
+                Send-Cmd '{"cmd":"event","n":0}' | Out-Null
+            }
+            if ($s -match '"electionPending":true') { Send-Cmd '{"cmd":"election","id":"yap"}' | Out-Null }
+            $t = Get-Turn
+            Send-Cmd '{"cmd":"endturn","n":1}' | Out-Null
+            Wait-Turn ($t + 1) 40 | Out-Null
+            $t = Get-Turn
+        }
+        $atKadra = Send-Cmd '{"cmd":"state"}'
+        Check ($atKadra -match '"pendingEvent":"kadra"') "30. turda Kadra düştü"
+        Shot "04-kadra.png"
+
+        $threatBefore = Field $atKadra "threat"
+        $r = Send-Cmd '{"cmd":"event","n":0}'
+        Write-Host "  $r"
+        $afterKadra = Send-Cmd '{"cmd":"state"}'
+        Check ((Field $afterKadra "threat") -gt $threatBefore) "Mersa bir komşusundan kurtuldu"
+        Check ((Field $afterKadra "population") -gt (Field $atKadra "population")) "mülteci kolu içeri alındı"
+        Shot "05-kadra-sonrasi.png"
+
+        Write-Host ("`n  eksen otorite {0:N0} · şeffaflık {1:N2} · tampon {2:N1}" -f `
+                    (Field $afterKadra "axisOrder"), (Field $afterKadra "transparency"), `
+                    (Field $afterKadra "bufferTurns"))
+
+        if (-not $ok) { $chainBroken = $true }
+        $state = Send-Cmd '{"cmd":"state"}'
+    }
+
     "turns40" {
         $t = Get-Turn
         Send-Cmd '{"cmd":"endturn","n":40}' | Out-Null

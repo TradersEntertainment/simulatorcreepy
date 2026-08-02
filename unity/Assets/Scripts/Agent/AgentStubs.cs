@@ -150,6 +150,29 @@ namespace Mesruiyet.Agent
             Num(sb, "decreesLeft", g.DecreesLeft); sb.Append(',');
             Bool(sb, "electionPending", g.ElectionPending); sb.Append(',');
 
+            // The outside world, with the true garrison and the true coup clock — the player may
+            // be looking at a number their Güvenlik minister invented.
+            Num(sb, "threat", g.Threat); sb.Append(',');
+            Num(sb, "garrison", g.Garrison); sb.Append(',');
+            Num(sb, "conscripts", g.Conscripts); sb.Append(',');
+            Num(sb, "coupCountdown", g.CoupCountdown); sb.Append(',');
+            Num(sb, "owed", g.TotalOwed); sb.Append(',');
+            Num(sb, "sealedSlots", g.SealedSlots); sb.Append(',');
+            Str(sb, "pendingEvent", g.PendingEvent != null ? g.PendingEvent.Id : ""); sb.Append(',');
+            Str(sb, "lastEvent", g.LastEventOutcome); sb.Append(',');
+
+            sb.Append("\"loans\":[");
+            for (int i = 0; i < g.Loans.Count; i++)
+            {
+                if (i > 0) sb.Append(',');
+                sb.Append("{");
+                Str(sb, "id", g.Loans[i].Def.Id); sb.Append(',');
+                Str(sb, "law", g.Loans[i].Def.DemandedLaw); sb.Append(',');
+                Num(sb, "owed", g.Loans[i].Owed);
+                sb.Append("}");
+            }
+            sb.Append("],");
+
             sb.Append("\"factions\":{");
             for (int f = 0; f < 5; f++)
             {
@@ -266,6 +289,55 @@ namespace Mesruiyet.Agent
             return touched;
         }
 
+        /// <summary>Answer the event card on the desk by option index.</summary>
+        public static bool Event(int option, out string message)
+        {
+            var state = GameState.Current;
+            if (state == null || state.PendingEvent == null) { message = "bekleyen olay yok"; return false; }
+            state.LastEventOutcome = Sim.OutsideWorld.Instance.Resolve(option);
+            message = state.LastEventOutcome;
+            return true;
+        }
+
+        /// <summary>Sign a credit line (on) or settle it (off).</summary>
+        public static bool Loan(string id, bool borrow, out string message)
+        {
+            var def = Creditors.Get(id);
+            if (def == null) { message = $"bilinmeyen alacaklı '{id}'"; return false; }
+            if (Sim.OutsideWorld.Instance == null) { message = "outside world not ready"; return false; }
+            return borrow
+                ? Sim.OutsideWorld.Instance.Borrow(def, out message)
+                : Sim.OutsideWorld.Instance.Settle(def, out message);
+        }
+
+        /// <summary>Set Mersa's threat directly. Test affordance only — no player can do this.</summary>
+        public static bool SetThreat(int value, out string message)
+        {
+            var state = GameState.Current;
+            if (state == null) { message = "state not bound"; return false; }
+            state.Threat = Mathf.Clamp(value, 0, 100);
+            message = $"tehdit {state.Threat:0}";
+            return true;
+        }
+
+        /// <summary>
+        /// Deal a named card. Test affordance: the draw is weighted and random by design, which
+        /// is right for play and useless for asserting that a specific causal chain works.
+        /// </summary>
+        public static bool Card(string id, out string message)
+        {
+            message = "";
+            var def = Events.Get(id);
+            if (def == null) { message = $"bilinmeyen olay '{id}'"; return false; }
+
+            var state = GameState.Current;
+            if (state == null) { message = "state not bound"; return false; }
+
+            state.PendingEvent = def;
+            state.FiredEvents.Add(def.Id);
+            return true;
+        }
+
         /// <summary>Issue a decree by id — the same two-a-turn allowance the player has.</summary>
         public static bool Decree(string id, out string message)
         {
@@ -341,5 +413,7 @@ namespace Mesruiyet.Agent
     }
 }
 #endif
+
+
 
 

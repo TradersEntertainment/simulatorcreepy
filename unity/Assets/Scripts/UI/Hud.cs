@@ -36,7 +36,7 @@ namespace Mesruiyet.UI
         VisualElement _factionList;
         VisualElement _chainList;
         VisualElement _ministerRow, _telegramList, _telegramHead;
-        VisualElement _councilHead, _councilBody;
+        VisualElement _councilHead, _councilBody, _outsideBody;
         VisualElement _appointmentCard, _modal, _scrim;
         VisualElement _lawSlotRow;
         Button _decreeButton;
@@ -70,6 +70,7 @@ namespace Mesruiyet.UI
             // subscribe to the cabinet itself rather than repainting at the click site.
             MinisterManager.Changed += Refresh;
             GovernanceManager.Changed += Refresh;
+            OutsideWorld.Changed += Refresh;
             Refresh();
         }
 
@@ -196,9 +197,260 @@ namespace Mesruiyet.UI
             rail.Add(BuildMinisterCard());
             rail.Add(BuildChainCard());
             rail.Add(BuildAxisCard());
+            rail.Add(BuildOutsideCard());
             rail.Add(BuildCouncilCard());
             rail.Add(BuildFactionCard());
             rail.Add(BuildTelegramCard());
+        }
+
+        // ---- the outside world
+        //
+        // Mersa, the garrison and the debt in one card, because they are one problem. The
+        // garrison that answers the threat is drawn from the same people who work the farms,
+        // and the money that pays for it is drawn from the law book.
+
+        VisualElement BuildOutsideCard()
+        {
+            var card = UiKit.Glass().Pad(12, 15).Margin(bottom: 10);
+            card.Add(UiKit.Heading("Dış Dünya", "mersa · garnizon · borç"));
+            _outsideBody = UiKit.Column();
+            card.Add(_outsideBody);
+            return card;
+        }
+
+        void PaintOutside()
+        {
+            _outsideBody.Clear();
+            var g = _state;
+
+            void Meter(string label, float value01, string reading, Color colour)
+            {
+                var head = UiKit.Row();
+                head.style.justifyContent = Justify.SpaceBetween;
+                head.style.marginBottom = 5;
+                head.Add(UiKit.Caption(label, UiKit.Hex("#9AA8BC")));
+                head.Add(UiKit.Text(reading, 11.5f, colour, FontStyle.Bold));
+                _outsideBody.Add(head);
+                _outsideBody.Add(UiKit.Bar(value01, colour, 340, 7).Margin(bottom: 11));
+            }
+
+            Color threatColour = g.Threat >= 70 ? UiKit.Red : g.Threat >= 40 ? UiKit.Amber : UiKit.Green;
+            Meter("Mersa · tehdit", g.Threat / 100f, $"{g.Threat:0}", threatColour);
+
+            // The garrison is measured against the threat, because that is the only comparison
+            // that means anything, and it is the comparison a hawkish minister will distort.
+            float readiness = g.Threat <= 0.01f ? 1f : Mathf.Clamp01(g.Garrison / Mathf.Max(20f, g.Threat));
+            Meter("Garnizon", readiness,
+                  $"{g.Garrison:0}" + (g.Conscripts > 0 ? $" · {g.Conscripts} er" : ""),
+                  readiness >= 0.9f ? UiKit.Green : readiness >= 0.5f ? UiKit.Amber : UiKit.Red);
+
+            if (g.CoupCountdown > 0 && Reporting.FactionReliable(Faction.Ordu))
+            {
+                var warn = UiKit.Text($"GARNİZONDA HAREKETLİLİK · {g.CoupCountdown} TUR",
+                                      10, UiKit.Red, FontStyle.Bold);
+                warn.style.letterSpacing = 1f;
+                warn.style.backgroundColor = UiKit.Alpha(UiKit.Red, 0.18f);
+                warn.Radius(6).Pad(6, 9).Margin(bottom: 10);
+                warn.style.unityTextAlign = TextAnchor.MiddleCenter;
+                _outsideBody.Add(warn);
+            }
+
+            var debtRow = UiKit.Row();
+            debtRow.style.justifyContent = Justify.SpaceBetween;
+            debtRow.style.marginBottom = 8;
+            debtRow.Add(UiKit.Caption("Borç", UiKit.Hex("#9AA8BC")));
+            debtRow.Add(UiKit.Text(
+                g.Loans.Count == 0 ? "yok" : $"{g.TotalOwed:N0} ₺ · {g.SealedSlots} yuva mühürlü",
+                11.5f, g.Loans.Count == 0 ? UiKit.Green : UiKit.Red, FontStyle.Bold));
+            _outsideBody.Add(debtRow);
+
+            var borrow = new Button { name = "btn_creditors", text = "ALACAKLILAR" };
+            borrow.style.marginTop = 0; borrow.style.marginBottom = 0;
+            borrow.style.marginLeft = 0; borrow.style.marginRight = 0;
+            borrow.style.paddingTop = 8; borrow.style.paddingBottom = 8;
+            borrow.style.fontSize = 10;
+            borrow.style.unityFontStyleAndWeight = FontStyle.Bold;
+            borrow.style.color = UiKit.Ink;
+            borrow.style.backgroundColor = new Color(1, 1, 1, 0.06f);
+            borrow.Radius(9).Border(1, UiKit.Hairline);
+            borrow.clicked += OpenCreditors;
+            _outsideBody.Add(borrow);
+        }
+
+        // ---- creditors
+
+        void OpenCreditors()
+        {
+            var card = OpenModal("panel_creditors", "ALACAKLILAR",
+                "Kredinin teminatı para değil, bir yasa yuvasıdır. Borç kapanana kadar o " +
+                "kanunu ne siz, ne meclis, ne de bir seçim kaldırabilir.", 720);
+
+            var list = ModalList();
+            foreach (var def in Creditors.All) list.Add(CreditorRow(def));
+            card.Add(list);
+        }
+
+        VisualElement CreditorRow(CreditorDef def)
+        {
+            var g = _state;
+            Loan held = null;
+            foreach (var l in g.Loans) if (l.Def == def) { held = l; break; }
+
+            var law = Laws.Get(def.DemandedLaw);
+
+            string refusal = "";
+            bool canBorrow = false;
+            if (held == null) canBorrow = OutsideWorld.Instance.CanBorrow(def, out refusal);
+            if (canBorrow) refusal = "";
+
+            var row = UiKit.Row();
+            row.style.alignItems = Align.FlexStart;
+            row.style.marginBottom = 8;
+            row.style.backgroundColor = held != null
+                ? UiKit.Alpha(UiKit.Red, 0.10f) : new Color(1, 1, 1, 0.04f);
+            row.Radius(10).Border(1, held != null ? UiKit.Alpha(UiKit.Red, 0.35f) : UiKit.Hairline)
+               .Pad(11, 13);
+
+            var text = UiKit.Column();
+            text.style.flexGrow = 1;
+            text.style.flexShrink = 1;
+            text.Add(UiKit.Text(def.Name, 13.5f, UiKit.Ink, FontStyle.Bold));
+
+            var blurb = UiKit.Text(def.Blurb, 11.5f, UiKit.Hex("#9AA8BC")).Margin(top: 3);
+            blurb.style.whiteSpace = WhiteSpace.Normal;
+            text.Add(blurb);
+
+            var terms = UiKit.Row();
+            terms.style.flexWrap = Wrap.Wrap;
+            terms.style.marginTop = 7;
+            void Term(string s, Color c)
+            {
+                var chip = UiKit.Text(s, 9.5f, c, FontStyle.Bold);
+                chip.style.backgroundColor = UiKit.Alpha(c, 0.16f);
+                chip.Radius(5).Pad(3, 7).Margin(right: 5, top: 3);
+                terms.Add(chip);
+            }
+            Term($"+{def.Principal} ₺", UiKit.Green);
+            Term($"tur faizi %{def.InterestRate * 100:0.0}", UiKit.Amber);
+            Term($"teminat: {law.Name}", UiKit.Red);
+            text.Add(terms);
+
+            if (held != null)
+                text.Add(UiKit.Text($"Kalan borç {held.Owed:N0} ₺ · tur faizi %{held.Rate * 100:0.0}",
+                                    10.5f, UiKit.Red).Margin(top: 6));
+            else if (!string.IsNullOrEmpty(refusal))
+                text.Add(UiKit.Text(refusal, 10.5f, UiKit.Amber).Margin(top: 6));
+            row.Add(text);
+
+            var act = new Button
+            {
+                name = (held != null ? "btn_settle_" : "btn_borrow_") + def.Id,
+                text = held != null ? $"KAPAT {held.Owed:N0} ₺" : "İMZALA",
+            };
+            act.style.marginLeft = 12;
+            act.style.marginTop = 0; act.style.marginBottom = 0; act.style.marginRight = 0;
+            act.style.paddingTop = 9; act.style.paddingBottom = 9;
+            act.style.paddingLeft = 14; act.style.paddingRight = 14;
+            act.style.fontSize = 11;
+            act.style.unityFontStyleAndWeight = FontStyle.Bold;
+            act.style.flexShrink = 0;
+            act.style.color = UiKit.Bg;
+            act.style.backgroundColor = held != null ? UiKit.Green : UiKit.Amber;
+            act.Radius(9).Border(0, Color.clear);
+            act.SetEnabled(held != null ? g.Stock[(int)Res.Para] >= held.Owed : canBorrow);
+            act.clicked += () =>
+            {
+                if (held != null) OutsideWorld.Instance.Settle(def, out _);
+                else OutsideWorld.Instance.Borrow(def, out _);
+                OpenCreditors();
+                Refresh();
+            };
+            row.Add(act);
+            return row;
+        }
+
+        // ---- the event card
+
+        void OpenEvent()
+        {
+            var def = _state.PendingEvent;
+            if (def == null) return;
+
+            var card = OpenModal("panel_event", def.Title, def.Source, 760);
+            card.style.bottom = StyleKeyword.Auto;
+
+            var body = UiKit.Text(def.Body, 13, UiKit.Hex("#C9D4E2")).Margin(bottom: 16);
+            body.style.whiteSpace = WhiteSpace.Normal;
+            card.Add(body);
+
+            var options = UiKit.Row();
+            options.style.alignItems = Align.Stretch;
+            for (int i = 0; i < def.Options.Length; i++)
+                options.Add(EventOptionBox(def.Options[i], i, i == def.Options.Length - 1));
+            card.Add(options);
+        }
+
+        VisualElement EventOptionBox(EventOption opt, int index, bool last)
+        {
+            bool available = opt.NeedsGarrison <= 0 || _state.Garrison >= opt.NeedsGarrison;
+
+            var box = UiKit.Column();
+            box.style.flexGrow = 1;
+            box.style.flexBasis = 0;
+            box.style.marginRight = last ? 0 : 12;
+            box.style.backgroundColor = new Color(1, 1, 1, 0.04f);
+            box.Radius(12).Border(1, UiKit.Hairline).Pad(14, 15);
+            box.style.opacity = available ? 1f : 0.45f;
+
+            box.Add(UiKit.Text(opt.Label, 14, UiKit.Ink, FontStyle.Bold));
+            var blurb = UiKit.Text(opt.Blurb, 11.5f, UiKit.Hex("#9AA8BC")).Margin(top: 6, bottom: 9);
+            blurb.style.whiteSpace = WhiteSpace.Normal;
+            box.Add(blurb);
+
+            var terms = UiKit.Row();
+            terms.style.flexWrap = Wrap.Wrap;
+            void Term(string s, Color c)
+            {
+                var chip = UiKit.Text(s, 9.5f, c, FontStyle.Bold);
+                chip.style.backgroundColor = UiKit.Alpha(c, 0.16f);
+                chip.Radius(5).Pad(3, 7).Margin(right: 5, top: 3);
+                terms.Add(chip);
+            }
+            if (opt.CostMoney > 0) Term($"{opt.CostMoney} ₺", UiKit.Amber);
+            if (opt.CostLegitimacy > 0) Term($"−{opt.CostLegitimacy} meşruiyet", UiKit.Amber);
+            if (opt.Order != 0) Term($"otorite {opt.Order:+0;−0}", opt.Order > 0 ? UiKit.Red : UiKit.Blue);
+            if (opt.Economy != 0) Term($"ekonomi {opt.Economy:+0;−0}", UiKit.Hex("#C48CFF"));
+            if (opt.Threat != 0) Term($"tehdit {opt.Threat:+0;−0}", opt.Threat > 0 ? UiKit.Red : UiKit.Green);
+            if (opt.Garrison != 0) Term($"garnizon {opt.Garrison:+0;−0}", UiKit.Blue);
+            if (opt.Grievance != 0)
+                Term($"hoşnutsuzluk {opt.Grievance:+0;−0}", opt.Grievance > 0 ? UiKit.Red : UiKit.Green);
+            AddFactionChips(Term, opt.Tuccar, opt.Isci, opt.Ordu, opt.Gelenek, opt.Aydin);
+            box.Add(terms);
+
+            box.Add(UiKit.Spacer());
+
+            var pick = new Button { name = $"btn_event_{index}", text = opt.Label.ToUpperInvariant() };
+            pick.style.marginTop = 12;
+            pick.style.marginLeft = 0; pick.style.marginRight = 0; pick.style.marginBottom = 0;
+            pick.style.paddingTop = 10; pick.style.paddingBottom = 10;
+            pick.style.fontSize = 11;
+            pick.style.unityFontStyleAndWeight = FontStyle.Bold;
+            pick.style.color = UiKit.Bg;
+            pick.style.backgroundColor = UiKit.Amber;
+            pick.Radius(9).Border(0, Color.clear);
+            pick.SetEnabled(available);
+            if (!available) pick.tooltip = $"En az {opt.NeedsGarrison} garnizon gerekiyor.";
+
+            int captured = index;
+            pick.clicked += () =>
+            {
+                _state.LastEventOutcome = OutsideWorld.Instance.Resolve(captured);
+                CloseModal();
+                Refresh();
+                Debug.Log("[Olay] " + _state.LastEventOutcome);
+            };
+            box.Add(pick);
+            return box;
         }
 
         // ---- the council
@@ -1635,6 +1887,7 @@ namespace Mesruiyet.UI
 
             PaintChains();
             PaintMinisters();
+            PaintOutside();
             PaintCouncil();
             PaintLawSlots();
             PaintTelegrams();
@@ -1650,6 +1903,12 @@ namespace Mesruiyet.UI
             bool electionOpen = _modal != null && _modal.name == "panel_election";
             if (_state.ElectionPending && !electionOpen) OpenElection();
             else if (!_state.ElectionPending && electionOpen) CloseModal();
+
+            // An event card is answered before anything else. The ballot outranks it, because
+            // a city that is voting this turn votes before it deals with the envoy at the door.
+            bool eventOpen = _modal != null && _modal.name == "panel_event";
+            if (!_state.ElectionPending && _state.PendingEvent != null && !eventOpen) OpenEvent();
+            else if (_state.PendingEvent == null && eventOpen) CloseModal();
             ((Label)_telegramHead[1]).text = $"{_state.Turn}. TUR";
 
             PaintAxis(_axisRow0, "Otorite", "Özgürlük", Reporting.AxisOrder, v => v.x);
@@ -1675,18 +1934,27 @@ namespace Mesruiyet.UI
                 bool unlocked = i < _state.LawSlots;
                 var law = i < _state.LawBook.Count ? _state.LawBook[i] : null;
 
-                var slot = UiKit.Text(law != null ? law.Glyph : (unlocked ? "+" : "·"),
-                                      law != null ? 15 : 12,
-                                      law != null ? UiKit.Amber : UiKit.Dim);
+                // A slot a creditor is sitting on is drawn locked and red. It is in your book
+                // and it is not yours, and that distinction is the whole point of foreign debt.
+                bool sealed_ = law != null && OutsideWorld.IsSealed(_state, law);
+                Color accent = sealed_ ? UiKit.Red : UiKit.Amber;
+
+                var slot = UiKit.Text(sealed_ ? "🔒" : law != null ? law.Glyph : (unlocked ? "+" : "·"),
+                                      law != null ? 14 : 12,
+                                      law != null ? accent : UiKit.Dim);
                 slot.style.width = 28; slot.style.height = 28;
                 slot.style.marginRight = 4;
                 slot.style.unityTextAlign = TextAnchor.MiddleCenter;
                 slot.style.backgroundColor = law != null
-                    ? UiKit.Alpha(UiKit.Amber, 0.14f)
+                    ? UiKit.Alpha(accent, 0.16f)
                     : new Color(1, 1, 1, 0.05f);
-                slot.Radius(9).Border(1, law != null ? UiKit.Alpha(UiKit.Amber, 0.42f) : UiKit.Hairline);
+                slot.Radius(9).Border(1, law != null ? UiKit.Alpha(accent, 0.45f) : UiKit.Hairline);
                 if (!unlocked) slot.style.opacity = 0.3f;
-                slot.tooltip = law != null ? $"{law.Name}\n{law.Blurb}" : "Boş yasa yuvası";
+                slot.tooltip = law == null
+                    ? "Boş yasa yuvası"
+                    : sealed_
+                        ? $"{law.Name}\nBir alacaklının teminatı — borç kapanmadan kaldırılamaz."
+                        : $"{law.Name}\n{law.Blurb}";
                 _lawSlotRow.Add(slot);
             }
         }
@@ -1699,6 +1967,7 @@ namespace Mesruiyet.UI
         }
     }
 }
+
 
 
 
