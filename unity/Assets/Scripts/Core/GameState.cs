@@ -86,10 +86,16 @@ namespace Mesruiyet.Core
         public readonly float[] FactionLoyalty = { 50, 50, 50, 50, 50 };
 
         /// <summary>
-        /// How honest the city's numbers are, 0..1. Free press and an open council push it up;
-        /// authority and censorship push it down. Ministers read this in a later slice.
+        /// How honest the city's numbers are, 0..1. A free press and an open council push it up;
+        /// authority and censorship push it down. Recomputed every tick by Distortion.Transparency.
         /// </summary>
-        public float Transparency = 1f;
+        public float Transparency = 0.30f;
+
+        /// <summary>The serving ministers. Every reported figure passes through one of them.</summary>
+        public Cabinet Cabinet;
+
+        /// <summary>This turn's telegrams, newest last. The onboarding channel and the trap in one.</summary>
+        public readonly List<string> Telegrams = new List<string>();
 
         // ---------------------------------------------------------------- the city
         public DistrictState[] Districts;
@@ -160,6 +166,8 @@ namespace Mesruiyet.Core
                     Housing = def.StartPopulation + 20,
                 };
             }
+
+            g.Cabinet = Cabinet.Founding();
 
             g.Chains = new Chain[Mesruiyet.Core.Chains.All.Length];
             for (int i = 0; i < g.Chains.Length; i++)

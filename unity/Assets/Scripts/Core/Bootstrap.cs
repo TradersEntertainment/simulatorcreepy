@@ -45,6 +45,11 @@ namespace Mesruiyet.Core
             world.transform.SetParent(transform, false);
             world.AddComponent<CityRenderer>().Build(grid, state);
 
+            // Ministers before the resolver: TurnResolver.Init recomputes immediately, and
+            // transparency has to exist before the first figure is reported.
+            var ministers = gameObject.AddComponent<MinisterManager>();
+            ministers.Init(state);
+
             var resolver = gameObject.AddComponent<TurnResolver>();
             resolver.Init(state);
 

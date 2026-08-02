@@ -1,0 +1,184 @@
+// The five ministers, their candidates, and their distortion styles.
+//
+// This is the thesis of the whole game as a data table. Each minister owns one domain and
+// reports on it; a loyalist reports what you want to hear, an expert reports what is true.
+// The bias applies ONLY to their own domain, which is what makes the fog partial rather than
+// total — you can always see clearly somewhere, just never everywhere.
+//
+// The trap has to be fair, so the loyalist is genuinely the better short-term answer: cheaper
+// decrees, no friction, no complaints to the council. You will take it, and you should. What
+// it costs you is the ability to see the crisis coming.
+
+namespace Mesruiyet.Core
+{
+    public enum Domain
+    {
+        Maliye = 0,      // ₺, tax
+        Tarim = 1,       // the food chain
+        Guvenlik = 2,    // security, garrison, the army's mood
+        Imar = 3,        // materials, construction, housing
+        Halk = 4,        // grievance, population, health
+    }
+
+    public sealed class MinisterDef
+    {
+        public string Name;
+        public Domain Domain;
+
+        /// <summary>SADIK reports what you want to hear; UZMAN reports what is true.</summary>
+        public bool Loyalist;
+
+        /// <summary>
+        /// How hard they lean on their own numbers, before transparency and authority scale it.
+        /// Always in the flattering direction; an expert sits at zero.
+        /// </summary>
+        public float StyleBias;
+
+        /// <summary>Their running gag, printed on the appointment card.</summary>
+        public string Trait;
+
+        /// <summary>The telegram that introduces them and their domain. Onboarding is diegetic.</summary>
+        public string Intro;
+
+        /// <summary>Drives the procedural portrait, so a face is stable across a run.</summary>
+        public int Seed;
+    }
+
+    public static class Ministers
+    {
+        public static readonly string[] DomainNames = { "MALİYE", "TARIM", "GÜVENLİK", "İMAR", "HALK" };
+
+        public static readonly string[] DomainBlurbs =
+        {
+            "Hazine, vergi, bütçe",
+            "Yiyecek zinciri, ambar",
+            "Asayiş, garnizon, ordunun havası",
+            "Malzeme, inşaat, barınma",
+            "Hoşnutsuzluk, nüfus, sağlık",
+        };
+
+        /// <summary>What each domain's reports cover, in the player's words.</summary>
+        public static string Covers(Domain d) => DomainBlurbs[(int)d];
+
+        public static Domain DomainOf(Res r)
+        {
+            switch (r)
+            {
+                case Res.Para: return Domain.Maliye;
+                case Res.Yiyecek: return Domain.Tarim;
+                case Res.Malzeme: return Domain.Imar;
+                default: return Domain.Halk;
+            }
+        }
+
+        // ---------------------------------------------------------------- the candidates
+        //
+        // Two per domain per slot: one loyalist, one expert. The pool is deliberately small and
+        // named — you are meant to remember who told you what, because the accountability
+        // session at turn 60 reads their names back to you.
+
+        public static readonly MinisterDef[] Pool =
+        {
+            // ---- MALİYE: inflates revenue, and names taxes after himself
+            new MinisterDef
+            {
+                Name = "Nazif Bey", Domain = Domain.Maliye, Loyalist = true, StyleBias = 0.42f, Seed = 11,
+                Trait = "Her tur yeni bir vergi önerir ve hepsine kendi adını verir.",
+                Intro = "Sayın Vali, hazineyi ben tutuyorum. Rakamlar iyidir, daima iyi olacaktır. " +
+                        "Zât-ı âliniz meşgul olmasın.",
+            },
+            new MinisterDef
+            {
+                Name = "Sabiha Hanım", Domain = Domain.Maliye, Loyalist = false, StyleBias = 0f, Seed = 12,
+                Trait = "Defterleri kuruşuna kadar okur, ve okuduğunu meclise de okur.",
+                Intro = "Sayın Vali, hazineyi ben tutuyorum. Size hoşunuza gitmeyecek rakamlar " +
+                        "getireceğim; getirmezsem işimi yapmıyorum demektir.",
+            },
+
+            // ---- TARIM: the interlock that matters most — reports the total, not the blockage
+            new MinisterDef
+            {
+                Name = "Rıza Efendi", Domain = Domain.Tarim, Loyalist = true, StyleBias = 0.55f, Seed = 21,
+                Trait = "Ambarı sever, değirmeni hiç ziyaret etmemiştir.",
+                Intro = "Sayın Vali, ambarı ben takip ediyorum. Zât-ı âliniz meşgul olmasın, " +
+                        "toplam yerindedir.",
+            },
+            new MinisterDef
+            {
+                Name = "Müzeyyen Hanım", Domain = Domain.Tarim, Loyalist = false, StyleBias = 0f, Seed = 22,
+                Trait = "Toplamı değil, zincirin en dar halkasını bildirir.",
+                Intro = "Sayın Vali, ambarı ben takip ediyorum. Size toplamı değil, hangi " +
+                        "aşamanın tıkalı olduğunu bildireceğim. Toplam yanıltır.",
+            },
+
+            // ---- GÜVENLİK: the one deadly blind spot — the army speaks only through him
+            new MinisterDef
+            {
+                Name = "Albay Kadri", Domain = Domain.Guvenlik, Loyalist = true, StyleBias = 0.48f, Seed = 31,
+                Trait = "Mersa ajanlarını fırında görmüştür. İki tabur daha şarttır.",
+                Intro = "Sayın Vali, asayişi ben tutuyorum. Ordu memnundur. Ordu daima memnundur.",
+            },
+            new MinisterDef
+            {
+                Name = "Binbaşı Nesrin", Domain = Domain.Guvenlik, Loyalist = false, StyleBias = 0f, Seed = 32,
+                Trait = "Garnizonun havasını olduğu gibi söyler, hoşunuza gitse de gitmese de.",
+                Intro = "Sayın Vali, asayişi ben tutuyorum. Ordunun havasını size ben " +
+                        "bildiriyorum — bu yüzden yalan söylersem hiçbir yerden duyamazsınız.",
+            },
+
+            // ---- İMAR: reports the yard total, never the depot
+            new MinisterDef
+            {
+                Name = "Şevket Bey", Domain = Domain.Imar, Loyalist = true, StyleBias = 0.40f, Seed = 41,
+                Trait = "Her rapora bir maket iliştirir. Maketler daima bitmiştir.",
+                Intro = "Sayın Vali, inşaat benim işim. Malzeme boldur. Ham, işlenmiş, fark etmez " +
+                        "— hepsi malzemedir efendim.",
+            },
+            new MinisterDef
+            {
+                Name = "Hüsniye Hanım", Domain = Domain.Imar, Loyalist = false, StyleBias = 0f, Seed = 42,
+                Trait = "Depodaki işlenmiş malzemeyi ham taştan ayrı sayar.",
+                Intro = "Sayın Vali, inşaat benim işim. Depoda ne varsa onu yazacağım; " +
+                        "ocaktaki ham taşı malzeme diye saymam.",
+            },
+
+            // ---- HALK: rounds grievance down, and the districts feel it anyway
+            new MinisterDef
+            {
+                Name = "Cevat Bey", Domain = Domain.Halk, Loyalist = true, StyleBias = 0.46f, Seed = 51,
+                Trait = "Hoşnutsuzluğu aşağı yuvarlar. Her mahalle \"gayet sakin\"dir.",
+                Intro = "Sayın Vali, halkın hâlini ben arz ederim. Mahalleler sakindir. " +
+                        "Ufak tefek homurtu her şehirde olur.",
+            },
+            new MinisterDef
+            {
+                Name = "Perihan Hanım", Domain = Domain.Halk, Loyalist = false, StyleBias = 0f, Seed = 52,
+                Trait = "Mahalleleri tek tek gezer ve duyduğunu olduğu gibi yazar.",
+                Intro = "Sayın Vali, halkın hâlini ben arz ederim. Rakamı yuvarlamam; " +
+                        "yuvarlanan rakam üç tur sonra sokakta düzelir.",
+            },
+        };
+
+        /// <summary>The two candidates for a domain: the loyalist first, then the expert.</summary>
+        public static MinisterDef Candidate(Domain d, bool loyalist)
+        {
+            foreach (var m in Pool)
+                if (m.Domain == d && m.Loyalist == loyalist) return m;
+            return null;
+        }
+
+        /// <summary>
+        /// The founding cabinet you inherit. Deliberately mixed: Tarım starts honest so the
+        /// granary number is worth trusting, which is precisely what makes replacing him later
+        /// cost you something you did not know you had.
+        /// </summary>
+        public static readonly bool[] FoundingLoyalists =
+        {
+            true,    // Maliye  — inherited from the founding company's books
+            false,   // Tarım   — honest, for now
+            true,    // Güvenlik
+            false,   // İmar
+            true,    // Halk
+        };
+    }
+}

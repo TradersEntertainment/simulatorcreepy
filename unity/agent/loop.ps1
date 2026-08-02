@@ -263,6 +263,74 @@ switch ($Scenario) {
         $state = Send-Cmd '{"cmd":"state"}'
     }
 
+    # The thesis, made testable. Run the exact same famine twice: once with an honest Tarım
+    # minister, once with a loyalist. The city suffers identically. What the governor is told
+    # must not be identical — and the loyalist's version must look *better* than the truth.
+    "bakan" {
+        function Field([string] $json, [string] $key) {
+            if ($json -match "`"$key`":(-?[\d.]+)") { return [double]$Matches[1] }
+            return [double]::NaN
+        }
+        function Reported([string] $json, [string] $key) {
+            if ($json -match "`"reported`":\{[^}]*`"$key`":(-?[\d.]+)") { return [double]$Matches[1] }
+            return [double]::NaN
+        }
+
+        Shot "01-uzman-bakan.png"
+
+        Write-Host "[loop] UZMAN bakanla kıtlık..." -ForegroundColor Cyan
+        Send-Cmd '{"cmd":"appoint","id":"tarim","n":0}' | Out-Null
+        Send-Cmd '{"cmd":"block","id":"degirmen","n":1}' | Out-Null
+        $t = Get-Turn
+        Send-Cmd '{"cmd":"endturn","n":6}' | Out-Null
+        Wait-Turn ($t + 6) 90 | Out-Null
+        Shot "02-uzman-kitlik.png"
+        $honest = Send-Cmd '{"cmd":"state"}'
+
+        Write-Host "[loop] aynı şehir, SADIK bakanla..." -ForegroundColor Cyan
+        Send-Cmd '{"cmd":"appoint","id":"tarim","n":1}' | Out-Null
+        Start-Sleep -Milliseconds 600
+        Shot "03-sadik-kitlik.png"
+        $loyal = Send-Cmd '{"cmd":"state"}'
+
+        Send-Cmd '{"cmd":"block","id":"degirmen","n":0}' | Out-Null
+
+        $trueFood   = Field $honest "yiyecek"
+        $honestSaid = Reported $honest "yiyecek"
+        $loyalSaid  = Reported $loyal  "yiyecek"
+        $honestBuf  = Reported $honest "bufferTurns"
+        $loyalBuf   = Reported $loyal  "bufferTurns"
+        $trueBread  = Field $honest "bread"
+
+        Write-Host "`n[loop] BİLGİ KATMANI KONTROLÜ:" -ForegroundColor Cyan
+        Write-Host ("  gerçek yiyecek toplamı : {0,8:N0}   (fırında ekmek {1:N0})" -f $trueFood, $trueBread)
+        Write-Host ("  UZMAN ne diyor         : {0,8:N0}" -f $honestSaid)
+        Write-Host ("  SADIK ne diyor         : {0,8:N0}" -f $loyalSaid)
+        Write-Host ("  UZMAN'ın tamponu       : {0,8:N1} tur" -f $honestBuf)
+        Write-Host ("  SADIK'ın tamponu       : {0,8:N1} tur" -f $loyalBuf)
+
+        $ok = $true
+        if ([math]::Abs($honestSaid - $trueFood) -gt 1) {
+            Write-Host "  ✘ uzman bakan gerçeği bildirmedi" -ForegroundColor Red; $ok = $false
+        }
+        if ($loyalSaid -le $honestSaid) {
+            Write-Host "  ✘ sadık bakan rakamı şişirmedi" -ForegroundColor Red; $ok = $false
+        }
+        if ($loyalBuf -le $honestBuf) {
+            Write-Host "  ✘ sadık bakan güvenlik payını şişirmedi — tampon yalana dönüşmeli" -ForegroundColor Red; $ok = $false
+        }
+        if ($loyal -notmatch '"yiyecekTeshis":"bildirilmedi"') {
+            Write-Host "  ✘ sadık bakan tıkanmayı gizlemedi" -ForegroundColor Red; $ok = $false
+        }
+        if ($ok) {
+            Write-Host "  ✔ aynı kıtlık, iki farklı gerçeklik — bilgi katmanı çalışıyor" -ForegroundColor Green
+        } else {
+            $chainBroken = $true
+        }
+
+        $state = Send-Cmd '{"cmd":"state"}'
+    }
+
     "turns40" {
         $t = Get-Turn
         Send-Cmd '{"cmd":"endturn","n":40}' | Out-Null

@@ -35,6 +35,8 @@ namespace Mesruiyet.UI
         VisualElement _axisRow0, _axisRow1;
         VisualElement _factionList;
         VisualElement _chainList;
+        VisualElement _ministerRow, _telegramList, _telegramHead;
+        VisualElement _appointmentCard;
         readonly List<VisualElement> _resCell = new List<VisualElement>();
         VisualElement _selectionCard;
         VisualElement _labelLayer;
@@ -61,6 +63,9 @@ namespace Mesruiyet.UI
 
             Placement.Instance.Changed += Refresh;
             TurnResolver.TurnCompleted += Refresh;
+            // Appointments can arrive from the agent bridge as well as from the card below, so
+            // subscribe to the cabinet itself rather than repainting at the click site.
+            MinisterManager.Changed += Refresh;
             Refresh();
         }
 
@@ -169,17 +174,162 @@ namespace Mesruiyet.UI
 
         void BuildRail()
         {
-            var rail = new VisualElement();
-            rail.style.position = Position.Absolute;
-            rail.style.top = 110; rail.style.right = 24;
-            rail.style.width = 372;
-            rail.pickingMode = PickingMode.Ignore;
-            _root.Add(rail);
+            // Six cards is taller than 1080 leaves room for, so the rail scrolls. The scroller
+            // appears only when it is needed: the safety margin and the cabinet must always be
+            // above the fold, because they are the two things the player governs by.
+            var scroll = new ScrollView(ScrollViewMode.Vertical);
+            scroll.style.width = 386;              // 372 of card plus room for the scroller
+            scroll.style.position = Position.Absolute;
+            scroll.style.top = 110; scroll.style.right = 24; scroll.style.bottom = 130;
+            scroll.verticalScrollerVisibility = ScrollerVisibility.Auto;
+            scroll.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
+            _root.Add(scroll);
+
+            var rail = scroll.contentContainer;
+            rail.style.width = Length.Percent(100);
 
             rail.Add(BuildBufferCard());
+            rail.Add(BuildMinisterCard());
             rail.Add(BuildChainCard());
             rail.Add(BuildAxisCard());
             rail.Add(BuildFactionCard());
+            rail.Add(BuildTelegramCard());
+        }
+
+        // ---- ministers
+        //
+        // Five faces and one number apiece: how reliable their reports are. Clicking one opens
+        // the appointment card, which is the choice this whole game is about — and the loyalist
+        // is the correct short-term answer nearly every time, which is what makes it a trap
+        // rather than a puzzle.
+
+        VisualElement BuildMinisterCard()
+        {
+            var card = UiKit.Glass().Pad(12, 15).Margin(bottom: 10);
+            card.Add(UiKit.Heading("Bakanlar", "rapor güvenilirliği"));
+            _ministerRow = UiKit.Row();
+            card.Add(_ministerRow);
+            return card;
+        }
+
+        static Color AccentFor(Domain d)
+        {
+            switch (d)
+            {
+                case Domain.Maliye: return UiKit.Amber;
+                case Domain.Tarim: return UiKit.Green;
+                case Domain.Guvenlik: return UiKit.Blue;
+                case Domain.Imar: return UiKit.Hex("#C48CFF");
+                default: return UiKit.Red;
+            }
+        }
+
+        void PaintMinisters()
+        {
+            _ministerRow.Clear();
+
+            for (int i = 0; i < 5; i++)
+            {
+                var domain = (Domain)i;
+                var m = _state.Cabinet.Of(domain);
+                if (m == null) continue;
+
+                float bias = Mathf.Abs(Reporting.BiasFor(domain));
+
+                var cell = UiKit.Column();
+                cell.style.flexGrow = 1;
+                cell.style.flexBasis = 0;
+                cell.style.marginRight = i < 4 ? 8 : 0;
+                cell.style.alignItems = Align.Center;
+
+                var button = new Button { name = "btn_minister_" + domain.ToString().ToLowerInvariant() };
+                button.text = string.Empty;
+                button.style.backgroundColor = Color.clear;
+                button.style.paddingTop = 0; button.style.paddingBottom = 0;
+                button.style.paddingLeft = 0; button.style.paddingRight = 0;
+                button.style.marginTop = 0; button.style.marginBottom = 0;
+                button.style.marginLeft = 0; button.style.marginRight = 0;
+                button.style.width = Length.Percent(100);
+                button.style.alignItems = Align.Center;
+                button.Border(0, Color.clear);
+
+                var portrait = new Portrait(m.Def.Seed, AccentFor(domain), m.Loyalist, 54);
+                button.Add(portrait);
+
+                // The badge is the whole read: green means this ministry's numbers are clean,
+                // red means they are not. It never says by how much or in which direction.
+                var badge = UiKit.Text(m.Loyalist ? "!" : "✓", 9, UiKit.Bg, FontStyle.Bold);
+                badge.style.position = Position.Absolute;
+                badge.style.top = -4; badge.style.right = 6;
+                badge.style.width = 16; badge.style.height = 16;
+                badge.style.unityTextAlign = TextAnchor.MiddleCenter;
+                badge.style.backgroundColor = bias > 0.02f ? UiKit.Red : UiKit.Green;
+                badge.Radius(8);
+                button.Add(badge);
+
+                var captured = domain;
+                button.clicked += () => OpenAppointment(captured);
+                cell.Add(button);
+
+                var label = UiKit.Text(Ministers.DomainNames[i], 8.5f, UiKit.Muted, FontStyle.Bold);
+                label.style.letterSpacing = 0.6f;
+                label.style.marginTop = 5;
+                cell.Add(label);
+
+                button.tooltip = $"{m.Name} — {Ministers.Covers(domain)}\n" +
+                                 (bias > 0.02f
+                                     ? $"Raporları %{bias * 100:0} sapmalı."
+                                     : "Raporları temiz.") +
+                                 $"\n{m.Def.Trait}";
+                _ministerRow.Add(cell);
+            }
+        }
+
+        // ---- telegrams
+
+        VisualElement BuildTelegramCard()
+        {
+            var card = UiKit.Glass().Pad(12, 15);
+            _telegramHead = UiKit.Heading("Telgraflar", "1. tur");
+            card.Add(_telegramHead);
+            _telegramList = UiKit.Column();
+            card.Add(_telegramList);
+            return card;
+        }
+
+        void PaintTelegrams()
+        {
+            _telegramList.Clear();
+
+            for (int i = 0; i < _state.Telegrams.Count; i++)
+            {
+                var parts = _state.Telegrams[i].Split('|');
+                if (parts.Length < 3) continue;
+
+                var row = UiKit.Row();
+                row.style.alignItems = Align.FlexStart;
+                row.style.paddingTop = 8; row.style.paddingBottom = 8;
+                if (i > 0)
+                {
+                    row.style.borderTopWidth = 1;
+                    row.style.borderTopColor = new Color(1, 1, 1, 0.07f);
+                }
+
+                var who = UiKit.Text(parts[0], 9.5f, UiKit.Muted, FontStyle.Bold);
+                who.style.letterSpacing = 0.8f;
+                who.style.width = 66;
+                who.style.marginTop = 2;
+                who.style.flexShrink = 0;
+                row.Add(who);
+
+                var msg = UiKit.Text("“" + parts[2] + "”", 11.5f, UiKit.Hex("#C9D4E2"));
+                msg.style.whiteSpace = WhiteSpace.Normal;
+                msg.style.flexGrow = 1;
+                msg.style.flexShrink = 1;
+                row.Add(msg);
+
+                _telegramList.Add(row);
+            }
         }
 
         // ---- supply chains
@@ -190,7 +340,7 @@ namespace Mesruiyet.UI
 
         VisualElement BuildChainCard()
         {
-            var card = UiKit.Glass().Pad(14, 16).Margin(bottom: 12);
+            var card = UiKit.Glass().Pad(12, 15).Margin(bottom: 10);
             card.Add(UiKit.Heading("Tedarik Zincirleri", "aşama aşama"));
             _chainList = UiKit.Column();
             card.Add(_chainList);
@@ -219,7 +369,12 @@ namespace Mesruiyet.UI
                 var stages = UiKit.Row();
                 stages.style.alignItems = Align.Stretch;
 
-                var bottleneck = chain.Bottleneck();
+                // Under an unreliable minister the panel goes dark rather than half-honest.
+                // Showing "Değirmen durdu" beside a report that declines to mention it would
+                // hand the player the answer and cost the lie its teeth — and a panel that
+                // openly says it was told nothing is a better signal than a half-true one.
+                bool reliable = Mathf.Abs(Reporting.BiasFor(chain.Def.Domain)) < 0.0001f;
+                var bottleneck = reliable ? chain.Bottleneck() : null;
 
                 for (int i = 0; i < chain.Stages.Length; i++)
                 {
@@ -258,17 +413,20 @@ namespace Mesruiyet.UI
                     // what it makes — and a full buffer is a surplus, not a fault.
                     string rate;
                     Color rateColour;
-                    if (stage.Dead) { rate = "durdu"; rateColour = UiKit.Red; }
+                    if (!reliable) { rate = "bildirilmedi"; rateColour = UiKit.Dim; }
+                    else if (stage.Dead) { rate = "durdu"; rateColour = UiKit.Red; }
                     else if (stage.Full) { rate = "dolu"; rateColour = UiKit.Green; }
                     else { rate = $"{stage.Moved:0}/{stage.Throughput:0} tur"; rateColour = UiKit.Dim; }
                     box.Add(UiKit.Text(rate, 9, rateColour));
 
-                    if (stage.Idle > 0)
+                    if (reliable && stage.Idle > 0)
                         box.Add(UiKit.Text($"{stage.Idle} çalışmıyor", 9, UiKit.Amber));
 
-                    box.tooltip = $"{stage.Name}: {stage.Def.Holds} · " +
-                                  $"stok {stage.Stock:0}/{stage.Capacity:0} · " +
-                                  $"{stage.Working} çalışıyor, {stage.Idle} boş";
+                    box.tooltip = reliable
+                        ? $"{stage.Name}: {stage.Def.Holds} · " +
+                          $"stok {stage.Stock:0}/{stage.Capacity:0} · " +
+                          $"{stage.Working} çalışıyor, {stage.Idle} boş"
+                        : $"{stage.Name}: {stage.Def.Holds} · bakanlık ayrıntı bildirmiyor";
                     stages.Add(box);
                 }
 
@@ -276,9 +434,10 @@ namespace Mesruiyet.UI
 
                 // The sentence that makes the trap legible without giving the answer away.
                 var final = chain.Final;
+                var reportedTotal = Reporting.Stock(chain.Def.Ledger);
                 string note = chain.Def.Id == "yiyecek"
-                    ? $"halk yalnızca {final.Def.Holds} yer · defterdeki toplam {chain.Total:0}"
-                    : $"inşaat yalnızca depodan çeker · defterdeki toplam {chain.Total:0}";
+                    ? $"halk yalnızca {final.Def.Holds} yer · defterdeki toplam {reportedTotal.Value:0}"
+                    : $"inşaat yalnızca depodan çeker · defterdeki toplam {reportedTotal.Value:0}";
                                 var noteLabel = UiKit.Text(note, 9.5f, UiKit.Muted).Margin(top: 9);
                 noteLabel.style.whiteSpace = WhiteSpace.Normal;
                 block.Add(noteLabel);
@@ -289,7 +448,7 @@ namespace Mesruiyet.UI
 
         VisualElement BuildBufferCard()
         {
-            var card = UiKit.Glass().Pad(14, 16).Margin(bottom: 12);
+            var card = UiKit.Glass().Pad(12, 15).Margin(bottom: 10);
 
             var head = UiKit.Row();
             head.style.justifyContent = Justify.SpaceBetween;
@@ -328,7 +487,7 @@ namespace Mesruiyet.UI
 
         VisualElement BuildAxisCard()
         {
-            var card = UiKit.Glass().Pad(14, 16).Margin(bottom: 12);
+            var card = UiKit.Glass().Pad(12, 15).Margin(bottom: 10);
             card.Add(UiKit.Heading("İdeolojik Konum", "son 15 tur"));
             _axisRow0 = UiKit.Column().Margin(bottom: 15);
             _axisRow1 = UiKit.Column();
@@ -428,7 +587,7 @@ namespace Mesruiyet.UI
 
         VisualElement BuildFactionCard()
         {
-            var card = UiKit.Glass().Pad(14, 16);
+            var card = UiKit.Glass().Pad(12, 15);
             card.Add(UiKit.Heading("Fraksiyonlar", "yüz yüze · dürüst"));
             _factionList = UiKit.Column();
             card.Add(_factionList);
@@ -476,6 +635,140 @@ namespace Mesruiyet.UI
                 case Mood.Kaygili: return UiKit.Hex("#E08A3C");
                 default: return UiKit.Red;
             }
+        }
+
+        // ================================================================ appointment
+        //
+        // The central repeated choice, and it must be a fair trap: SADIK is genuinely the better
+        // answer this turn — cheaper decrees, no friction, no complaints — and the cost lands
+        // three crises later, when the numbers you governed by turn out to have been someone's
+        // idea of good news.
+
+        void OpenAppointment(Domain domain)
+        {
+            _appointmentCard?.RemoveFromHierarchy();
+
+            var sitting = _state.Cabinet.Of(domain);
+
+            var card = UiKit.Glass().Pad(20, 22);
+            card.name = "panel_appointment";
+            card.style.position = Position.Absolute;
+            card.style.left = Length.Percent(50);
+            card.style.top = Length.Percent(50);
+            card.style.width = 620;
+            card.style.marginLeft = -310;
+            card.style.marginTop = -190;
+
+            var head = UiKit.Row();
+            head.style.justifyContent = Justify.SpaceBetween;
+            head.style.marginBottom = 4;
+            head.Add(UiKit.Text(Ministers.DomainNames[(int)domain] + " BAKANLIĞI", 17, UiKit.Ink, FontStyle.Bold));
+
+            var close = new Button { name = "btn_appoint_close", text = "✕" };
+            close.style.backgroundColor = Color.clear;
+            close.style.color = UiKit.Muted;
+            close.style.width = 26; close.style.height = 26;
+            close.style.marginTop = 0; close.style.marginBottom = 0;
+            close.style.marginLeft = 0; close.style.marginRight = 0;
+            close.Border(0, Color.clear);
+            close.clicked += CloseAppointment;
+            head.Add(close);
+            card.Add(head);
+
+            card.Add(UiKit.Text(Ministers.Covers(domain), 11.5f, UiKit.Muted).Margin(bottom: 4));
+            card.Add(UiKit.Text($"Görevde: {sitting.Name} · {sitting.Def.Trait}", 11.5f, UiKit.Dim)
+                     .Margin(bottom: 16));
+
+            var options = UiKit.Row();
+            options.style.alignItems = Align.Stretch;
+            options.Add(Candidate(domain, true));
+            options.Add(Candidate(domain, false));
+            card.Add(options);
+
+            _appointmentCard = card;
+            _root.Add(card);
+        }
+
+        VisualElement Candidate(Domain domain, bool loyalist)
+        {
+            var def = Ministers.Candidate(domain, loyalist);
+            var sitting = _state.Cabinet.Of(domain);
+            bool serving = sitting.Loyalist == loyalist;
+
+            var box = UiKit.Column();
+            box.style.flexGrow = 1;
+            box.style.flexBasis = 0;
+            box.style.marginRight = loyalist ? 14 : 0;
+            box.style.backgroundColor = new Color(1, 1, 1, 0.04f);
+            box.Radius(12).Border(1, UiKit.Hairline).Pad(14, 15);
+
+            var top = UiKit.Row();
+            top.Add(new Portrait(def.Seed, AccentFor(domain), loyalist, 46));
+
+            var names = UiKit.Column().Margin(left: 12);
+            names.style.flexGrow = 1;
+            names.Add(UiKit.Pill(loyalist ? "SADIK" : "UZMAN", loyalist ? UiKit.Amber : UiKit.Green));
+            names.Add(UiKit.Text(def.Name, 14, UiKit.Ink, FontStyle.Bold).Margin(top: 6));
+            top.Add(names);
+            box.Add(top);
+
+            var trait = UiKit.Text(def.Trait, 11.5f, UiKit.Hex("#9AA8BC")).Margin(top: 10, bottom: 10);
+            trait.style.whiteSpace = WhiteSpace.Normal;
+            box.Add(trait);
+
+            // State the trade plainly. The design is emphatic that nothing may be labelled
+            // extreme or evil — only by what it does. So: what it does.
+            string[] terms = loyalist
+                ? new[] { "Kararname maliyeti −%25", "Meclise şikâyet etmez",
+                          "Kendi alanındaki rakamları lehinize yuvarlar" }
+                : new[] { "Kendi alanında verim +%20", "Rakamları olduğu gibi bildirir",
+                          "Tavsiyesine rağmen hareket ederseniz meclise gider" };
+
+            foreach (var t in terms)
+            {
+                var row = UiKit.Row();
+                row.style.alignItems = Align.FlexStart;
+                row.style.marginBottom = 5;
+                row.Add(UiKit.Text("·", 11.5f, loyalist ? UiKit.Amber : UiKit.Green).Margin(right: 7));
+                var label = UiKit.Text(t, 11.5f, UiKit.Hex("#C9D4E2"));
+                label.style.whiteSpace = WhiteSpace.Normal;
+                label.style.flexGrow = 1;
+                row.Add(label);
+                box.Add(row);
+            }
+
+            var pick = new Button
+            {
+                name = $"btn_appoint_{domain.ToString().ToLowerInvariant()}_{(loyalist ? "sadik" : "uzman")}",
+                text = serving ? "GÖREVDE" : "ATA",
+            };
+            pick.style.marginTop = 10;
+            pick.style.marginLeft = 0; pick.style.marginRight = 0; pick.style.marginBottom = 0;
+            pick.style.paddingTop = 9; pick.style.paddingBottom = 9;
+            pick.style.fontSize = 11;
+            pick.style.unityFontStyleAndWeight = FontStyle.Bold;
+            pick.style.color = serving ? UiKit.Muted : UiKit.Bg;
+            pick.style.backgroundColor = serving
+                ? new Color(1, 1, 1, 0.06f)
+                : (loyalist ? UiKit.Amber : UiKit.Green);
+            pick.Radius(9).Border(0, Color.clear);
+            pick.SetEnabled(!serving);
+
+            var capturedDomain = domain;
+            pick.clicked += () =>
+            {
+                MinisterManager.Instance.Appoint(capturedDomain, loyalist);
+                CloseAppointment();
+                Refresh();
+            };
+            box.Add(pick);
+            return box;
+        }
+
+        void CloseAppointment()
+        {
+            _appointmentCard?.RemoveFromHierarchy();
+            _appointmentCard = null;
         }
 
         // ================================================================ selection card
@@ -850,6 +1143,10 @@ namespace Mesruiyet.UI
             }
 
             PaintChains();
+            PaintMinisters();
+            PaintTelegrams();
+            ((Label)_telegramHead[1]).text = $"{_state.Turn}. TUR";
+
             PaintAxis(_axisRow0, "Otorite", "Özgürlük", Reporting.AxisOrder, v => v.x);
             PaintAxis(_axisRow1, "Sermaye", "Eşitlik", Reporting.AxisEconomy, v => v.y);
             PaintFactions();
@@ -867,4 +1164,6 @@ namespace Mesruiyet.UI
         }
     }
 }
+
+
 

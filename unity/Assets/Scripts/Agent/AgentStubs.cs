@@ -103,6 +103,24 @@ namespace Mesruiyet.Agent
 
             Num(sb, "depot", g.DepotStock); sb.Append(',');
             Num(sb, "bread", g.FoodChain.Final.Stock); sb.Append(',');
+            Num(sb, "transparency", g.Transparency); sb.Append(',');
+
+            // Ministers with their TRUE bias, so a test can measure the gap between what the
+            // HUD shows and what is actually happening. The player never sees this number.
+            sb.Append("\"ministers\":[");
+            for (int i = 0; i < 5; i++)
+            {
+                var m = g.Cabinet.Of((Domain)i);
+                if (i > 0) sb.Append(',');
+                sb.Append('{');
+                Str(sb, "domain", Ministers.DomainNames[i]); sb.Append(',');
+                Str(sb, "name", m.Name); sb.Append(',');
+                Bool(sb, "loyalist", m.Loyalist); sb.Append(',');
+                Num(sb, "bias", Distortion.Bias(m, g)); sb.Append(',');
+                Str(sb, "telegram", m.Telegram);
+                sb.Append('}');
+            }
+            sb.Append("],");
 
             sb.Append("\"factions\":{");
             for (int f = 0; f < 5; f++)
@@ -117,6 +135,9 @@ namespace Mesruiyet.Agent
             sb.Append("\"reported\":{");
             Num(sb, "yiyecek", Reporting.Stock(Res.Yiyecek).Value); sb.Append(',');
             Num(sb, "bufferTurns", Reporting.Buffer().Value); sb.Append(',');
+            Num(sb, "para", Reporting.Stock(Res.Para).Value); sb.Append(',');
+            Num(sb, "malzeme", Reporting.Stock(Res.Malzeme).Value); sb.Append(',');
+            Str(sb, "yiyecekTeshis", Reporting.Diagnosis("yiyecek")); sb.Append(',');
             Bool(sb, "yiyecekReliable", Reporting.Stock(Res.Yiyecek).Reliable);
             sb.Append('}');
 
@@ -215,6 +236,25 @@ namespace Mesruiyet.Agent
             TurnResolver.Instance.Recompute();
             Debug.Log($"[AgentInput] {(on ? "block" : "unblock")} {buildingId} ×{touched}");
             return touched;
+        }
+
+        /// <summary>
+        /// Appoint a minister: id is the domain (maliye/tarim/guvenlik/imar/halk), loyalist
+        /// picks SADIK over UZMAN. The agent takes the same choice the player does.
+        /// </summary>
+        public static bool Appoint(string domain, bool loyalist, out string message)
+        {
+            message = "";
+            if (!System.Enum.TryParse(domain, true, out Domain d))
+            {
+                message = $"bilinmeyen bakanlık '{domain}'";
+                return false;
+            }
+            if (Sim.MinisterManager.Instance == null) { message = "cabinet not ready"; return false; }
+
+            var m = Sim.MinisterManager.Instance.Appoint(d, loyalist);
+            Debug.Log($"[AgentInput] appoint {d} -> {m.Name} ({(loyalist ? "sadık" : "uzman")})");
+            return true;
         }
 
         /// <summary>Place a building by id at a tile — the agent's version of a mouse click on the map.</summary>

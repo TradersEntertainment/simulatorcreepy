@@ -36,8 +36,8 @@ namespace Mesruiyet.Core
         public string Name;
         /// <summary>Which ledger line the sum of every stage rolls up into.</summary>
         public Res Ledger;
-        /// <summary>The domain whose minister reports on it — the distortion hook.</summary>
-        public string Domain;
+        /// <summary>The minister who reports on it — the distortion hook.</summary>
+        public Domain Domain;
         /// <summary>What the last stage produces, in the player's words: "ekmek", "malzeme".</summary>
         public string Product;
         public ChainStageDef[] Stages;
@@ -52,7 +52,7 @@ namespace Mesruiyet.Core
                 Id = "yiyecek",
                 Name = "EKMEK",
                 Ledger = Res.Yiyecek,
-                Domain = "TARIM",
+                Domain = Domain.Tarim,
                 Product = "ekmek",
                 Stages = new[]
                 {
@@ -87,7 +87,7 @@ namespace Mesruiyet.Core
                 Id = "malzeme",
                 Name = "MALZEME",
                 Ledger = Res.Malzeme,
-                Domain = "İMAR",
+                Domain = Domain.Imar,
                 Product = "işlenmiş malzeme",
                 Stages = new[]
                 {
@@ -116,3 +116,4 @@ namespace Mesruiyet.Core
         }
     }
 }
+

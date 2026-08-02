@@ -73,6 +73,12 @@ namespace Mesruiyet.Sim
             g.BufferTurns = ComputeBuffer();
             g.RecordTrail();
 
+            // Transparency last, so this turn's new printing press counts, and the telegrams
+            // after that, so ministers quote the figures the player is about to be shown.
+            MinisterManager.Instance.Refresh();
+            MinisterManager.Instance.RecordTerm();
+            MinisterManager.Instance.WriteTelegrams();
+
             g.Legitimacy = Mathf.Clamp(
                 g.Legitimacy + LegitimacyDelta(), 0, 100);
         }
@@ -445,12 +451,10 @@ namespace Mesruiyet.Sim
             // so that when a minister later inflates the granary the buffer becomes a lie too.
             if (_breadDemand > 0.01f)
             {
-                var food = g.FoodChain;
-                // Against the chain's narrowest stage, not the bakeries' nameplate capacity.
-                // Four ovens behind two farms bake what two farms grow, and a buffer computed
-                // off the ovens would report nine calm turns straight into a famine.
-                float shortfall = _breadDemand - food.EffectiveRate;
-                float turns = shortfall <= 0.01f ? 9f : food.Final.Stock / shortfall;
+                // Run the food chain forward rather than dividing a stock by a rate. A balanced
+                // chain with empty bakeries still starves the city for the two turns it takes
+                // grain to become bread, and a margin that cannot see that is worthless.
+                float turns = g.FoodChain.TurnsUntilShortfall(_breadDemand);
                 if (turns < worst) worst = turns;
             }
 
@@ -533,7 +537,15 @@ namespace Mesruiyet.Sim
             _breadDemand = pop * 0.12f;
             g.BufferTurns = ComputeBuffer();
             WriteLedgerNotes(flow);
+
+            if (MinisterManager.Instance != null)
+            {
+                MinisterManager.Instance.Refresh();
+                MinisterManager.Instance.WriteTelegrams();
+            }
         }
     }
 }
+
+
 

@@ -126,6 +126,43 @@ namespace Mesruiyet.Core
             head.Stock += head.Moved;
         }
 
+        /// <summary>
+        /// How many turns the chain can meet <paramref name="demandPerTurn"/> before it comes up
+        /// short, by running the pipeline forward on a copy of the stocks.
+        ///
+        /// Worth the arithmetic rather than dividing stock by rate: a chain can be perfectly
+        /// balanced and still starve you, because material takes one turn per stage and an empty
+        /// bakery is an empty bakery however much grain is behind it. TAMPON is the number the
+        /// player plans around, so it has to know that.
+        /// </summary>
+        public int TurnsUntilShortfall(float demandPerTurn, int horizon = 9)
+        {
+            if (demandPerTurn <= 0.01f) return horizon;
+
+            var stock = new float[Stages.Length];
+            for (int i = 0; i < Stages.Length; i++) stock[i] = Stages[i].Stock;
+
+            for (int turn = 0; turn < horizon; turn++)
+            {
+                for (int i = Stages.Length - 1; i >= 1; i--)
+                {
+                    float room = Mathf.Max(0, Stages[i].Capacity - stock[i]);
+                    float moved = Mathf.Min(Stages[i].Throughput, Mathf.Min(stock[i - 1], room));
+                    stock[i - 1] -= moved;
+                    stock[i] += moved;
+                }
+
+                float headRoom = Mathf.Max(0, Stages[0].Capacity - stock[0]);
+                stock[0] += Mathf.Min(Stages[0].Throughput, headRoom);
+
+                int last = Stages.Length - 1;
+                if (stock[last] < demandPerTurn - 0.5f) return turn;
+                stock[last] -= demandPerTurn;
+            }
+
+            return horizon;
+        }
+
         /// <summary>Take from the end of the chain. Returns what was actually available.</summary>
         public float Draw(float amount)
         {
