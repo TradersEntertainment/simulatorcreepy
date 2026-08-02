@@ -28,6 +28,10 @@ namespace Mesruiyet.EditorTools
 
         static void Run(BuildTarget target, string exeName)
         {
+            // Idempotent: creates the boot scene, the UI panel asset and the player settings
+            // the agent loop needs, so a fresh clone builds without anyone opening the GUI.
+            ProjectSetup.Ensure();
+
             var scenes = EditorBuildSettings.scenes
                 .Where(s => s.enabled)
                 .Select(s => s.path)

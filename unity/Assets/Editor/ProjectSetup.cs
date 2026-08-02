@@ -1,0 +1,112 @@
+// Everything the project needs that cannot be created at runtime, created from code anyway.
+//
+// Three things live in the editor rather than in Bootstrap: the single empty scene that Build
+// Settings insists on, the PanelSettings asset UI Toolkit needs to open a runtime panel, and
+// the player settings the agent loop depends on (chiefly runInBackground — without it the
+// unfocused player pauses and every bridge command times out).
+//
+// BuildScript calls Ensure() before every build, so the agent loop stays one command and a
+// fresh clone of the repo builds without anyone opening the editor GUI.
+
+using System.IO;
+using UnityEditor;
+using UnityEditor.SceneManagement;
+using UnityEngine;
+using UnityEngine.UIElements;
+
+namespace Mesruiyet.EditorTools
+{
+    public static class ProjectSetup
+    {
+        const string ScenePath = "Assets/Scenes/Boot.unity";
+        const string ThemePath = "Assets/Resources/MesruiyetTheme.tss";
+        const string PanelPath = "Assets/Resources/MesruiyetPanel.asset";
+
+        [MenuItem("Meşruiyet/Projeyi hazırla")]
+        public static void Setup() => Ensure(force: true);
+
+        /// <summary>Create anything missing. Cheap and idempotent, so it runs before every build.</summary>
+        public static void Ensure(bool force = false)
+        {
+            Directory.CreateDirectory("Assets/Resources");
+            Directory.CreateDirectory("Assets/Scenes");
+
+            EnsurePanelSettings();
+            EnsureBootScene(force);
+            EnsurePlayerSettings();
+
+            AssetDatabase.SaveAssets();
+        }
+
+        // ---------------------------------------------------------------- UI Toolkit panel
+
+        static void EnsurePanelSettings()
+        {
+            var theme = AssetDatabase.LoadAssetAtPath<ThemeStyleSheet>(ThemePath);
+            if (theme == null)
+            {
+                // The default runtime theme is one import line; authoring it as text avoids
+                // depending on the editor's "Create > UI Toolkit" menu ever having been used.
+                File.WriteAllText(ThemePath, "@import url(\"unity-theme://default\");\n");
+                AssetDatabase.ImportAsset(ThemePath, ImportAssetOptions.ForceSynchronousImport);
+                theme = AssetDatabase.LoadAssetAtPath<ThemeStyleSheet>(ThemePath);
+            }
+
+            var panel = AssetDatabase.LoadAssetAtPath<PanelSettings>(PanelPath);
+            if (panel == null)
+            {
+                panel = ScriptableObject.CreateInstance<PanelSettings>();
+                AssetDatabase.CreateAsset(panel, PanelPath);
+            }
+
+            panel.themeStyleSheet = theme;
+            // The HUD is laid out against the mockup's 1920×1080, then scaled to the window.
+            panel.scaleMode = PanelScaleMode.ScaleWithScreenSize;
+            panel.referenceResolution = new Vector2Int(1920, 1080);
+            panel.screenMatchMode = PanelScreenMatchMode.MatchWidthOrHeight;
+            panel.match = 0.5f;
+            panel.clearColor = false;
+            EditorUtility.SetDirty(panel);
+        }
+
+        // ---------------------------------------------------------------- the one scene
+
+        static void EnsureBootScene(bool force)
+        {
+            bool exists = File.Exists(ScenePath);
+            if (!exists || force)
+            {
+                var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+                var go = new GameObject("Bootstrap");
+                go.AddComponent<Mesruiyet.Core.Bootstrap>();
+                EditorSceneManager.SaveScene(scene, ScenePath);
+            }
+
+            // Exactly one scene in the build, and it is this one. The world is code.
+            var current = EditorBuildSettings.scenes;
+            bool alreadyOnly = current.Length == 1 && current[0].path == ScenePath && current[0].enabled;
+            if (!alreadyOnly)
+                EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
+        }
+
+        // ---------------------------------------------------------------- player settings
+
+        static void EnsurePlayerSettings()
+        {
+            PlayerSettings.companyName = "Meşruiyet";
+            PlayerSettings.productName = "Mesruiyet";
+
+            // The agent drives a window that never has focus. Without this the player pauses
+            // between commands and the bridge times out — the single most confusing failure
+            // mode in the whole loop, so it is set here rather than left to a human.
+            PlayerSettings.runInBackground = true;
+
+            PlayerSettings.defaultScreenWidth = 1600;
+            PlayerSettings.defaultScreenHeight = 900;
+            PlayerSettings.fullScreenMode = FullScreenMode.Windowed;
+            PlayerSettings.resizableWindow = true;
+            PlayerSettings.defaultIsNativeResolution = false;
+            PlayerSettings.SetUseDefaultGraphicsAPIs(BuildTarget.StandaloneWindows64, true);
+        }
+    }
+}

@@ -135,6 +135,8 @@ namespace Mesruiyet.Agent
             public string id;
             public string path;
             public int n;
+            public int x;
+            public int y;
         }
 
         string Execute(string raw)
@@ -157,6 +159,10 @@ namespace Mesruiyet.Agent
                 case "click":
                     return AgentInput.Click(c.id) ? Ok() : Err($"no ui element named '{c.id}'");
 
+                case "build":
+                    // Placement is the whole first slice, so the agent has to be able to do it.
+                    return AgentInput.Build(c.id, c.x, c.y, out string why) ? Ok() : Err(why);
+
                 case "endturn":
                     StartCoroutine(EndTurns(Mathf.Max(1, c.n)));
                     return Ok();
@@ -178,8 +184,27 @@ namespace Mesruiyet.Agent
         {
             for (int i = 0; i < n; i++)
             {
-                AgentInput.Click("btn_end_turn");
-                // Let the turn resolve; TurnResolver raises this when the tick finishes.
+                // Wait for the previous turn to settle, then give the HUD one frame to
+                // re-enable the button before pressing it again — otherwise the click lands
+                // on a disabled control and the turn is silently skipped.
+                yield return new WaitUntil(() => AgentState.TurnIdle);
+
+                // Script execution order between the HUD and this coroutine is undefined, so
+                // retry for a few frames rather than assuming the button is enabled yet.
+                bool pressed = false;
+                for (int attempt = 0; attempt < 30 && !pressed; attempt++)
+                {
+                    yield return null;
+                    pressed = AgentInput.Click("btn_end_turn");
+                }
+
+                if (!pressed)
+                {
+                    Debug.LogWarning($"[AgentBridge] endturn {i + 1}/{n}: btn_end_turn basılamadı");
+                    yield break;
+                }
+
+                // BeginTurn clears TurnIdle synchronously, so this waits for the real tick.
                 yield return new WaitUntil(() => AgentState.TurnIdle);
             }
         }

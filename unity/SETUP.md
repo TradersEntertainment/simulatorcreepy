@@ -38,14 +38,14 @@ cd mesruiyet\unity
 Unity Hub → New Project → **Core → Universal 3D** → konum `mesruiyet\unity`, isim ne olursa
 (`Game`, `cityGame`, fark etmez — script'ler projeyi `Assets` + `ProjectSettings` klasörlerine
 bakarak kendi buluyor). **Source control provider'ı boş bırak** — proje zaten bir git deposunun
-içinde. **Use AI Assistant** işaretsiz kalsın. Oluşunca Unity'yi **kapat**.
+içinde. **Use AI Assistant** işaretsiz kalsın.
 
-Sonra bu klasördeki `Assets` içeriğini yeni projeye kopyala (aşağıda `<Proje>` yerine kendi
-klasör adını yaz):
+Oluşunca Unity'yi **kapat ve kapalı tut**. Editör projeyi açıkken kilitliyor, batchmode build
+çalışmıyor; `loop.ps1` bunu fark edip anlaşılır bir hata veriyor ama iş yine de durur.
 
-```powershell
-Copy-Item -Recurse -Force .\Assets\* .\<Proje>\Assets\
-```
+Dosya kopyalamana gerek yok: `loop.ps1` her çalıştığında `unity/Assets` içeriğini projeye
+senkronluyor, eksik sahne ve ayarları da `Editor/ProjectSetup` üretiyor. Depoda **kaynak
+`unity/Assets`**, proje klasörü ise çalışma kopyası — orayı elle düzenleme.
 
 ## 5. Claude'u başlat
 
@@ -74,8 +74,9 @@ JSON cevap döner:
 |---|---|
 | `{"cmd":"ping"}` | ayakta mı |
 | `{"cmd":"state"}` | tüm oyun durumunu JSON olarak döker (gerçek değerler) |
-| `{"cmd":"press","key":"space"}` | tuşa basar |
+| `{"cmd":"press","key":"e"}` | kamerayı döndürür / kaydırır (`w a s d q e zoomin zoomout`) |
 | `{"cmd":"click","id":"btn_end_turn"}` | isimli UI öğesine tıklar |
+| `{"cmd":"build","id":"dokuma","x":26,"y":9}` | ızgaraya yapı kurar |
 | `{"cmd":"endturn","n":10}` | n tur ilerletir |
 | `{"cmd":"shot","path":"agent/shots/x.png"}` | ekran görüntüsü kaydeder |
 | `{"cmd":"quit"}` | oyunu kapatır |
@@ -87,10 +88,16 @@ topla → logu oku. Ben bu script'i çalıştırıp çıktısına bakıyorum.
 .\agent\loop.ps1 -Scenario smoke
 ```
 
-## Sık çıkan iki sorun
+Senaryolar: `smoke` (aç, 3 tur, ekran görüntüsü), `play` (inşa et, kamerayı çevir, 10 tur),
+`turns40` (uzun koşu). Yeniden derlemeden tekrar oynatmak için `-SkipBuild` ekle.
 
-**Unity yolu bulunamadı.** `agent/loop.ps1` içindeki `$UnityExe` satırını kendi sürümünle
-güncelle: `C:\Program Files\Unity\Hub\Editor\6000.x.y\Editor\Unity.exe`
+## Sık çıkan sorunlar
+
+**"Multiple Unity instances cannot open the same project."** Editör açık. Kapat.
+
+**Unity sürümü bulunamadı.** `loop.ps1` sürümü `ProjectSettings/ProjectVersion.txt` içinden
+okur ve Hub'da tam o sürümü arar. Hub → Installs'tan o sürümü kur, ya da projeyi kurulu bir
+sürümle bir kez açıp yükselt.
 
 **Derleme hatası görünmüyor.** Loglar `agent/logs/` altına düşer; `build.log` derleme,
 `player.log` çalışma zamanı hatalarını içerir. İkisini de ben okuyorum.

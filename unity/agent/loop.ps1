@@ -1,7 +1,7 @@
 # loop.ps1 — build, launch, play, capture. The agent runs this; the human never has to.
 #
 #   .\agent\loop.ps1 -Scenario smoke
-#   .\agent\loop.ps1 -Scenario turns40 -SkipBuild
+#   .\agent\loop.ps1 -Scenario play -SkipBuild
 #
 # Everything lands under agent/: logs/, shots/, build/. Exit code is non-zero if the build
 # or the scenario failed, so the agent can react without reading prose.
@@ -27,24 +27,76 @@ if (-not $game) {
 }
 Write-Host "[loop] proje: $game" -ForegroundColor DarkGray
 
-# Adjust if your Unity version differs — Hub installs under Editor\<version>\Editor\Unity.exe
-$UnityExe = (Get-ChildItem "C:\Program Files\Unity\Hub\Editor\*\Editor\Unity.exe" |
-             Sort-Object FullName -Descending | Select-Object -First 1).FullName
-if (-not $UnityExe) { throw "Unity bulunamadı. loop.ps1 içindeki `$UnityExe yolunu elle ayarla." }
+# Use the editor the project was made with. Opening it with a different one triggers a full
+# reimport and, worse, silently rewrites ProjectVersion.txt. Do not sort version folders as
+# strings either — "6000.3.6f1" sorts above "6000.3.21f1" and you get the wrong editor.
+$hub = "C:\Program Files\Unity\Hub\Editor"
+$wanted = (Get-Content (Join-Path $game "ProjectSettings\ProjectVersion.txt") |
+           Select-String '^m_EditorVersion:\s*(.+)$').Matches.Groups[1].Value.Trim()
+
+$UnityExe = Join-Path $hub "$wanted\Editor\Unity.exe"
+if (-not (Test-Path $UnityExe)) {
+    $available = (Get-ChildItem $hub -Directory -ErrorAction SilentlyContinue).Name -join ", "
+    throw "Projenin istediği Unity $wanted kurulu değil. Kurulu sürümler: $available"
+}
+Write-Host "[loop] editör: $wanted" -ForegroundColor DarkGray
 
 New-Item -ItemType Directory -Force -Path "$agent\logs","$agent\shots" | Out-Null
+
+# unity/Assets is the tracked source; the project folder holds a working copy. Syncing here
+# rather than by hand removes the worst failure in this loop: building the previous edit and
+# spending ten minutes debugging a bug you already fixed.
+$src = Join-Path $root "Assets"
+if (Test-Path $src) {
+    Copy-Item -Recurse -Force (Join-Path $src "*") (Join-Path $game "Assets")
+    Write-Host "[loop] kaynaklar senkronlandı" -ForegroundColor DarkGray
+}
+
+# The editor holds an exclusive lock on the project, so a batchmode build silently refuses to
+# run while it is open. Catch it here instead of ten minutes later in a confusing log.
+if (-not $SkipBuild) {
+    $editor = Get-Process Unity -ErrorAction SilentlyContinue |
+              Where-Object { $_.MainWindowTitle -like "*$(Split-Path $game -Leaf)*" }
+    if ($editor) {
+        Write-Host "[loop] Unity Editor bu projeyi açık tutuyor — batchmode build çalışamaz." -ForegroundColor Red
+        Write-Host "       Editörü kapatın, sonra tekrar deneyin." -ForegroundColor Red
+        exit 4
+    }
+}
 
 # ---------------------------------------------------------------- build
 if (-not $SkipBuild) {
     Write-Host "[loop] derleniyor..." -ForegroundColor Cyan
     $buildLog = "$agent\logs\build.log"
-    & $UnityExe -batchmode -quit -nographics `
-        -projectPath $game `
-        -executeMethod Mesruiyet.EditorTools.BuildScript.Windows `
-        -logFile $buildLog
-    if ($LASTEXITCODE -ne 0) {
+    Remove-Item $buildLog -ErrorAction SilentlyContinue
+
+    # Start-Process -Wait, not `& $UnityExe`: Unity.exe is a GUI-subsystem binary, so the call
+    # operator returns immediately and leaves $LASTEXITCODE empty. Reading the log at that
+    # point gives you the previous run's output, which is a genuinely baffling way to fail.
+    $unity = Start-Process -FilePath $UnityExe -Wait -PassThru -ArgumentList @(
+        "-batchmode", "-quit", "-nographics",
+        "-projectPath", $game,
+        "-executeMethod", "Mesruiyet.EditorTools.BuildScript.Windows",
+        "-logFile", $buildLog)
+    $code = $unity.ExitCode
+
+    if (-not (Test-Path $buildLog)) {
+        Write-Host "[loop] Unity hiç log yazmadı — editör kapanırken kilidi bırakmamış olabilir." -ForegroundColor Red
+        exit 1
+    }
+
+    # Unity exits 0 when it refuses to open a locked project, so verify the log too.
+    $refused = Select-String -Path $buildLog -Pattern "Multiple Unity instances" -Quiet -ErrorAction SilentlyContinue
+    if ($code -ne 0 -or $refused) {
         Write-Host "[loop] DERLEME HATASI — son satırlar:" -ForegroundColor Red
         Get-Content $buildLog -Tail 40
+        exit 1
+    }
+
+    $compileErrors = Select-String -Path $buildLog -Pattern "error CS\d+" -ErrorAction SilentlyContinue
+    if ($compileErrors) {
+        Write-Host "[loop] DERLEYİCİ HATALARI:" -ForegroundColor Red
+        $compileErrors | Select-Object -First 30 | ForEach-Object { Write-Host $_.Line }
         exit 1
     }
 }
@@ -55,7 +107,8 @@ if (-not (Test-Path $exe)) { throw "Build çıktısı yok: $exe" }
 # ---------------------------------------------------------------- launch
 Write-Host "[loop] oyun başlatılıyor..." -ForegroundColor Cyan
 $playerLog = "$agent\logs\player.log"
-$proc = Start-Process $exe -PassThru -ArgumentList @(
+Remove-Item $playerLog -ErrorAction SilentlyContinue
+$proc = Start-Process $exe -PassThru -WorkingDirectory $agent -ArgumentList @(
     "-logFile", $playerLog, "-screen-width", "1600", "-screen-height", "900", "-screen-fullscreen", "0"
 )
 
@@ -71,9 +124,44 @@ function Send-Cmd([string] $json) {
     return $reply
 }
 
+# Screenshot paths must be absolute: the player resolves relative paths against its own
+# working directory, which is not something the caller should have to reason about.
+function Shot([string] $name) {
+    $path = (Join-Path "$agent\shots" $name) -replace '\\', '/'
+    Send-Cmd ('{"cmd":"shot","path":"' + $path + '"}') | Out-Null
+    Start-Sleep -Milliseconds 900
+}
+
+function Build-At([string] $id, [int] $x, [int] $y) {
+    $reply = Send-Cmd ('{"cmd":"build","id":"' + $id + '","x":' + $x + ',"y":' + $y + '}')
+    if ($reply -notmatch '"ok":true') { Write-Host "  [inşa reddedildi] $id ($x,$y): $reply" -ForegroundColor DarkYellow }
+    return $reply
+}
+
+function Get-Turn {
+    $s = Send-Cmd '{"cmd":"state"}'
+    if ($s -match '"turn":(\d+)') { return [int]$Matches[1] }
+    return -1
+}
+
+# Waiting for turnIdle alone is not enough: it is true *between* turns, so a ten-turn request
+# would appear finished after the first tick. Wait for the turn counter to actually arrive.
+function Wait-Turn([int] $target, [int] $seconds = 90) {
+    $deadline = (Get-Date).AddSeconds($seconds)
+    while ((Get-Date) -lt $deadline) {
+        Start-Sleep -Milliseconds 400
+        $s = Send-Cmd '{"cmd":"state"}'
+        if ($s -match '"turn":(\d+)' -and [int]$Matches[1] -ge $target -and $s -match '"turnIdle":true') {
+            return $true
+        }
+    }
+    Write-Host "  [uyarı] $target. tura ulaşılamadı ($seconds sn)" -ForegroundColor DarkYellow
+    return $false
+}
+
 # wait for AgentBridge to come up
 $ready = $false
-foreach ($i in 1..40) {
+foreach ($i in 1..60) {
     Start-Sleep -Milliseconds 500
     try { if ((Send-Cmd '{"cmd":"ping"}') -match '"ok":true') { $ready = $true; break } } catch { }
 }
@@ -84,29 +172,61 @@ if (-not $ready) {
     exit 2
 }
 Write-Host "[loop] köprü hazır" -ForegroundColor Green
+Start-Sleep -Seconds 1
 
 # ---------------------------------------------------------------- scenarios
 switch ($Scenario) {
     "smoke" {
-        Send-Cmd '{"cmd":"shot","path":"agent/shots/01-acilis.png"}' | Out-Null
-        Start-Sleep -Seconds 1
+        Shot "01-acilis.png"
+        $t = Get-Turn
         Send-Cmd '{"cmd":"endturn","n":3}' | Out-Null
-        Start-Sleep -Seconds 3
-        Send-Cmd '{"cmd":"shot","path":"agent/shots/02-3tur.png"}' | Out-Null
+        Wait-Turn ($t + 3) 40 | Out-Null
+        Shot "02-3tur.png"
         $state = Send-Cmd '{"cmd":"state"}'
     }
+
+    # A real play session: look around, build in two districts, run the clock.
+    "play" {
+        Shot "01-acilis.png"
+
+        Write-Host "[loop] inşa ediliyor..." -ForegroundColor Cyan
+        Build-At "tarla"   9  4 | Out-Null
+        Build-At "tarla"  10  4 | Out-Null
+        Build-At "kuyu"   14 16 | Out-Null
+        Build-At "konut"  20 16 | Out-Null
+        # The same workshop in two districts — the political effect must differ.
+        Build-At "dokuma"  6  8 | Out-Null
+        Build-At "dokuma" 26  9 | Out-Null
+        Build-At "park"   36 20 | Out-Null
+        Shot "02-insa.png"
+
+        Send-Cmd '{"cmd":"press","key":"e"}' | Out-Null
+        Start-Sleep -Milliseconds 700
+        Shot "03-donmus-kamera.png"
+        Send-Cmd '{"cmd":"press","key":"q"}' | Out-Null
+        Start-Sleep -Milliseconds 700
+
+        $t = Get-Turn
+        Send-Cmd '{"cmd":"endturn","n":10}' | Out-Null
+        Wait-Turn ($t + 10) 120 | Out-Null
+        Shot "04-10tur.png"
+        $state = Send-Cmd '{"cmd":"state"}'
+    }
+
     "turns40" {
+        $t = Get-Turn
         Send-Cmd '{"cmd":"endturn","n":40}' | Out-Null
-        Start-Sleep -Seconds 30
-        Send-Cmd '{"cmd":"shot","path":"agent/shots/40tur.png"}' | Out-Null
+        Wait-Turn ($t + 40) 300 | Out-Null
+        Shot "40tur.png"
         $state = Send-Cmd '{"cmd":"state"}'
     }
+
     default { throw "Bilinmeyen senaryo: $Scenario" }
 }
 
 Start-Sleep -Seconds 1
 Send-Cmd '{"cmd":"quit"}' | Out-Null
-Start-Sleep -Seconds 2
+Start-Sleep -Seconds 3
 if (-not $proc.HasExited) { $proc.Kill() }
 
 # ---------------------------------------------------------------- report
@@ -114,7 +234,14 @@ $state | Out-File "$agent\logs\state.json" -Encoding utf8
 Write-Host "`n[loop] DURUM:" -ForegroundColor Cyan
 Write-Host $state
 
-$errors = Select-String -Path $playerLog -Pattern "Exception|NullReference|Error" -ErrorAction SilentlyContinue
+Write-Host "`n[loop] görüntüler:" -ForegroundColor DarkGray
+Get-ChildItem "$agent\shots" -Filter *.png | ForEach-Object {
+    Write-Host ("  {0}  {1:N0} KB" -f $_.Name, ($_.Length / 1KB))
+}
+
+# Only real failures: Unity prints plenty of lines containing the word "error" that are not.
+$errors = Select-String -Path $playerLog -Pattern "Exception|NullReference|error CS|Shader error|\[Bootstrap\] .*bulunamadı" `
+          -ErrorAction SilentlyContinue
 if ($errors) {
     Write-Host "`n[loop] ÇALIŞMA ZAMANI HATALARI:" -ForegroundColor Red
     $errors | Select-Object -First 20 | ForEach-Object { Write-Host $_.Line }
@@ -122,3 +249,4 @@ if ($errors) {
 }
 
 Write-Host "`n[loop] temiz. Görüntüler: agent\shots\" -ForegroundColor Green
+

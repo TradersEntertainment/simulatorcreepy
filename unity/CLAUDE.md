@@ -16,6 +16,10 @@ Bu derler, oyunu başlatır, `AgentBridge` üzerinden oynar, ekran görüntüsü
 Çıkış kodu 0 değilse iş bitmemiştir. **Kullanıcıya "çalışıyor mu bak" deme** — kendin bak,
 sonra ekran görüntüsü ve iki paragraf özetle rapor ver.
 
+Kaynak `unity/Assets` altındadır; Unity proje klasörü (`cityGame/`) çalışma kopyasıdır ve
+`loop.ps1` her koşuda senkronlar. **Proje klasöründeki dosyaları elle düzenleme** — bir sonraki
+koşuda üzerine yazılır.
+
 ## Mimari kuralları
 
 - **Sahne ve prefab elle yazılmaz.** `.unity` ve `.prefab` dosyaları GUID referanslı YAML'dır;
@@ -37,7 +41,7 @@ sonra ekran görüntüsü ve iki paragraf özetle rapor ver.
 
 `Assets/Scripts/Agent/AgentBridge.cs` yalnızca debug/editör build'lerinde derlenir ve
 `127.0.0.1:8787` üzerinde satır bazlı JSON konuşur: `ping`, `state`, `press`, `click`,
-`endturn`, `shot`, `quit`. Yeni bir sistem eklediğinde:
+`build`, `endturn`, `shot`, `quit`. Yeni bir sistem eklediğinde:
 
 1. `AgentState.DumpJson()` çıktısına ilgili alanları ekle — göremediğin şeyi test edemezsin.
 2. Yeni bir UI düğmesi eklediğinde ona `name` ver ki `click` ile basılabilsin.

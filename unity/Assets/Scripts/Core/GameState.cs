@@ -1,0 +1,168 @@
+// GameState holds the TRUE values. Nothing in the UI is allowed to read it.
+//
+// That single rule is the spine of the whole game: the player sees Reporting's version, the
+// agent bridge sees this one, and the gap between them is the subject. Slice one has no
+// ministers distorting anything yet, but the separation exists from the first line of code
+// so it can never be retrofitted badly later.
+
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace Mesruiyet.Core
+{
+    public sealed class PlacedBuilding
+    {
+        public BuildingDef Def;
+        public Vector2Int Tile;
+        public DistrictId District;
+        /// <summary>False when it has no workers or no power — it stands there costing upkeep.</summary>
+        public bool Staffed = true;
+        public int BuiltOnTurn;
+    }
+
+    public sealed class DistrictState
+    {
+        public DistrictDef Def;
+        public float Grievance;
+        public int Population;
+        public int Housing;
+        /// <summary>Turns spent above 70 grievance. Three in a row and the district acts.</summary>
+        public int AngryStreak;
+
+        public string Name => Def.Name;
+        public DistrictId Id => Def.Id;
+    }
+
+    public sealed class GameState
+    {
+        public static GameState Current;
+
+        // ---------------------------------------------------------------- time
+        public int Turn = 1;
+        public const int FinalTurn = 60;
+
+        public int Season => (Turn - 1) % 4;
+        public int Year => (Turn - 1) / 4 + 1;
+        public string SeasonName => Naming.SeasonNames[Season];
+
+        /// <summary>Elections fall on turns 12, 24, 36, 48 and 60 — the one channel that cannot lie.</summary>
+        public static readonly int[] ElectionTurns = { 12, 24, 36, 48, 60 };
+
+        public int TurnsToElection
+        {
+            get
+            {
+                for (int i = 0; i < ElectionTurns.Length; i++)
+                    if (ElectionTurns[i] >= Turn) return ElectionTurns[i] - Turn;
+                return 0;
+            }
+        }
+
+        // ---------------------------------------------------------------- the ledger
+        public readonly float[] Stock = new float[6];
+        /// <summary>Net change applied on the last tick. Recomputed every turn by TurnResolver.</summary>
+        public readonly float[] Flow = new float[6];
+        /// <summary>Total İşgücü the city has, employed or not.</summary>
+        public int LabourPool;
+        public int LabourUsed;
+
+        // ---------------------------------------------------------------- indices, 0..100
+        public float Saglik = 50, Egitim = 50, Guvenlik = 50, Kultur = 50, Kirlilik = 6;
+
+        // ---------------------------------------------------------------- politics
+        public int Legitimacy = 60;
+        /// <summary>OTORİTE(+) ↔ ÖZGÜRLÜK(−), −100..100.</summary>
+        public int AxisOrder;
+        /// <summary>SERMAYE(+) ↔ EŞİTLİK(−), −100..100.</summary>
+        public int AxisEconomy;
+        /// <summary>The last 15 turns of both axes. This is where the game's subject becomes visible.</summary>
+        public readonly List<Vector2Int> AxisTrail = new List<Vector2Int>();
+
+        public readonly float[] FactionLoyalty = { 50, 50, 50, 50, 50 };
+
+        /// <summary>
+        /// How honest the city's numbers are, 0..1. Free press and an open council push it up;
+        /// authority and censorship push it down. Ministers read this in a later slice.
+        /// </summary>
+        public float Transparency = 1f;
+
+        // ---------------------------------------------------------------- the city
+        public DistrictState[] Districts;
+        public readonly List<PlacedBuilding> Buildings = new List<PlacedBuilding>();
+
+        /// <summary>How many turns the city could absorb a shock. Pillar 3, made a number.</summary>
+        public float BufferTurns = 6f;
+
+        public int Population
+        {
+            get
+            {
+                int n = 0;
+                foreach (var d in Districts) n += d.Population;
+                return n;
+            }
+        }
+
+        public float AverageGrievance
+        {
+            get
+            {
+                float sum = 0;
+                foreach (var d in Districts) sum += d.Grievance;
+                return sum / Districts.Length;
+            }
+        }
+
+        public static GameState NewGame()
+        {
+            var g = new GameState();
+
+            // Fully qualified: the Districts field below shadows the Districts content table.
+            // Stored by enum value, never by declaration order — District(id) indexes this.
+            var defs = Mesruiyet.Core.Districts.All;
+            g.Districts = new DistrictState[defs.Length];
+            for (int i = 0; i < defs.Length; i++)
+            {
+                var def = defs[i];
+                g.Districts[(int)def.Id] = new DistrictState
+                {
+                    Def = def,
+                    Population = def.StartPopulation,
+                    Grievance = 10 + (100 - def.Wealth) * 0.06f,
+                    Housing = def.StartPopulation + 20,
+                };
+            }
+
+            // 400 settlers, a small treasury, a blank grid.
+            g.Stock[(int)Res.Para] = 900;
+            g.Stock[(int)Res.Yiyecek] = 320;
+            g.Stock[(int)Res.Su] = 260;
+            g.Stock[(int)Res.Enerji] = 120;
+            g.Stock[(int)Res.Malzeme] = 240;
+
+            g.AxisTrail.Add(Vector2Int.zero);
+            return g;
+        }
+
+        public DistrictState District(DistrictId id) => Districts[(int)id];
+
+        public bool CanAfford(BuildingDef def)
+            => Stock[(int)Res.Para] >= def.CostMoney && Stock[(int)Res.Malzeme] >= def.CostMaterial;
+
+        /// <summary>Clamp an axis and remember that it moved. Everything that shifts politics comes here.</summary>
+        public void ShiftAxes(int order, int economy)
+        {
+            AxisOrder = Mathf.Clamp(AxisOrder + order, -100, 100);
+            AxisEconomy = Mathf.Clamp(AxisEconomy + economy, -100, 100);
+        }
+
+        public void ShiftFaction(Faction f, int delta)
+            => FactionLoyalty[(int)f] = Mathf.Clamp(FactionLoyalty[(int)f] + delta, 0, 100);
+
+        public void RecordTrail()
+        {
+            AxisTrail.Add(new Vector2Int(AxisOrder, AxisEconomy));
+            if (AxisTrail.Count > 15) AxisTrail.RemoveAt(0);
+        }
+    }
+}
