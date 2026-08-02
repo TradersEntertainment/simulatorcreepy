@@ -220,6 +220,20 @@ switch ($Scenario) {
         Start-Sleep -Milliseconds 900
         Shot "03-yakin.png"
 
+        # The same block with the housing shut down. An unworked building is drawn cold, and
+        # every part of it has to go cold together — the roof is the largest surface on a house,
+        # so a roof that ignored the shutdown left a bright lid hanging over invisible walls and
+        # the whole row looked like it was floating. This picture is how that stays fixed.
+        Send-Cmd '{"cmd":"block","id":"konut","n":1}' | Out-Null
+        Start-Sleep -Milliseconds 900
+        Shot "04-kapali-konut.png"
+        Send-Cmd '{"cmd":"block","id":"konut","n":0}' | Out-Null
+
+        # Right down onto a single block, where a wall either meets the ground or it does not.
+        foreach ($i in 1..8) { Send-Cmd '{"cmd":"press","key":"zoomin"}' | Out-Null }
+        Start-Sleep -Milliseconds 900
+        Shot "05-cok-yakin.png"
+
         $state = Send-Cmd '{"cmd":"state"}'
     }
 

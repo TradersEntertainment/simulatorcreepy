@@ -33,6 +33,8 @@ namespace Mesruiyet.World
         static readonly Color ColKerb = Hex("#4E535E");
         static readonly Color ColVoid = Hex("#0B0E13");
         static readonly Color ColLine = Hex("#C9CEDA");
+        /// <summary>Where an unworked building's colours are dragged towards: cold, not absent.</summary>
+        static readonly Color ColShuttered = Hex("#2A2F38");
 
         static Color Hex(string s)
         {
@@ -317,20 +319,27 @@ namespace Mesruiyet.World
                 float depth = CityGrid.TileSize * (spread + vary * hash2);
                 float height = storeys * storeyHeight;
 
-                if (!b.Staffed) tint = Color.Lerp(tint, ColVoid, 0.45f);
+                // A building nobody works reads as cold and shuttered. It used to be dragged 45%
+                // of the way to the background colour, which under a low winter sun left the
+                // walls all but invisible — and since the roof took its colour from its own
+                // palette and never saw this line, a dead house showed a bright terracotta roof
+                // hanging in the air over nothing. Softer, towards slate rather than towards the
+                // void, and everything the house is made of now follows it.
+                bool dead = !b.Staffed;
+                if (dead) tint = Color.Lerp(tint, ColShuttered, 0.38f);
 
                 _builder.AddBox(ground, new Vector3(footprint, height, depth), tint);
-                AddWindows(ground, footprint, depth, height, storeys, b.Tile);
+                AddWindows(ground, footprint, depth, height, storeys, b.Tile, dead);
 
                 // Houses get a pitched roof, a chimney and a front door; everything above four
                 // storeys and every civic building keeps a flat top, because that is the honest
                 // difference between a home and an institution. A town of flat-topped boxes
                 // reads as an office park, which is not what four hundred settlers built.
                 bool cottage = residential && storeys <= 3;
-                if (cottage) AddCottageTop(ground, footprint, depth, height, tint, b.Tile);
+                if (cottage) AddCottageTop(ground, footprint, depth, height, tint, b.Tile, dead);
                 else if (storeys >= 2) AddRoofClutter(ground, footprint, depth, height, tint, b.Tile);
 
-                if (residential) AddDoor(ground, footprint, depth, b.Tile);
+                if (residential) AddDoor(ground, footprint, depth, b.Tile, dead);
 
                 if (def.Id == "anit")
                     _builder.AddPyramid(ground + Vector3.up * height, footprint * 0.5f, 4.2f, MeshBuilder.Shade(tint, 1.1f));
@@ -387,9 +396,16 @@ namespace Mesruiyet.World
             }
             else if (order < 0 && hash < orderDensity)
             {
-                // An awning, and a room somebody added without asking anyone.
-                _builder.AddBox(ground + new Vector3(0, height * 0.45f, d * 0.5f + 0.4f),
+                // An awning, and a room somebody added without asking anyone. The brackets are
+                // two slivers and they are what stop the awning reading as a plate hanging in
+                // the air beside the building.
+                float ay = height * 0.45f;
+                _builder.AddBox(ground + new Vector3(0, ay, d * 0.5f + 0.4f),
                                 new Vector3(w * 0.7f, 0.12f, 0.9f), PropAwning);
+                foreach (float bx in new[] { -w * 0.3f, w * 0.3f })
+                    _builder.AddBox(ground + new Vector3(bx, ay - 0.45f, d * 0.5f + 0.32f),
+                                    new Vector3(0.07f, 0.5f, 0.5f),
+                                    MeshBuilder.Shade(PropAwning, 0.6f));
                 if (hash2 < 0.5f)
                     _builder.AddBox(ground + new Vector3(w * 0.5f, height * 0.4f, 0),
                                     new Vector3(w * 0.28f, height * 0.26f, d * 0.45f),
@@ -413,9 +429,14 @@ namespace Mesruiyet.World
                 // A mural across the ground floor, and a line of washing between the blocks.
                 _builder.AddBox(ground + new Vector3(0, 0.9f, d * 0.5f + 0.03f),
                                 new Vector3(w * 0.8f, 1.8f, 0.07f), PropMural);
+                // The line ran out of the wall and stopped in mid-air. It now ends on a post,
+                // because a washing line with one end attached to nothing is the sort of thing
+                // that reads as a rendering fault rather than as a neighbourhood.
                 float y = height * 0.7f;
                 _builder.AddBox(ground + new Vector3(0, y, d * 0.5f + 1.1f),
                                 new Vector3(w * 0.05f, 0.05f, 2.2f), PropLaundry);
+                _builder.AddBox(ground + new Vector3(0, 0, d * 0.5f + 2.1f),
+                                new Vector3(0.12f, y + 0.05f, 0.12f), MeshBuilder.Shade(PropLaundry, 0.55f));
                 for (int i = 0; i < 3; i++)
                     _builder.AddBox(ground + new Vector3(0, y - 0.35f, d * 0.5f + 0.45f + i * 0.62f),
                                     new Vector3(0.36f, 0.5f, 0.04f),
@@ -433,13 +454,17 @@ namespace Mesruiyet.World
         /// slope. The roof colour comes from a small warm palette rather than the wall tint, so
         /// a quarter reads as a roofscape from above instead of a field of coloured lids.
         /// </summary>
-        void AddCottageTop(Vector3 ground, float w, float d, float height, Color tint, Vector2Int tile)
+        void AddCottageTop(Vector3 ground, float w, float d, float height, Color tint, Vector2Int tile,
+                           bool dead)
         {
             float h1 = CityGrid.Hash(tile.x, tile.y, 61);
             float h2 = CityGrid.Hash(tile.x, tile.y, 67);
             float h3 = CityGrid.Hash(tile.x, tile.y, 71);
 
             Color roof = RoofTiles[Mathf.FloorToInt(h1 * RoofTiles.Length) % RoofTiles.Length];
+            // The roof is the largest surface on a house. If it does not go dark with the walls,
+            // an empty house is a bright lid floating over a shadow.
+            if (dead) roof = Color.Lerp(roof, ColShuttered, 0.38f);
             bool alongX = w >= d;                       // ridge runs the long way, as roofs do
             // Kept under half the wall height. A steeper roof looks better in isolation and, from
             // a camera pitched at forty degrees, swallows the walls it is supposed to sit on.
@@ -466,21 +491,22 @@ namespace Mesruiyet.World
                 _builder.AddBox(at, new Vector3(0.85f, 0.8f, 0.85f), MeshBuilder.Shade(tint, 1.04f));
                 _builder.AddWindow(at + (alongX ? new Vector3(0, 0.45f, 0.44f) : new Vector3(0.44f, 0.45f, 0)),
                                    alongX ? Vector3.forward : Vector3.right,
-                                   0.5f, 0.5f, Hex("#FFD79A"));
+                                   0.5f, 0.5f, dead ? Hex("#39414E") : Hex("#FFD79A"));
             }
         }
 
         /// <summary>A door at the foot of the wall, with a step and a lamp beside it.</summary>
-        void AddDoor(Vector3 ground, float w, float d, Vector2Int tile)
+        void AddDoor(Vector3 ground, float w, float d, Vector2Int tile, bool dead)
         {
             float h = CityGrid.Hash(tile.x, tile.y, 73);
             Vector3 face = ground + new Vector3((h - 0.5f) * w * 0.4f, 0, d * 0.5f);
 
             _builder.AddBox(face + new Vector3(0, 0, 0.02f), new Vector3(0.62f, 1.35f, 0.1f), Hex("#4A3527"));
             _builder.AddBox(face + new Vector3(0, 0, 0.16f), new Vector3(0.9f, 0.12f, 0.35f), Hex("#7C7062"));
-            // A porch lamp, self-lit. Small, warm, and the reason a street looks occupied.
+            // A porch lamp, self-lit. Small, warm, and the reason a street looks occupied — so
+            // an empty house does not get to keep its light on.
             _builder.AddBox(face + new Vector3(0.5f, 1.5f, 0.1f), new Vector3(0.16f, 0.16f, 0.16f),
-                            new Color(1f, 0.86f, 0.62f, 0f));
+                            dead ? Hex("#3A3F48") : new Color(1f, 0.86f, 0.62f, 0f));
         }
 
         /// <summary>
@@ -521,16 +547,18 @@ namespace Mesruiyet.World
                                 Hex("#6E6357"));
             }
 
-            // Vents, in a little row.
+            // Vents, in a little row. AddBox measures from the base of the box, so these take no
+            // Y offset at all — 0.18 here used to lift the whole row off the roof it sits on.
             if (c > 0.5f)
                 for (int i = 0; i < 3; i++)
-                    _builder.AddBox(roof + new Vector3(w * (-0.22f + i * 0.22f), 0.18f, -d * 0.3f),
+                    _builder.AddBox(roof + new Vector3(w * (-0.22f + i * 0.22f), 0f, -d * 0.3f),
                                     new Vector3(0.3f, 0.36f, 0.3f), MeshBuilder.Shade(dark, 0.9f));
 
-            // An aerial. Thin, tall, and the only thing up here that breaks the skyline.
+            // An aerial. Thin, tall, and the only thing up here that breaks the skyline — which
+            // it was doing from a metre and a half above the roof, standing on nothing.
             if (e > 0.7f)
-                _builder.AddBox(roof + new Vector3((e - 0.5f) * w * 0.5f, 1.5f, (a - 0.5f) * d * 0.5f),
-                                new Vector3(0.1f, 3f, 0.1f), MeshBuilder.Shade(dark, 0.75f));
+                _builder.AddBox(roof + new Vector3((e - 0.5f) * w * 0.5f, 0f, (a - 0.5f) * d * 0.5f),
+                                new Vector3(0.1f, 4.5f, 0.1f), MeshBuilder.Shade(dark, 0.75f));
         }
 
         void AddFurrows(Vector3 ground, float hash)
@@ -546,7 +574,8 @@ namespace Mesruiyet.World
             }
         }
 
-        void AddWindows(Vector3 ground, float w, float d, float height, int storeys, Vector2Int tile)
+        void AddWindows(Vector3 ground, float w, float d, float height, int storeys, Vector2Int tile,
+                        bool dead)
         {
             Color warm = Hex("#FFD79A");
             Color cold = Hex("#8FA6C0");
@@ -567,7 +596,8 @@ namespace Mesruiyet.World
                     int salt = tile.x * 31 + tile.y * 17 + floor * 7 + col;
                     if (CityGrid.Hash(tile.x, tile.y, salt) < 0.24f) continue;
 
-                    bool lit = CityGrid.Hash(tile.x, tile.y, salt + 5000) < litShare;
+                    // Nobody is home to light a lamp in a building nobody works.
+                    bool lit = !dead && CityGrid.Hash(tile.x, tile.y, salt + 5000) < litShare;
                     Color glow = lit ? warm : MeshBuilder.Shade(cold, 0.45f);
 
                     _builder.AddWindow(new Vector3(ground.x + u * w, y, ground.z + d * 0.5f),
@@ -788,9 +818,14 @@ namespace Mesruiyet.World
             Vector3 p = at + new Vector3((hash - 0.5f) * 2.4f, 0, (hash - 0.5f) * 2.4f);
             Color canopy = StallCanopy[Mathf.FloorToInt(hash * StallCanopy.Length) % StallCanopy.Length];
 
+            // The posts run from the ground, not from the table top: they were starting at 0.62
+            // and the stall stood on nothing, a canopy and a plank hanging in the air.
             _builder.AddBox(p + Vector3.up * 0.42f, new Vector3(1.25f, 0.12f, 0.75f), Hex("#6B5A45"));
-            _builder.AddBox(p + new Vector3(-0.52f, 0.62f, 0), new Vector3(0.09f, 1.24f, 0.09f), Hex("#4A4034"));
-            _builder.AddBox(p + new Vector3(0.52f, 0.62f, 0), new Vector3(0.09f, 1.24f, 0.09f), Hex("#4A4034"));
+            _builder.AddBox(p + new Vector3(-0.52f, 0f, 0), new Vector3(0.09f, 1.4f, 0.09f), Hex("#4A4034"));
+            _builder.AddBox(p + new Vector3(0.52f, 0f, 0), new Vector3(0.09f, 1.4f, 0.09f), Hex("#4A4034"));
+            // Legs under the table too, so the plank is not levitating either.
+            _builder.AddBox(p + new Vector3(-0.5f, 0f, 0.28f), new Vector3(0.08f, 0.42f, 0.08f), Hex("#4A4034"));
+            _builder.AddBox(p + new Vector3(0.5f, 0f, 0.28f), new Vector3(0.08f, 0.42f, 0.08f), Hex("#4A4034"));
             _builder.AddBox(p + Vector3.up * 1.28f, new Vector3(1.45f, 0.11f, 0.95f), canopy);
             // Crates under the table, so it reads as a stall with something to sell.
             _builder.AddBox(p + new Vector3(0.3f, 0, 0.28f), new Vector3(0.3f, 0.3f, 0.3f), Hex("#7A6647"));
@@ -809,8 +844,9 @@ namespace Mesruiyet.World
             _builder.AddBox(at + Vector3.up * 0.3f, hull, Hex("#6E5A46"));
             _builder.AddBox(at + Vector3.up * 0.62f, hull * 0.55f, Hex("#8A7458"));
             // A mast, on about half of them, so the moorings are not a row of identical hulls.
+            // Stepped on the deck at 0.6, not hung at 2.0 — it used to float clear of the boat.
             if (hash > 0.62f)
-                _builder.AddBox(at + Vector3.up * 2f, new Vector3(0.12f, 3f, 0.12f), Hex("#4A4034"));
+                _builder.AddBox(at + Vector3.up * 0.6f, new Vector3(0.12f, 3.6f, 0.12f), Hex("#4A4034"));
         }
 
         static readonly Color[] Foliage =
