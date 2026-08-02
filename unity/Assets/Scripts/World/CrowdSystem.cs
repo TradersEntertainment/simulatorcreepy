@@ -1,0 +1,436 @@
+// The crowd and the traffic — and the main readability channel in the whole game.
+//
+// This is not decoration. Density and behaviour encode the simulation, and the target the
+// design sets is explicit: a player should be able to diagnose a district by watching it for
+// five seconds without opening a panel. So:
+//
+//   · employment fills the streets — people walk, the district looks busy
+//   · unemployment leaves clusters standing still
+//   · grievance above 70 makes crowds converge on the square and carry banners
+//   · a strike empties the industrial quarter completely
+//
+// Architecture, per CLAUDE.md: no MonoBehaviour per agent, ever. Everything lives in
+// NativeArray<struct>, moves in a Burst-compiled IJobParallelFor, and draws through
+// RenderMeshInstanced in a handful of colour buckets. Six hundred agents cost one job and
+// about a dozen draw calls.
+
+using Unity.Burst;
+using Unity.Collections;
+using Unity.Jobs;
+using Unity.Mathematics;
+using UnityEngine;
+using UnityEngine.Rendering;
+using Mesruiyet.Core;
+
+namespace Mesruiyet.World
+{
+    /// <summary>What a district is doing, as the crowd needs to see it.</summary>
+    public struct DistrictMood
+    {
+        public float3 Centre;
+        public float3 Extent;
+        /// <summary>0..1 — how many hands are working.</summary>
+        public float Employment;
+        public float Grievance;
+        /// <summary>1 when the quarter has stopped: no staffed workplaces at all.</summary>
+        public byte Struck;
+    }
+
+    public struct CrowdAgent
+    {
+        public float3 Pos;
+        public float3 Target;
+        public float Speed;
+        public int District;
+        /// <summary>0 pedestrian · 1 car.</summary>
+        public byte Kind;
+        /// <summary>0 walking · 1 standing idle · 2 marching on the square.</summary>
+        public byte Mood;
+        public byte Bucket;
+        public float Phase;
+    }
+
+    [BurstCompile]
+    public struct CrowdJob : IJobParallelFor
+    {
+        public NativeArray<CrowdAgent> Agents;
+        [ReadOnly] public NativeArray<DistrictMood> Moods;
+        public float Dt;
+        public uint Frame;
+
+        static float Hash01(uint x)
+        {
+            x ^= x >> 16; x *= 0x7feb352du;
+            x ^= x >> 15; x *= 0x846ca68bu;
+            x ^= x >> 16;
+            return (x & 0xffffff) / 16777215f;
+        }
+
+        public void Execute(int i)
+        {
+            var a = Agents[i];
+            if (a.District < 0 || a.District >= Moods.Length) return;
+            var mood = Moods[a.District];
+
+            // Standing still is a behaviour, not an absence of one: idle clusters are how
+            // unemployment looks from the air.
+            if (a.Mood == 1)
+            {
+                a.Phase += Dt;
+                Agents[i] = a;
+                return;
+            }
+
+            float3 delta = a.Target - a.Pos;
+            float distance = math.length(delta);
+
+            if (distance < 1.2f)
+            {
+                uint seed = (uint)(i * 747796405) ^ (Frame * 2891336453u);
+                float rx = Hash01(seed) - 0.5f;
+                float rz = Hash01(seed * 16807u + 13u) - 0.5f;
+
+                // An angry district converges: everyone heads for the same square, and the
+                // crowd thickens there until it is the first thing you notice.
+                float3 target = a.Mood == 2
+                    ? mood.Centre + new float3(rx * 8f, 0, rz * 8f)
+                    : mood.Centre + new float3(rx * 2f * mood.Extent.x, 0, rz * 2f * mood.Extent.z);
+
+                a.Target = target;
+            }
+            else
+            {
+                a.Pos += delta / distance * a.Speed * Dt;
+            }
+
+            a.Phase += Dt * (a.Kind == 1 ? 0.4f : 1.6f);
+            Agents[i] = a;
+        }
+    }
+
+    public sealed class CrowdSystem : MonoBehaviour
+    {
+        public const int MaxAgents = 600;
+
+        /// <summary>Six buckets, so the whole crowd is six instanced draw calls.</summary>
+        static readonly string[] BucketHex =
+        {
+            "#E4544A", "#4E8FE0", "#F0C24A", "#EDEFF3", "#3FBF7A", "#C48CFF",
+        };
+
+        GameState _state;
+        CityGrid _grid;
+
+        NativeArray<CrowdAgent> _agents;
+        NativeArray<DistrictMood> _moods;
+        int _live;
+
+        Mesh _personMesh, _carMesh, _bannerMesh;
+        Material[] _bucketMats;
+        Material _bannerMat;
+
+        Matrix4x4[][] _batches, _carBatches;
+        int[] _batchCount, _carBatchCount;
+        Matrix4x4[] _banners;
+        int _bannerCount;
+
+        JobHandle _handle;
+        uint _frame;
+
+        public int LiveAgents => _live;
+
+        public void Init(GameState state, CityGrid grid, Material template)
+        {
+            _state = state;
+            _grid = grid;
+
+            _agents = new NativeArray<CrowdAgent>(MaxAgents, Allocator.Persistent);
+            _moods = new NativeArray<DistrictMood>(state.Districts.Length, Allocator.Persistent);
+
+            BuildMeshes();
+            BuildMaterials(template);
+
+            _batches = new Matrix4x4[BucketHex.Length][];
+            _carBatches = new Matrix4x4[BucketHex.Length][];
+            _batchCount = new int[BucketHex.Length];
+            _carBatchCount = new int[BucketHex.Length];
+            for (int i = 0; i < _batches.Length; i++)
+            {
+                _batches[i] = new Matrix4x4[MaxAgents];
+                _carBatches[i] = new Matrix4x4[MaxAgents];
+            }
+            _banners = new Matrix4x4[MaxAgents];
+
+            Repopulate();
+
+            Debug.Log($"[Crowd] kişi {_personMesh.vertexCount}v · araba {_carMesh.vertexCount}v · " +
+                      $"pankart {_bannerMesh.vertexCount}v · shader {template.shader.name} · " +
+                      $"instancing {_bucketMats[0].enableInstancing} · ajan {_live}");
+        }
+
+        void OnDestroy()
+        {
+            _handle.Complete();
+            if (_agents.IsCreated) _agents.Dispose();
+            if (_moods.IsCreated) _moods.Dispose();
+        }
+
+        // ---------------------------------------------------------------- geometry
+
+        void BuildMeshes()
+        {
+            // A person is a body and a head; a car is a body, a cabin and four wheels. Built
+            // from the same primitives as everything else, so there is still not one imported
+            // asset anywhere in the project.
+            var b = new MeshBuilder();
+            b.AddBox(new Vector3(0, 0, 0), new Vector3(0.55f, 1.15f, 0.42f), Color.white);
+            b.AddBox(new Vector3(0, 1.15f, 0), new Vector3(0.45f, 0.42f, 0.42f), new Color(0.91f, 0.73f, 0.56f));
+            _personMesh = b.ToMesh("Person");
+
+            b.Clear();
+            b.AddBox(new Vector3(0, 0.22f, 0), new Vector3(1.7f, 0.62f, 0.95f), Color.white);
+            b.AddBox(new Vector3(-0.1f, 0.84f, 0), new Vector3(0.95f, 0.5f, 0.85f),
+                     new Color(0.62f, 0.71f, 0.80f));
+            foreach (float dx in new[] { -0.55f, 0.55f })
+            foreach (float dz in new[] { -0.45f, 0.45f })
+                b.AddBox(new Vector3(dx, 0, dz), new Vector3(0.3f, 0.26f, 0.18f),
+                         new Color(0.14f, 0.15f, 0.18f));
+            _carMesh = b.ToMesh("Car");
+
+            // A banner on a pole. Only marching crowds carry them, so seeing one at all is
+            // the signal — you never have to read the number to know a quarter has had enough.
+            b.Clear();
+            b.AddBox(new Vector3(0, 1.5f, 0), new Vector3(0.09f, 1.5f, 0.09f), new Color(0.2f, 0.16f, 0.12f));
+            b.AddBox(new Vector3(0.4f, 2.5f, 0), new Vector3(0.8f, 0.55f, 0.06f), Color.white);
+            _bannerMesh = b.ToMesh("Banner");
+        }
+
+        void BuildMaterials(Material template)
+        {
+            _bucketMats = new Material[BucketHex.Length];
+            for (int i = 0; i < BucketHex.Length; i++)
+            {
+                ColorUtility.TryParseHtmlString(BucketHex[i], out var c);
+                _bucketMats[i] = new Material(template) { name = "Crowd " + i, enableInstancing = true };
+                _bucketMats[i].SetColor("_Tint", c);
+            }
+            _bannerMat = new Material(template) { name = "Banner", enableInstancing = true };
+            _bannerMat.SetColor("_Tint", new Color(0.88f, 0.25f, 0.18f));
+        }
+
+        // ---------------------------------------------------------------- population
+
+        static float Rand(ref uint s)
+        {
+            s ^= s << 13; s ^= s >> 17; s ^= s << 5;
+            return (s & 0xffffff) / 16777215f;
+        }
+
+        /// <summary>
+        /// Resize the crowd to the city. Fleet and footfall both scale with population, capped
+        /// at six hundred — a bigger world is not more agents, it is more statistics.
+        /// </summary>
+        public void Repopulate()
+        {
+            int wanted = Mathf.Clamp(_state.Population / 3, 40, MaxAgents);
+            uint seed = 0x9E3779B9u;
+
+            for (int i = 0; i < wanted; i++)
+            {
+                int district = i % _state.Districts.Length;
+                var bounds = _state.Districts[district].Def.Bounds;
+
+                float x = bounds.xMin + Rand(ref seed) * bounds.width;
+                float y = bounds.yMin + Rand(ref seed) * bounds.height;
+                Vector3 world = CityGrid.World(Mathf.RoundToInt(x), Mathf.RoundToInt(y));
+
+                bool car = i % 5 == 0;
+                _agents[i] = new CrowdAgent
+                {
+                    Pos = new float3(world.x, car ? 0.05f : 0f, world.z),
+                    Target = new float3(world.x, 0, world.z),
+                    Speed = car ? 7f + Rand(ref seed) * 4f : 2.2f + Rand(ref seed) * 1.4f,
+                    District = district,
+                    Kind = (byte)(car ? 1 : 0),
+                    Bucket = (byte)(Rand(ref seed) * BucketHex.Length),
+                    Phase = Rand(ref seed) * 10f,
+                };
+            }
+            _live = wanted;
+        }
+
+        /// <summary>
+        /// Read the districts and tell the crowd how to behave. Called on every tick and every
+        /// build, because this is the moment the simulation becomes something you can look at.
+        /// </summary>
+        public void SyncMoods()
+        {
+            for (int d = 0; d < _state.Districts.Length; d++)
+            {
+                var district = _state.Districts[d];
+                var bounds = district.Def.Bounds;
+
+                Vector3 centre = CityGrid.World(bounds.xMin + bounds.width / 2,
+                                                bounds.yMin + bounds.height / 2);
+
+                int workplaces = 0, working = 0;
+                foreach (var b in _state.Buildings)
+                {
+                    if (b.District != district.Id || b.Def.Workers <= 0) continue;
+                    workplaces++;
+                    if (b.Staffed) working++;
+                }
+
+                _moods[d] = new DistrictMood
+                {
+                    Centre = new float3(centre.x, 0, centre.z),
+                    Extent = new float3(bounds.width * CityGrid.TileSize * 0.42f, 0,
+                                        bounds.height * CityGrid.TileSize * 0.42f),
+                    Employment = workplaces == 0 ? 1f : working / (float)workplaces,
+                    Grievance = district.Grievance,
+                    Struck = (byte)(workplaces > 0 && working == 0 ? 1 : 0),
+                };
+            }
+
+            AssignBehaviour();
+        }
+
+        void AssignBehaviour()
+        {
+            uint seed = 0x2545F491u;
+
+            for (int i = 0; i < _live; i++)
+            {
+                var a = _agents[i];
+                if (a.District < 0) continue;
+                var mood = _moods[a.District];
+
+                // A struck quarter empties: its people are simply not on the street.
+                if (mood.Struck == 1 && a.Kind == 0)
+                {
+                    a.Mood = 1;
+                    a.Pos = new float3(a.Pos.x, -50f, a.Pos.z);      // parked out of sight
+                    _agents[i] = a;
+                    continue;
+                }
+                if (a.Pos.y < -1f) a.Pos = new float3(a.Pos.x, a.Kind == 1 ? 0.05f : 0f, a.Pos.z);
+
+                if (mood.Grievance >= 70f && a.Kind == 0) a.Mood = 2;          // converge, carry banners
+                else if (Rand(ref seed) > mood.Employment && a.Kind == 0) a.Mood = 1;   // idle
+                else a.Mood = 0;
+
+                _agents[i] = a;
+            }
+        }
+
+        // ---------------------------------------------------------------- frame
+
+        void Update()
+        {
+            if (_live == 0) return;
+
+            _handle.Complete();
+            _frame++;
+
+            var job = new CrowdJob
+            {
+                Agents = _agents,
+                Moods = _moods,
+                Dt = Time.deltaTime,
+                Frame = _frame,
+            };
+            _handle = job.Schedule(_live, 64);
+            _handle.Complete();
+
+            Draw();
+        }
+
+        void Draw()
+        {
+            // Thin the crowd out as the camera pulls back: at full zoom the individual figures
+            // are below a pixel and only the density reads anyway.
+            int stride = 1;
+            var cam = IsoCamera.Instance;
+            if (cam != null && cam.Cam != null)
+            {
+                float size = cam.Cam.orthographicSize;
+                stride = size > 90f ? 4 : size > 68f ? 2 : 1;
+            }
+
+            for (int i = 0; i < _batchCount.Length; i++) { _batchCount[i] = 0; _carBatchCount[i] = 0; }
+            _bannerCount = 0;
+
+            for (int i = 0; i < _live; i += stride)
+            {
+                var a = _agents[i];
+                if (a.Pos.y < -1f) continue;
+
+                // A walking figure bobs; a standing one does not. It is two lines of code and
+                // it is the difference between a crowd and a scatter of boxes.
+                float bob = a.Mood == 0 && a.Kind == 0 ? Mathf.Abs(Mathf.Sin(a.Phase * 3f)) * 0.18f : 0f;
+                var pos = new Vector3(a.Pos.x, a.Pos.y + bob, a.Pos.z);
+
+                float3 face = a.Target - a.Pos;
+                Quaternion rot = math.lengthsq(face) > 0.01f
+                    ? Quaternion.LookRotation(new Vector3(face.x, 0, face.z))
+                    : Quaternion.identity;
+
+                int bucket = a.Bucket % _batches.Length;
+                var trs = Matrix4x4.TRS(pos, rot, Vector3.one);
+                if (a.Kind == 1) _carBatches[bucket][_carBatchCount[bucket]++] = trs;
+                else _batches[bucket][_batchCount[bucket]++] = trs;
+
+                if (a.Mood == 2 && a.Kind == 0 && (i & 3) == 0 && _bannerCount < _banners.Length)
+                    _banners[_bannerCount++] = Matrix4x4.TRS(pos, rot, Vector3.one);
+            }
+
+            // Two calls per colour bucket — people and cars — so the entire population of the
+            // city costs about a dozen draw calls however many of them there are.
+            for (int b = 0; b < _batches.Length; b++)
+            {
+                if (_batchCount[b] == 0 && _carBatchCount[b] == 0) continue;
+
+                var rp = new RenderParams(_bucketMats[b])
+                {
+                    shadowCastingMode = ShadowCastingMode.Off,
+                    receiveShadows = false,
+                    worldBounds = new Bounds(Vector3.zero, Vector3.one * 400f),
+                };
+
+                if (_batchCount[b] > 0)
+                    Graphics.RenderMeshInstanced(rp, _personMesh, 0, _batches[b], _batchCount[b]);
+                if (_carBatchCount[b] > 0)
+                    Graphics.RenderMeshInstanced(rp, _carMesh, 0, _carBatches[b], _carBatchCount[b]);
+            }
+
+
+            if (_bannerCount > 0)
+            {
+                var rp = new RenderParams(_bannerMat)
+                {
+                    shadowCastingMode = ShadowCastingMode.Off,
+                    receiveShadows = false,
+                    worldBounds = new Bounds(Vector3.zero, Vector3.one * 400f),
+                };
+                Graphics.RenderMeshInstanced(rp, _bannerMesh, 0, _banners, _bannerCount);
+            }
+        }
+
+        /// <summary>How the crowd reads right now, for the agent loop to assert against.</summary>
+        public void Census(out int walking, out int idle, out int marching, out int hidden)
+        {
+            walking = idle = marching = hidden = 0;
+            for (int i = 0; i < _live; i++)
+            {
+                var a = _agents[i];
+                if (a.Pos.y < -1f) { hidden++; continue; }
+                if (a.Mood == 2) marching++;
+                else if (a.Mood == 1) idle++;
+                else walking++;
+            }
+        }
+    }
+}
+
+
+

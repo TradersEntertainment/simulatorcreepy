@@ -925,8 +925,15 @@ namespace Mesruiyet.UI
             track.Add(seg);
         }
 
-        /// <summary>−100..100 mapped onto the 0..100 % of the track.</summary>
-        static float Pct(int axis) => Mathf.Clamp01((axis + 100f) / 200f) * 100f;
+        /// <summary>
+        /// −100..100 mapped onto the track, with the POSITIVE end on the left.
+        ///
+        /// The labels read "Otorite ← → Özgürlük" and axis_order is positive towards OTORİTE,
+        /// so a naive (axis+100)/200 puts an authoritarian city's knob under the word
+        /// "Özgürlük". The meter is the one place the player is supposed to be able to read
+        /// their own drift, so getting its direction wrong is worse than not drawing it.
+        /// </summary>
+        static float Pct(int axis) => Mathf.Clamp01((100f - axis) / 200f) * 100f;
 
         VisualElement BuildFactionCard()
         {
@@ -1967,6 +1974,7 @@ namespace Mesruiyet.UI
         }
     }
 }
+
 
 
 

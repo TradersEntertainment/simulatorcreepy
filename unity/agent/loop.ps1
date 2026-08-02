@@ -532,6 +532,93 @@ switch ($Scenario) {
         $state = Send-Cmd '{"cmd":"state"}'
     }
 
+    # The readability channel. The design's target is explicit: a player should be able to
+    # diagnose a district by watching it for five seconds without opening a panel. So drive the
+    # city into three distinct states and check the crowd actually changes shape.
+    "kalabalik" {
+        function Field([string] $json, [string] $key) {
+            if ($json -match "`"$key`":(-?[\d.]+)") { return [double]$Matches[1] }
+            return [double]::NaN
+        }
+        function Crowd([string] $json, [string] $key) {
+            if ($json -match "`"crowd`":\{[^}]*`"$key`":(-?[\d.]+)") { return [double]$Matches[1] }
+            return [double]::NaN
+        }
+        $ok = $true
+        function Check([bool] $pass, [string] $label) {
+            if ($pass) { Write-Host "  ✔ $label" -ForegroundColor Green }
+            else { Write-Host "  ✘ $label" -ForegroundColor Red; $script:ok = $false }
+        }
+
+        # ---- 1. an ordinary working city
+        $t = Get-Turn
+        Send-Cmd '{"cmd":"endturn","n":2}' | Out-Null
+        Wait-Turn ($t + 2) 40 | Out-Null
+        Start-Sleep -Milliseconds 800
+        Shot "01-calisan-sehir.png"
+        $calm = Send-Cmd '{"cmd":"state"}'
+        Write-Host "`n[loop] KALABALIK KONTROLÜ:" -ForegroundColor Cyan
+        Write-Host ("  çalışan şehir : yürüyen {0:N0} · duran {1:N0} · yürüyüşte {2:N0} · sokakta yok {3:N0}" -f `
+                    (Crowd $calm "walking"), (Crowd $calm "idle"), (Crowd $calm "marching"), (Crowd $calm "hidden"))
+        Check ((Crowd $calm "live") -gt 0) "kalabalık var"
+        Check ((Crowd $calm "walking") -gt 0) "sokaklar dolu"
+        Check ((Crowd $calm "marching") -eq 0) "kimse yürüyüşte değil"
+
+        # ---- 2. a struck quarter empties
+        # Every workplace in SANAYİ, or the quarter has not actually stopped. Blocking the farms
+        # hits LİMAN too, but LİMAN keeps its mills and wells and so keeps working — which is
+        # the comparison that makes the empty quarter mean something.
+        Write-Host "`n[loop] SANAYİ'de iş bırakma..." -ForegroundColor Cyan
+        foreach ($id in @("dokuma","santral","tarla")) {
+            Send-Cmd ('{"cmd":"block","id":"' + $id + '","n":1}') | Out-Null
+        }
+        $t = Get-Turn
+        Send-Cmd '{"cmd":"endturn","n":1}' | Out-Null
+        Wait-Turn ($t + 1) 40 | Out-Null
+        Start-Sleep -Milliseconds 800
+        Shot "02-grev.png"
+        $struck = Send-Cmd '{"cmd":"state"}'
+        Write-Host ("  grevde        : yürüyen {0:N0} · duran {1:N0} · yürüyüşte {2:N0} · sokakta yok {3:N0}" -f `
+                    (Crowd $struck "walking"), (Crowd $struck "idle"), (Crowd $struck "marching"), (Crowd $struck "hidden"))
+        Check ((Crowd $struck "hidden") -gt (Crowd $calm "hidden")) "duran mahalle sokaktan çekildi"
+
+        # ---- 3. anger brings them to the square with banners
+        Write-Host "`n[loop] hoşnutsuzluk tırmandırılıyor..." -ForegroundColor Cyan
+        $guard = 0
+        while ($guard -lt 12) {
+            Send-Cmd '{"cmd":"decree","id":"serbest_fiyat"}' | Out-Null
+            Send-Cmd '{"cmd":"decree","id":"imar_affi"}' | Out-Null
+            $t = Get-Turn
+            $s = Send-Cmd '{"cmd":"state"}'
+            if ($s -notmatch '"pendingEvent":""') { Send-Cmd '{"cmd":"event","n":2}' | Out-Null }
+            if ($s -match '"electionPending":true') { Send-Cmd '{"cmd":"election","id":"ertele"}' | Out-Null }
+            Send-Cmd '{"cmd":"endturn","n":1}' | Out-Null
+            Wait-Turn ($t + 1) 40 | Out-Null
+            $s = Send-Cmd '{"cmd":"state"}'
+            if ((Crowd $s "marching") -gt 0) { break }
+            $guard++
+        }
+        Start-Sleep -Milliseconds 900
+        Shot "03-yuruyus.png"
+        $angry = Send-Cmd '{"cmd":"state"}'
+        Write-Host ("  öfkeli        : yürüyen {0:N0} · duran {1:N0} · yürüyüşte {2:N0} · sokakta yok {3:N0}" -f `
+                    (Crowd $angry "walking"), (Crowd $angry "idle"), (Crowd $angry "marching"), (Crowd $angry "hidden"))
+        Check ((Crowd $angry "marching") -gt 0) "kalabalık meydana yürüdü, pankart taşıyor"
+
+        # ---- 4. the city looks like its politics — verified by eye, close up
+        foreach ($i in 1..7) { Send-Cmd '{"cmd":"press","key":"zoomin"}' | Out-Null }
+        Start-Sleep -Milliseconds 900
+        Shot "04-yakin-ideoloji.png"
+
+        Write-Host "`n[loop] İDEOLOJİ PROPLARI:" -ForegroundColor Cyan
+        Write-Host ("  otorite {0:N0} · ekonomi {1:N0}" -f `
+                    (Field $angry "axisOrder"), (Field $angry "axisEconomy"))
+        Check ([math]::Abs((Field $angry "axisEconomy")) -ge 25) "eksen prop eşiğini geçti (duvarlarda görünmeli)"
+
+        if (-not $ok) { $chainBroken = $true }
+        $state = Send-Cmd '{"cmd":"state"}'
+    }
+
     "turns40" {
         $t = Get-Turn
         Send-Cmd '{"cmd":"endturn","n":40}' | Out-Null
@@ -574,4 +661,5 @@ if ($chainBroken) {
 }
 
 Write-Host "`n[loop] temiz. Görüntüler: agent\shots\" -ForegroundColor Green
+
 

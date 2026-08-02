@@ -40,19 +40,35 @@ namespace Mesruiyet.World
             return c;
         }
 
+        /// <summary>The shared CityLit material, so the crowd can tint copies of it.</summary>
+        public Material Material => _material;
+
+        /// <summary>Axis values the props were last baked at, so we only rebake when it shows.</summary>
+        int _bakedOrder, _bakedEconomy;
+
         public void Build(CityGrid grid, GameState state)
         {
             Instance = this;
             _grid = grid;
             _state = state;
 
-            var shader = Resources.Load<Shader>("Shaders/CityLit");
-            if (shader == null)
+            // Load the shipped material rather than building one from the shader: the asset is
+            // what keeps the GPU instancing variant from being stripped out of the build, and
+            // the crowd draws through instancing.
+            var template = Resources.Load<Material>("CityLit");
+            if (template == null)
             {
-                Debug.LogError("[CityRenderer] Shaders/CityLit bulunamadı — Resources klasörü eksik.");
-                shader = Shader.Find("Universal Render Pipeline/Lit");
+                Debug.LogError("[CityRenderer] Resources/CityLit.mat bulunamadı — " +
+                               "Editor/ProjectSetup.Ensure çalıştırılmamış.");
+                var shader = Resources.Load<Shader>("Shaders/CityLit")
+                             ?? Shader.Find("Universal Render Pipeline/Lit");
+                _material = new Material(shader) { name = "CityLit (fallback)" };
             }
-            _material = new Material(shader) { name = "CityLit (runtime)" };
+            else
+            {
+                _material = new Material(template) { name = "CityLit (runtime)" };
+            }
+            _material.enableInstancing = true;
 
             BuildGround();
             _buildingFilter = NewLayer("Buildings", out _buildingMesh);
@@ -170,8 +186,22 @@ namespace Mesruiyet.World
         /// <summary>Re-bake the building and prop meshes. Called once at start and on every placement.</summary>
         public void Rebuild()
         {
+            _bakedOrder = _state.AxisOrder;
+            _bakedEconomy = _state.AxisEconomy;
             BuildBuildings();
             BuildProps();
+        }
+
+        /// <summary>
+        /// Rebake only when the drift has moved enough to change what is on the walls. Baking
+        /// the whole skyline every turn would be wasteful, and baking it never would mean the
+        /// city stopped telling the truth about its own politics.
+        /// </summary>
+        public void RefreshIdeology()
+        {
+            if (Mathf.Abs(_state.AxisOrder - _bakedOrder) < 6 &&
+                Mathf.Abs(_state.AxisEconomy - _bakedEconomy) < 6) return;
+            Rebuild();
         }
 
         void BuildBuildings()
@@ -238,9 +268,88 @@ namespace Mesruiyet.World
                 if (def.Id == "santral" || def.Id == "dokuma")
                     _builder.AddBox(ground + new Vector3(footprint * 0.32f, 0, -depth * 0.3f),
                                     new Vector3(1.1f, height + 5.5f, 1.1f), MeshBuilder.Shade(tint, 0.62f));
+
+                AddIdeologyProps(ground, footprint, depth, height, hash, hash2);
             }
 
             _builder.Into(_buildingMesh);
+        }
+
+        // ---------------------------------------------------------------- ideology
+        //
+        // The highest-payoff feature in the design, and the cheapest: as the axes move, the
+        // buildings themselves grow the evidence. Red banners and shuttered windows towards
+        // OTORİTE, awnings and improvised extensions towards ÖZGÜRLÜK, billboards and private
+        // walls towards SERMAYE, murals and laundry lines towards EŞİTLİK.
+        //
+        // A player who never once reads the meters should still be able to look out of the
+        // window and see what they have become. Nothing labels it. It is simply there.
+
+        static readonly Color PropBanner = Hex("#C43A2A");
+        static readonly Color PropShutter = Hex("#4A4238");
+        static readonly Color PropAwning = Hex("#3E8C6E");
+        static readonly Color PropBillboard = Hex("#E8E2D2");
+        static readonly Color PropWall = Hex("#8E8578");
+        static readonly Color PropMural = Hex("#C97B3C");
+        static readonly Color PropLaundry = Hex("#DCE3EA");
+
+        void AddIdeologyProps(Vector3 ground, float w, float d, float height, float hash, float hash2)
+        {
+            int order = _state.AxisOrder;
+            int economy = _state.AxisEconomy;
+
+            // Each band puts props on a fraction of the buildings, so the change creeps across
+            // the city rather than switching on. At RADİKAL it is on most of them.
+            // Capped below 1 on purpose: even at DÖNÜŞSÜZ some buildings stay bare, so the
+            // city reads as a place that drifted rather than a set that was dressed.
+            float orderDensity = Mathf.Clamp01((Mathf.Abs(order) - 25f) / 60f) * 0.8f;
+            float economyDensity = Mathf.Clamp01((Mathf.Abs(economy) - 25f) / 60f) * 0.8f;
+
+            if (order > 0 && hash < orderDensity)
+            {
+                // A banner down the face, and windows boarded on the ground floor.
+                _builder.AddBox(ground + new Vector3(0, height * 0.32f, d * 0.5f + 0.04f),
+                                new Vector3(w * 0.2f, height * 0.55f, 0.09f), PropBanner);
+                if (hash2 < 0.55f)
+                    _builder.AddBox(ground + new Vector3(w * 0.2f, 0.9f, d * 0.5f + 0.03f),
+                                    new Vector3(w * 0.32f, 1.1f, 0.08f), PropShutter);
+            }
+            else if (order < 0 && hash < orderDensity)
+            {
+                // An awning, and a room somebody added without asking anyone.
+                _builder.AddBox(ground + new Vector3(0, height * 0.45f, d * 0.5f + 0.4f),
+                                new Vector3(w * 0.7f, 0.12f, 0.9f), PropAwning);
+                if (hash2 < 0.5f)
+                    _builder.AddBox(ground + new Vector3(w * 0.5f, height * 0.4f, 0),
+                                    new Vector3(w * 0.28f, height * 0.26f, d * 0.45f),
+                                    MeshBuilder.Shade(PropAwning, 0.7f));
+            }
+
+            if (economy > 0 && hash2 < economyDensity)
+            {
+                // A billboard standing on the roof edge, and a low wall around the plot. Both
+                // deliberately modest: a hoarding the size of the building it stands on reads
+                // as a bug, not as commerce.
+                _builder.AddBox(ground + new Vector3(0, height, -d * 0.34f),
+                                new Vector3(w * 0.7f, 1.3f, 0.09f), PropBillboard);
+                _builder.AddBox(ground + new Vector3(0, height, -d * 0.34f),
+                                new Vector3(0.12f, 0.5f, 0.12f), MeshBuilder.Shade(PropWall, 0.7f));
+                _builder.AddBox(ground + new Vector3(0, 0, d * 0.66f),
+                                new Vector3(w * 1.1f, 0.85f, 0.12f), PropWall);
+            }
+            else if (economy < 0 && hash2 < economyDensity)
+            {
+                // A mural across the ground floor, and a line of washing between the blocks.
+                _builder.AddBox(ground + new Vector3(0, 0.9f, d * 0.5f + 0.03f),
+                                new Vector3(w * 0.8f, 1.8f, 0.07f), PropMural);
+                float y = height * 0.7f;
+                _builder.AddBox(ground + new Vector3(0, y, d * 0.5f + 1.1f),
+                                new Vector3(w * 0.05f, 0.05f, 2.2f), PropLaundry);
+                for (int i = 0; i < 3; i++)
+                    _builder.AddBox(ground + new Vector3(0, y - 0.35f, d * 0.5f + 0.45f + i * 0.62f),
+                                    new Vector3(0.36f, 0.5f, 0.04f),
+                                    MeshBuilder.Shade(PropLaundry, 0.85f + i * 0.06f));
+            }
         }
 
         void AddFurrows(Vector3 ground, float hash)
@@ -329,5 +438,8 @@ namespace Mesruiyet.World
         }
     }
 }
+
+
+
 
 

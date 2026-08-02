@@ -19,6 +19,7 @@ namespace Mesruiyet.EditorTools
     public static class ProjectSetup
     {
         const string ScenePath = "Assets/Scenes/Boot.unity";
+        const string MaterialPath = "Assets/Resources/CityLit.mat";
         const string ThemePath = "Assets/Resources/MesruiyetTheme.tss";
         const string PanelPath = "Assets/Resources/MesruiyetPanel.asset";
 
@@ -32,6 +33,7 @@ namespace Mesruiyet.EditorTools
             Directory.CreateDirectory("Assets/Scenes");
 
             EnsurePanelSettings();
+            EnsureCityMaterial();
             EnsureBootScene(force);
             EnsurePlayerSettings();
 
@@ -67,6 +69,37 @@ namespace Mesruiyet.EditorTools
             panel.match = 0.5f;
             panel.clearColor = false;
             EditorUtility.SetDirty(panel);
+        }
+
+        // ---------------------------------------------------------------- the city material
+
+        /// <summary>
+        /// Ship a material asset with GPU instancing switched on.
+        /// 
+        /// Not cosmetic: Unity strips shader variants that no material in the build asks for,
+        /// and materials created at runtime do not count. Without this asset the INSTANCING_ON
+        /// variant is stripped, RenderMeshInstanced silently draws every agent at the origin,
+        /// and the entire crowd is invisible in a player build while working fine in the editor.
+        /// </summary>
+        static void EnsureCityMaterial()
+        {
+            var shader = AssetDatabase.LoadAssetAtPath<Shader>("Assets/Resources/Shaders/CityLit.shader");
+            if (shader == null)
+            {
+                Debug.LogError("[ProjectSetup] CityLit.shader bulunamadı.");
+                return;
+            }
+
+            var mat = AssetDatabase.LoadAssetAtPath<Material>(MaterialPath);
+            if (mat == null)
+            {
+                mat = new Material(shader);
+                AssetDatabase.CreateAsset(mat, MaterialPath);
+            }
+
+            mat.shader = shader;
+            mat.enableInstancing = true;
+            EditorUtility.SetDirty(mat);
         }
 
         // ---------------------------------------------------------------- the one scene
@@ -110,3 +143,4 @@ namespace Mesruiyet.EditorTools
         }
     }
 }
+

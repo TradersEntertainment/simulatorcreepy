@@ -17,6 +17,7 @@ Shader "Mesruiyet/CityLit"
         _AmbientSky    ("Ambient sky",    Color) = (0.34, 0.40, 0.52, 1)
         _AmbientGround ("Ambient ground", Color) = (0.10, 0.11, 0.15, 1)
         _ShadowTint    ("Shadow tint",    Color) = (0.16, 0.20, 0.30, 1)
+        _Tint          ("Tint",           Color) = (1, 1, 1, 1)
     }
 
     SubShader
@@ -31,6 +32,7 @@ Shader "Mesruiyet/CityLit"
             HLSLPROGRAM
             #pragma vertex Vert
             #pragma fragment Frag
+            #pragma multi_compile_instancing
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
             #pragma multi_compile_fragment _ _SHADOWS_SOFT
             #pragma multi_compile_fog
@@ -42,6 +44,7 @@ Shader "Mesruiyet/CityLit"
                 half4 _AmbientSky;
                 half4 _AmbientGround;
                 half4 _ShadowTint;
+                half4 _Tint;
             CBUFFER_END
 
             struct Attributes
@@ -49,6 +52,7 @@ Shader "Mesruiyet/CityLit"
                 float4 positionOS : POSITION;
                 float3 normalOS   : NORMAL;
                 half4  color      : COLOR;
+                UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
             struct Varyings
@@ -63,6 +67,7 @@ Shader "Mesruiyet/CityLit"
             Varyings Vert(Attributes input)
             {
                 Varyings o;
+                UNITY_SETUP_INSTANCE_ID(input);
                 VertexPositionInputs p = GetVertexPositionInputs(input.positionOS.xyz);
                 o.positionCS = p.positionCS;
                 o.positionWS = p.positionWS;
@@ -74,7 +79,7 @@ Shader "Mesruiyet/CityLit"
 
             half4 Frag(Varyings input) : SV_Target
             {
-                half3 albedo = input.color.rgb;
+                half3 albedo = input.color.rgb * _Tint.rgb;
 
                 // Alpha 0 means "this surface is its own light source" — lit windows, signs.
                 half emissive = 1.0h - input.color.a;
@@ -116,6 +121,7 @@ Shader "Mesruiyet/CityLit"
             HLSLPROGRAM
             #pragma vertex ShadowVert
             #pragma fragment ShadowFrag
+            #pragma multi_compile_instancing
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
@@ -124,6 +130,7 @@ Shader "Mesruiyet/CityLit"
                 half4 _AmbientSky;
                 half4 _AmbientGround;
                 half4 _ShadowTint;
+                half4 _Tint;
             CBUFFER_END
 
             float3 _LightDirection;
@@ -132,6 +139,7 @@ Shader "Mesruiyet/CityLit"
             {
                 float4 positionOS : POSITION;
                 float3 normalOS   : NORMAL;
+                UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
             struct ShadowVaryings
@@ -142,6 +150,7 @@ Shader "Mesruiyet/CityLit"
             ShadowVaryings ShadowVert(ShadowAttributes input)
             {
                 ShadowVaryings o;
+                UNITY_SETUP_INSTANCE_ID(input);
                 float3 positionWS = TransformObjectToWorld(input.positionOS.xyz);
                 float3 normalWS   = TransformObjectToWorldNormal(input.normalOS);
                 float4 positionCS = TransformWorldToHClip(ApplyShadowBias(positionWS, normalWS, _LightDirection));
@@ -174,6 +183,7 @@ Shader "Mesruiyet/CityLit"
             HLSLPROGRAM
             #pragma vertex DepthVert
             #pragma fragment DepthFrag
+            #pragma multi_compile_instancing
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
@@ -181,14 +191,16 @@ Shader "Mesruiyet/CityLit"
                 half4 _AmbientSky;
                 half4 _AmbientGround;
                 half4 _ShadowTint;
+                half4 _Tint;
             CBUFFER_END
 
-            struct DepthAttributes { float4 positionOS : POSITION; };
+            struct DepthAttributes { float4 positionOS : POSITION; UNITY_VERTEX_INPUT_INSTANCE_ID };
             struct DepthVaryings   { float4 positionCS : SV_POSITION; };
 
             DepthVaryings DepthVert(DepthAttributes input)
             {
                 DepthVaryings o;
+                UNITY_SETUP_INSTANCE_ID(input);
                 o.positionCS = TransformObjectToHClip(input.positionOS.xyz);
                 return o;
             }
@@ -203,3 +215,4 @@ Shader "Mesruiyet/CityLit"
 
     FallBack Off
 }
+

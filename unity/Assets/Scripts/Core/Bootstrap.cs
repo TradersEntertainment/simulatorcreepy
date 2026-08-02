@@ -43,7 +43,12 @@ namespace Mesruiyet.Core
 
             var world = new GameObject("City");
             world.transform.SetParent(transform, false);
-            world.AddComponent<CityRenderer>().Build(grid, state);
+            var renderer = world.AddComponent<CityRenderer>();
+            renderer.Build(grid, state);
+
+            // The crowd shares the city material so it needs the renderer to exist first.
+            var crowd = world.AddComponent<CrowdSystem>();
+            crowd.Init(state, grid, renderer.Material);
 
             // Ministers before the resolver: TurnResolver.Init recomputes immediately, and
             // transparency has to exist before the first figure is reported.
@@ -67,6 +72,18 @@ namespace Mesruiyet.Core
 
             // The agent plays through the same UI a human does — no private back door.
             Agent.AgentHooks.Bind(state, grid, hud.rootVisualElement);
+
+            // The city has to keep looking like what it is: crowds re-read their districts and
+            // the walls re-grow their politics after every tick.
+            Sim.TurnResolver.TurnCompleted += () =>
+            {
+                crowd.Repopulate();
+                crowd.SyncMoods();
+                renderer.RefreshIdeology();
+                SeasonLight(state);
+            };
+            crowd.SyncMoods();
+            SeasonLight(state);
 
             Debug.Log($"[Bootstrap] şehir kuruldu · {state.Buildings.Count} yapı · {state.Population} nüfus");
             CheckChains(state);
@@ -92,6 +109,22 @@ namespace Mesruiyet.Core
             }
         }
 
+        static Light _sun;
+
+        /// <summary>The light turns with the year: pale in winter, heavy and gold in autumn.</summary>
+        static void SeasonLight(GameState state)
+        {
+            if (_sun == null) return;
+
+            switch (state.Season)
+            {
+                case 0: _sun.color = UiKit.Hex("#FFE8C4"); _sun.intensity = 1.30f; break;   // ilkbahar
+                case 1: _sun.color = UiKit.Hex("#FFF0CE"); _sun.intensity = 1.45f; break;   // yaz
+                case 2: _sun.color = UiKit.Hex("#FFD79A"); _sun.intensity = 1.22f; break;   // sonbahar
+                default: _sun.color = UiKit.Hex("#D8E4F2"); _sun.intensity = 1.02f; break;  // kış
+            }
+        }
+
         Camera BuildCamera()
         {
             var go = new GameObject("IsoCamera");
@@ -113,6 +146,7 @@ namespace Mesruiyet.Core
             go.transform.SetParent(transform, false);
 
             var light = go.AddComponent<Light>();
+            _sun = light;
             light.type = LightType.Directional;
             // Low and warm: long shadows across the grid are what give the toy city its depth.
             light.transform.rotation = Quaternion.Euler(38f, -128f, 0f);
@@ -166,5 +200,6 @@ namespace Mesruiyet.Core
         }
     }
 }
+
 
 

@@ -173,6 +173,21 @@ namespace Mesruiyet.Agent
             }
             sb.Append("],");
 
+            // The crowd as the player would read it off the map. This is the readability
+            // channel under test: a district should be diagnosable by looking at it.
+            var crowd = Object.FindFirstObjectByType<CrowdSystem>();
+            if (crowd != null)
+            {
+                crowd.Census(out int walking, out int idle, out int marching, out int hidden);
+                sb.Append("\"crowd\":{");
+                Num(sb, "live", crowd.LiveAgents); sb.Append(',');
+                Num(sb, "walking", walking); sb.Append(',');
+                Num(sb, "idle", idle); sb.Append(',');
+                Num(sb, "marching", marching); sb.Append(',');
+                Num(sb, "hidden", hidden);
+                sb.Append("},");
+            }
+
             sb.Append("\"factions\":{");
             for (int f = 0; f < 5; f++)
             {
@@ -413,6 +428,7 @@ namespace Mesruiyet.Agent
     }
 }
 #endif
+
 
 
 
