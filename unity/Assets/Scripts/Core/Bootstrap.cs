@@ -148,18 +148,48 @@ namespace Mesruiyet.Core
 
         static Light _sun;
 
-        /// <summary>The light turns with the year: pale in winter, heavy and gold in autumn.</summary>
+        /// <summary>
+        /// The light turns with the year. Colour and intensity were already doing something; the
+        /// sun's *angle* was not, and it is the one that carries. A low winter sun rakes shadows
+        /// half a district long across the grid and a high summer one pulls them in under the
+        /// eaves — from an orthographic camera that shadow length is most of what tells you how
+        /// tall a building is, so the season now changes the shape of the city, not just its tint.
+        /// </summary>
         static void SeasonLight(GameState state)
         {
             if (_sun == null) return;
 
+            Color sky, ground;
+            float elevation, azimuth;
+
             switch (state.Season)
             {
-                case 0: _sun.color = UiKit.Hex("#FFE8C4"); _sun.intensity = 1.30f; break;   // ilkbahar
-                case 1: _sun.color = UiKit.Hex("#FFF0CE"); _sun.intensity = 1.45f; break;   // yaz
-                case 2: _sun.color = UiKit.Hex("#FFD79A"); _sun.intensity = 1.22f; break;   // sonbahar
-                default: _sun.color = UiKit.Hex("#D8E4F2"); _sun.intensity = 1.02f; break;  // kış
+                case 0:  // ilkbahar — clean and high-ish
+                    _sun.color = UiKit.Hex("#FFE8C4"); _sun.intensity = 1.30f;
+                    elevation = 42f; azimuth = -128f;
+                    sky = UiKit.Hex("#44536E"); ground = UiKit.Hex("#141A24");
+                    break;
+                case 1:  // yaz — highest sun, shortest shadows, palest shade
+                    _sun.color = UiKit.Hex("#FFF0CE"); _sun.intensity = 1.48f;
+                    elevation = 54f; azimuth = -120f;
+                    sky = UiKit.Hex("#4C5E7C"); ground = UiKit.Hex("#171E29");
+                    break;
+                case 2:  // sonbahar — low and gold, the long-shadow season
+                    _sun.color = UiKit.Hex("#FFC983"); _sun.intensity = 1.24f;
+                    elevation = 27f; azimuth = -138f;
+                    sky = UiKit.Hex("#54483F"); ground = UiKit.Hex("#1C1712");
+                    break;
+                default: // kış — lowest and coldest; the city leans on its own lit windows
+                    _sun.color = UiKit.Hex("#CFE0F4"); _sun.intensity = 0.92f;
+                    elevation = 21f; azimuth = -146f;
+                    sky = UiKit.Hex("#38465F"); ground = UiKit.Hex("#0E1219");
+                    break;
             }
+
+            _sun.transform.rotation = Quaternion.Euler(elevation, azimuth, 0f);
+            RenderSettings.ambientSkyColor = sky;
+            RenderSettings.ambientEquatorColor = Color.Lerp(sky, ground, 0.55f);
+            RenderSettings.ambientGroundColor = ground;
         }
 
         Camera BuildCamera()

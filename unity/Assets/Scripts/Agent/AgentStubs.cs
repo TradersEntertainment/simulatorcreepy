@@ -88,7 +88,10 @@ namespace Mesruiyet.Agent
                 Num(sb, "housing", d.Housing); sb.Append(',');
                 Num(sb, "angryStreak", d.AngryStreak); sb.Append(',');
                 Num(sb, "roadTiles", d.RoadTiles); sb.Append(',');
-                Num(sb, "congestion", d.Congestion);
+                Num(sb, "congestion", d.Congestion); sb.Append(',');
+                // How well surfaced the quarter's streets are. Colour is the only place this
+                // shows in game, and colour is not something an unattended run can assert on.
+                Num(sb, "paving", CityRenderer.PavingOf(d.Def, g));
                 sb.Append('}');
             }
             sb.Append("],");

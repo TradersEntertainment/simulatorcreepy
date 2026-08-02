@@ -1116,9 +1116,21 @@ switch ($Scenario) {
         }
         Write-Host ("  sağlık {0:N1} -> {1:N1}" -f $healthBefore, $healthAfter)
 
+        # §11 asks for roads that repave as land value rises. Land value is not a stat here, so
+        # paving is founding wealth plus what has been built since — which means building has to
+        # move it, or the road surface is decoration pretending to be a signal.
+        function Paving([string] $json, [string] $name) {
+            if ($json -match "`"name`":`"$name`"[^}]*?`"paving`":(-?[\d.]+)") { return [double]$Matches[1] }
+            return [double]::NaN
+        }
+        $pavedBefore = Paving $before "LİMAN"
+        $pavedAfter  = Paving $after  "LİMAN"
+        Write-Host ("  LİMAN kaplama {0:N2} -> {1:N2}" -f $pavedBefore, $pavedAfter)
+
         Check ($ids.Count -ge 30) "yapı tablosu tasarım çıtasında (en az 30)"
         Check ($failed.Count -eq 0) "her yapının kurulabileceği bir parsel var"
         Check ($healthAfter -gt $healthBefore + 5) "sağlık binaları endeksi gerçekten yükseltti"
+        Check ($pavedAfter -gt $pavedBefore) "mahalleye inşa etmek yollarını yeniledi"
 
         Shot "yapilar.png"
         $state = $after

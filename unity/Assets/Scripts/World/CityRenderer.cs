@@ -44,7 +44,7 @@ namespace Mesruiyet.World
         public Material Material => _material;
 
         /// <summary>Axis values the props were last baked at, so we only rebake when it shows.</summary>
-        int _bakedOrder, _bakedEconomy;
+        int _bakedOrder, _bakedEconomy, _bakedSeason = -1;
 
         public void Build(CityGrid grid, GameState state)
         {
@@ -118,6 +118,18 @@ namespace Mesruiyet.World
                 var t = _grid.At(x, y);
                 Color c = TerrainColour(t);
 
+                // "Roads repave as land value rises", §11. Land value is not a stat in this game
+                // and inventing one would be a lie; what a quarter is actually worth shows in
+                // what stands there, so paving is its founding wealth plus what has been built
+                // since. A poor quarter keeps a rutted dirt lane and no lane markings at all —
+                // which means the player can see where the money went without opening a panel.
+                float paving = 0f;
+                if (t == TileKind.Yol)
+                {
+                    paving = Paving(x, y);
+                    c = Color.Lerp(ColRoadRough, ColRoad, paving);
+                }
+
                 // A little per-tile variation keeps the grass from reading as a bedsheet.
                 float v = 0.93f + 0.14f * CityGrid.Hash(x, y, 7);
                 c = MeshBuilder.Shade(c, v);
@@ -133,7 +145,8 @@ namespace Mesruiyet.World
                     bool vertical = _grid.At(x, y - 1) == TileKind.Yol || _grid.At(x, y + 1) == TileKind.Yol;
                     bool horizontal = _grid.At(x - 1, y) == TileKind.Yol || _grid.At(x + 1, y) == TileKind.Yol;
 
-                    if (vertical ^ horizontal)
+                    // No markings on an unpaved lane. Nobody paints a line on gravel.
+                    if ((vertical ^ horizontal) && paving > 0.45f)
                     {
                         Vector3 d = vertical ? new Vector3(0, 0, 1) : new Vector3(1, 0, 0);
                         Vector3 s = vertical ? new Vector3(1, 0, 0) : new Vector3(0, 0, 1);
@@ -175,6 +188,38 @@ namespace Mesruiyet.World
             box.center = Vector3.zero;
         }
 
+        /// <summary>
+        /// How well surfaced this stretch of street is, 0..1. Half of it is the quarter's founding
+        /// wealth — TEPE was always going to have better roads than LİMAN — and half is what the
+        /// player has since built there, so investing in a district visibly repaves it.
+        /// </summary>
+        float Paving(int x, int y)
+        {
+            var def = Districts.At(x, y);
+            return def == null ? 0.25f : PavingOf(def, _state);
+        }
+
+        /// <summary>
+        /// The same number, addressable by district. Static so the agent dump can report it
+        /// without a second copy of the formula going quietly out of step with this one.
+        /// </summary>
+        public static float PavingOf(DistrictDef def, GameState state)
+        {
+            int built = 0;
+            foreach (var b in state.Buildings)
+                if (b.District == def.Id && b.Def.Storeys > 0) built++;
+
+            // Floored well above zero: a founding city already has streets, and starting every
+            // quarter on bare dirt turned the whole map tan and threw away the lane markings that
+            // make a grid of grey squares read as a road. The range wants to be a difference in
+            // upkeep between quarters, not a difference in century.
+            float wealth = Mathf.Clamp01(def.Wealth / 80f);
+            float density = Mathf.Clamp01(built / 14f);
+            return Mathf.Clamp01(0.35f + wealth * 0.35f + density * 0.30f);
+        }
+
+        static readonly Color ColRoadRough = Hex("#585045");
+
         bool HasRoadNeighbour(int x, int y)
             => _grid.At(x - 1, y) == TileKind.Yol || _grid.At(x + 1, y) == TileKind.Yol
             || _grid.At(x, y - 1) == TileKind.Yol || _grid.At(x, y + 1) == TileKind.Yol;
@@ -199,18 +244,25 @@ namespace Mesruiyet.World
         {
             _bakedOrder = _state.AxisOrder;
             _bakedEconomy = _state.AxisEconomy;
+            _bakedSeason = _state.Season;
             BuildBuildings();
             BuildProps();
+            // The ground carries the road surface, and the road surface depends on how built-up
+            // the quarter is — so it has to be re-baked when the quarter changes, not only when
+            // somebody lays a road.
+            RebuildGround();
         }
 
         /// <summary>
-        /// Rebake only when the drift has moved enough to change what is on the walls. Baking
-        /// the whole skyline every turn would be wasteful, and baking it never would mean the
-        /// city stopped telling the truth about its own politics.
+        /// Rebake only when the drift has moved enough to change what is on the walls, or when
+        /// the year has turned and the windows should be lit differently. Baking the whole
+        /// skyline every turn would be wasteful, and baking it never would mean the city stopped
+        /// telling the truth about its own politics.
         /// </summary>
         public void RefreshIdeology()
         {
-            if (Mathf.Abs(_state.AxisOrder - _bakedOrder) < 6 &&
+            if (_state.Season == _bakedSeason &&
+                Mathf.Abs(_state.AxisOrder - _bakedOrder) < 6 &&
                 Mathf.Abs(_state.AxisEconomy - _bakedEconomy) < 6) return;
             Rebuild();
         }
@@ -499,6 +551,13 @@ namespace Mesruiyet.World
             Color warm = Hex("#FFD79A");
             Color cold = Hex("#8FA6C0");
 
+            // Short winter days mean lamps lit while you are still looking at the city; high
+            // summer means most windows are just glass. Same buildings, different hour.
+            float litShare = _state.Season == 3 ? 0.80f      // kış
+                           : _state.Season == 2 ? 0.62f      // sonbahar
+                           : _state.Season == 0 ? 0.48f      // ilkbahar
+                           : 0.34f;                          // yaz
+
             for (int floor = 0; floor < storeys; floor++)
             {
                 float y = ground.y + (floor + 0.55f) / storeys * height;
@@ -508,7 +567,7 @@ namespace Mesruiyet.World
                     int salt = tile.x * 31 + tile.y * 17 + floor * 7 + col;
                     if (CityGrid.Hash(tile.x, tile.y, salt) < 0.24f) continue;
 
-                    bool lit = CityGrid.Hash(tile.x, tile.y, salt + 5000) < 0.55f;
+                    bool lit = CityGrid.Hash(tile.x, tile.y, salt + 5000) < litShare;
                     Color glow = lit ? warm : MeshBuilder.Shade(cold, 0.45f);
 
                     _builder.AddWindow(new Vector3(ground.x + u * w, y, ground.z + d * 0.5f),
