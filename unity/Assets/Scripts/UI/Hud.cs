@@ -36,7 +36,10 @@ namespace Mesruiyet.UI
         VisualElement _factionList;
         VisualElement _chainList;
         VisualElement _ministerRow, _telegramList, _telegramHead;
-        VisualElement _appointmentCard;
+        VisualElement _councilHead, _councilBody;
+        VisualElement _appointmentCard, _modal, _scrim;
+        VisualElement _lawSlotRow;
+        Button _decreeButton;
         readonly List<VisualElement> _resCell = new List<VisualElement>();
         VisualElement _selectionCard;
         VisualElement _labelLayer;
@@ -66,6 +69,7 @@ namespace Mesruiyet.UI
             // Appointments can arrive from the agent bridge as well as from the card below, so
             // subscribe to the cabinet itself rather than repainting at the click site.
             MinisterManager.Changed += Refresh;
+            GovernanceManager.Changed += Refresh;
             Refresh();
         }
 
@@ -192,8 +196,95 @@ namespace Mesruiyet.UI
             rail.Add(BuildMinisterCard());
             rail.Add(BuildChainCard());
             rail.Add(BuildAxisCard());
+            rail.Add(BuildCouncilCard());
             rail.Add(BuildFactionCard());
             rail.Add(BuildTelegramCard());
+        }
+
+        // ---- the council
+        //
+        // The counterweight to the cabinet, and the reason the fog is not a blindfold. These
+        // lines are read from the truth, not from Reporting — a representative from LİMAN does
+        // not clear their complaint with the Tarım ministry first. When the chamber is adjourned
+        // the card says so and goes quiet, which is the most expensive silence in the game.
+
+        VisualElement BuildCouncilCard()
+        {
+            var card = UiKit.Glass().Pad(12, 15).Margin(bottom: 10);
+            _councilHead = UiKit.Heading("Meclis", "21 sandalye");
+            card.Add(_councilHead);
+            _councilBody = UiKit.Column();
+            card.Add(_councilBody);
+            return card;
+        }
+
+        void PaintCouncil()
+        {
+            _councilBody.Clear();
+            var council = _state.Council;
+
+            // Seats as one stacked bar: who is in the room, at a glance.
+            var bar = UiKit.Row();
+            bar.style.height = 8;
+            bar.style.marginBottom = 9;
+            bar.Radius(4);
+            bar.style.overflow = Overflow.Hidden;
+            for (int f = 0; f < 5; f++)
+            {
+                if (council.SeatsFor[f] == 0) continue;
+                var seg = new VisualElement();
+                seg.style.flexGrow = council.SeatsFor[f];
+                seg.style.height = Length.Percent(100);
+                seg.style.backgroundColor = MoodColour(Reporting.FactionMood((Faction)f));
+                seg.style.marginRight = 1;
+                seg.tooltip = $"{Naming.FactionNames[f]}: {council.SeatsFor[f]} sandalye";
+                bar.Add(seg);
+            }
+            _councilBody.Add(bar);
+
+            foreach (var line in council.Murmurs)
+            {
+                var row = UiKit.Row();
+                row.style.alignItems = Align.FlexStart;
+                row.style.marginBottom = 6;
+                row.Add(UiKit.Text("“", 13, UiKit.Dim).Margin(right: 5));
+                var label = UiKit.Text(line, 11.5f,
+                    council.Suspended ? UiKit.Dim : UiKit.Hex("#C9D4E2"));
+                label.style.whiteSpace = WhiteSpace.Normal;
+                label.style.flexGrow = 1;
+                label.style.flexShrink = 1;
+                row.Add(label);
+                _councilBody.Add(row);
+            }
+
+            // The button that ends the debate. It states the trade and it is still pressed.
+            if (GovernanceManager.Instance.CanSuspend || council.Suspended)
+            {
+                var suspend = new Button
+                {
+                    name = "btn_council_suspend",
+                    text = council.Suspended ? "MECLİSİ TOPLA" : "MECLİSİ TATİL ET",
+                };
+                suspend.style.marginTop = 8;
+                suspend.style.marginLeft = 0; suspend.style.marginRight = 0; suspend.style.marginBottom = 0;
+                suspend.style.paddingTop = 8; suspend.style.paddingBottom = 8;
+                suspend.style.fontSize = 10;
+                suspend.style.unityFontStyleAndWeight = FontStyle.Bold;
+                suspend.style.color = council.Suspended ? UiKit.Bg : UiKit.Red;
+                suspend.style.backgroundColor = council.Suspended
+                    ? UiKit.Green : UiKit.Alpha(UiKit.Red, 0.16f);
+                suspend.Radius(9).Border(1, UiKit.Alpha(UiKit.Red, 0.4f));
+                suspend.tooltip = council.Suspended
+                    ? "Meclis yeniden toplanır. Kanunlar tekrar oylanır."
+                    : "Kanunlar bedelsiz ve anında geçer. Karşılığında mahallelerden gelen " +
+                      "şikâyetleri bir daha duymazsınız.";
+                suspend.clicked += () =>
+                {
+                    GovernanceManager.Instance.SetSuspended(!_state.Council.Suspended);
+                    Refresh();
+                };
+                _councilBody.Add(suspend);
+            }
         }
 
         // ---- ministers
@@ -637,6 +728,382 @@ namespace Mesruiyet.UI
             }
         }
 
+        // ================================================================ modals
+        //
+        // One modal at a time, built fresh each time it opens. These panels are rare and small;
+        // caching them would buy nothing and cost a stale-state bug the first time a law changed
+        // while a panel was closed.
+
+        VisualElement OpenModal(string name, string title, string subtitle, float width)
+        {
+            CloseModal();
+
+            // A scrim, so the floating district labels do not read through the panel and so a
+            // stray click on the map cannot land behind an open decision.
+            _scrim = new VisualElement();
+            _scrim.style.position = Position.Absolute;
+            _scrim.style.left = 0; _scrim.style.top = 0;
+            _scrim.style.right = 0; _scrim.style.bottom = 0;
+            _scrim.style.backgroundColor = new Color(0.02f, 0.03f, 0.05f, 0.72f);
+            _root.Add(_scrim);
+
+            var card = UiKit.Glass().Pad(20, 22);
+            card.name = name;
+            card.style.position = Position.Absolute;
+            card.style.left = Length.Percent(50);
+            card.style.top = 90;
+            card.style.bottom = 130;
+            card.style.width = width;
+            card.style.marginLeft = -width * 0.5f;
+
+            var head = UiKit.Row();
+            head.style.justifyContent = Justify.SpaceBetween;
+            head.style.marginBottom = 3;
+            head.Add(UiKit.Text(title, 17, UiKit.Ink, FontStyle.Bold));
+
+            var close = new Button { name = name + "_close", text = "✕" };
+            close.style.backgroundColor = Color.clear;
+            close.style.color = UiKit.Muted;
+            close.style.width = 26; close.style.height = 26;
+            close.style.marginTop = 0; close.style.marginBottom = 0;
+            close.style.marginLeft = 0; close.style.marginRight = 0;
+            close.Border(0, Color.clear);
+            close.clicked += CloseModal;
+            head.Add(close);
+            card.Add(head);
+
+            var sub = UiKit.Text(subtitle, 11.5f, UiKit.Muted).Margin(bottom: 14);
+            sub.style.whiteSpace = WhiteSpace.Normal;
+            card.Add(sub);
+
+            _modal = card;
+            _root.Add(card);
+            return card;
+        }
+
+        void CloseModal()
+        {
+            _modal?.RemoveFromHierarchy();
+            _modal = null;
+            _scrim?.RemoveFromHierarchy();
+            _scrim = null;
+        }
+
+        static ScrollView ModalList()
+        {
+            var list = new ScrollView(ScrollViewMode.Vertical);
+            list.style.flexGrow = 1;
+            list.verticalScrollerVisibility = ScrollerVisibility.Auto;
+            list.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
+            return list;
+        }
+
+        // ---- decrees
+
+        void OpenDecrees()
+        {
+            var card = OpenModal("panel_decrees", "KARARNAMELER",
+                $"Bu tur {_state.DecreesLeft}/{_state.DecreeAllowance} hakkınız kaldı. " +
+                "Kararname anında yürürlüğe girer ve meclise uğramaz.", 720);
+
+            var list = ModalList();
+            foreach (var d in Decrees.All) list.Add(DecreeRow(d));
+            card.Add(list);
+        }
+
+        VisualElement DecreeRow(DecreeDef d)
+        {
+            bool allowed = GovernanceManager.Instance.CanIssue(d, out string refusal);
+
+            var row = UiKit.Row();
+            row.style.alignItems = Align.FlexStart;
+            row.style.marginBottom = 8;
+            row.style.backgroundColor = new Color(1, 1, 1, 0.04f);
+            row.Radius(10).Border(1, UiKit.Hairline).Pad(11, 13);
+            row.style.opacity = allowed ? 1f : 0.5f;
+
+            var text = UiKit.Column();
+            text.style.flexGrow = 1;
+            text.style.flexShrink = 1;
+            text.Add(UiKit.Text(d.Name, 13.5f, UiKit.Ink, FontStyle.Bold));
+
+            var blurb = UiKit.Text(d.Blurb, 11.5f, UiKit.Hex("#9AA8BC")).Margin(top: 3);
+            blurb.style.whiteSpace = WhiteSpace.Normal;
+            text.Add(blurb);
+
+            // Costs and consequences as numbers, never as a verdict. The design forbids
+            // labelling any option extreme; it may only be described by what it does.
+            var terms = UiKit.Row();
+            terms.style.flexWrap = Wrap.Wrap;
+            terms.style.marginTop = 7;
+            void Term(string s, Color c)
+            {
+                var chip = UiKit.Text(s, 9.5f, c, FontStyle.Bold);
+                chip.style.backgroundColor = UiKit.Alpha(c, 0.16f);
+                chip.Radius(5).Pad(3, 7).Margin(right: 5, top: 3);
+                terms.Add(chip);
+            }
+            if (d.CostMoney > 0) Term($"{d.CostMoney} ₺", UiKit.Amber);
+            if (d.CostLegitimacy > 0) Term($"−{d.CostLegitimacy} meşruiyet", UiKit.Amber);
+            if (d.Order != 0) Term($"otorite {d.Order:+0;−0}", d.Order > 0 ? UiKit.Red : UiKit.Blue);
+            if (d.Economy != 0) Term($"ekonomi {d.Economy:+0;−0}", UiKit.Hex("#C48CFF"));
+            if (d.Grievance != 0)
+                Term($"hoşnutsuzluk {d.Grievance:+0;−0}", d.Grievance > 0 ? UiKit.Red : UiKit.Green);
+            AddFactionChips(Term, d.Tuccar, d.Isci, d.Ordu, d.Gelenek, d.Aydin);
+            text.Add(terms);
+            row.Add(text);
+
+            var issue = new Button { name = "btn_decree_" + d.Id, text = "ÇIKAR" };
+            issue.style.marginLeft = 12;
+            issue.style.marginTop = 0; issue.style.marginBottom = 0; issue.style.marginRight = 0;
+            issue.style.paddingTop = 9; issue.style.paddingBottom = 9;
+            issue.style.paddingLeft = 16; issue.style.paddingRight = 16;
+            issue.style.fontSize = 11;
+            issue.style.unityFontStyleAndWeight = FontStyle.Bold;
+            issue.style.flexShrink = 0;
+            issue.style.color = UiKit.Bg;
+            issue.style.backgroundColor = UiKit.Amber;
+            issue.Radius(9).Border(0, Color.clear);
+            issue.SetEnabled(allowed);
+            issue.tooltip = allowed ? "" : refusal;
+            issue.clicked += () =>
+            {
+                GovernanceManager.Instance.Issue(d, out _);
+                OpenDecrees();
+                Refresh();
+            };
+            row.Add(issue);
+            return row;
+        }
+
+        static void AddFactionChips(System.Action<string, Color> term,
+                                    int tuccar, int isci, int ordu, int gelenek, int aydin)
+        {
+            void One(string name, int v)
+            {
+                if (v == 0) return;
+                term($"{name} {v:+0;−0}", v > 0 ? UiKit.Green : UiKit.Red);
+            }
+            One("tüccar", tuccar); One("işçi", isci); One("ordu", ordu);
+            One("gelenek", gelenek); One("aydın", aydin);
+        }
+
+        // ---- the law book
+
+        void OpenLaws()
+        {
+            var council = _state.Council;
+            string subtitle = council.Suspended
+                ? $"{_state.LawBook.Count}/{_state.LawSlots} yuva dolu. Meclis tatilde: " +
+                  "kanunlar bedelsiz ve anında geçiyor."
+                : $"{_state.LawBook.Count}/{_state.LawSlots} yuva dolu. Yeni bir kanun için " +
+                  "önce bir kanunu kaldırmanız gerekir.";
+
+            var card = OpenModal("panel_laws", "YASA KİTABI", subtitle, 760);
+
+            var list = ModalList();
+
+            if (_state.LawBook.Count > 0)
+            {
+                list.Add(UiKit.Caption("Yürürlükte").Margin(bottom: 8));
+                foreach (var law in _state.LawBook.ToArray()) list.Add(LawRow(law, true));
+                list.Add(UiKit.Caption("Gündemde").Margin(top: 10, bottom: 8));
+            }
+
+            foreach (var law in Laws.All)
+            {
+                if (_state.LawBook.Contains(law)) continue;
+                list.Add(LawRow(law, false));
+            }
+            card.Add(list);
+        }
+
+        VisualElement LawRow(LawDef law, bool inForce)
+        {
+            var council = _state.Council;
+            int support = council.SupportFor(law, _state);
+            int force = council.ForceCost(law, _state);
+            bool allowed = inForce || GovernanceManager.Instance.CanAdopt(law, out _);
+
+            var row = UiKit.Row();
+            row.style.alignItems = Align.FlexStart;
+            row.style.marginBottom = 8;
+            row.style.backgroundColor = inForce
+                ? UiKit.Alpha(UiKit.Amber, 0.10f)
+                : new Color(1, 1, 1, 0.04f);
+            row.Radius(10).Border(1, inForce ? UiKit.Alpha(UiKit.Amber, 0.35f) : UiKit.Hairline).Pad(11, 13);
+            row.style.opacity = allowed ? 1f : 0.5f;
+
+            var glyph = UiKit.Text(law.Glyph, 16, inForce ? UiKit.Amber : UiKit.Muted);
+            glyph.style.width = 26;
+            glyph.style.marginRight = 8;
+            glyph.style.flexShrink = 0;
+            row.Add(glyph);
+
+            var text = UiKit.Column();
+            text.style.flexGrow = 1;
+            text.style.flexShrink = 1;
+            text.Add(UiKit.Text(law.Name, 13.5f, UiKit.Ink, FontStyle.Bold));
+
+            var blurb = UiKit.Text(law.Blurb, 11.5f, UiKit.Hex("#9AA8BC")).Margin(top: 3);
+            blurb.style.whiteSpace = WhiteSpace.Normal;
+            text.Add(blurb);
+
+            var terms = UiKit.Row();
+            terms.style.flexWrap = Wrap.Wrap;
+            terms.style.marginTop = 7;
+            void Term(string s, Color c)
+            {
+                var chip = UiKit.Text(s, 9.5f, c, FontStyle.Bold);
+                chip.style.backgroundColor = UiKit.Alpha(c, 0.16f);
+                chip.Radius(5).Pad(3, 7).Margin(right: 5, top: 3);
+                terms.Add(chip);
+            }
+            if (law.Order != 0) Term($"otorite {law.Order:+0;−0}", law.Order > 0 ? UiKit.Red : UiKit.Blue);
+            if (law.Economy != 0) Term($"ekonomi {law.Economy:+0;−0}", UiKit.Hex("#C48CFF"));
+            if (System.Math.Abs(law.TaxMultiplier - 1f) > 0.001f)
+                Term($"vergi ×{law.TaxMultiplier:0.00}", UiKit.Amber);
+            if (System.Math.Abs(law.ChainThroughputMultiplier - 1f) > 0.001f)
+                Term($"üretim ×{law.ChainThroughputMultiplier:0.00}", UiKit.Green);
+            if (System.Math.Abs(law.FarmThroughputMultiplier - 1f) > 0.001f)
+                Term($"tarla ×{law.FarmThroughputMultiplier:0.00}", UiKit.Green);
+            if (System.Math.Abs(law.FoodDemandMultiplier - 1f) > 0.001f)
+                Term($"ekmek talebi ×{law.FoodDemandMultiplier:0.00}", UiKit.Green);
+            if (System.Math.Abs(law.BuildCostMultiplier - 1f) > 0.001f)
+                Term($"inşaat ×{law.BuildCostMultiplier:0.00}", UiKit.Blue);
+            if (System.Math.Abs(law.TransparencyDelta) > 0.001f)
+                Term($"şeffaflık {law.TransparencyDelta:+0.00;−0.00}",
+                     law.TransparencyDelta > 0 ? UiKit.Green : UiKit.Red);
+            if (law.ExtraDecrees != 0) Term($"+{law.ExtraDecrees} kararname", UiKit.Amber);
+            AddFactionChips(Term, law.TuccarPerTurn, law.IsciPerTurn, law.OrduPerTurn,
+                            law.GelenekPerTurn, law.AydinPerTurn);
+            text.Add(terms);
+
+            if (!inForce)
+            {
+                string vote = council.Suspended
+                    ? "Meclis tatilde — oylama yok."
+                    : force > 0
+                        ? $"Mecliste {support}/{Council.Seats} oy · zorlamak {force} meşruiyet"
+                        : $"Mecliste {support}/{Council.Seats} oy · çoğunluk var";
+                text.Add(UiKit.Text(vote, 10.5f, force > 0 ? UiKit.Amber : UiKit.Green).Margin(top: 6));
+            }
+            row.Add(text);
+
+            var act = new Button
+            {
+                name = (inForce ? "btn_law_repeal_" : "btn_law_adopt_") + law.Id,
+                text = inForce ? "KALDIR" : "KABUL ET",
+            };
+            act.style.marginLeft = 12;
+            act.style.marginTop = 0; act.style.marginBottom = 0; act.style.marginRight = 0;
+            act.style.paddingTop = 9; act.style.paddingBottom = 9;
+            act.style.paddingLeft = 14; act.style.paddingRight = 14;
+            act.style.fontSize = 11;
+            act.style.unityFontStyleAndWeight = FontStyle.Bold;
+            act.style.flexShrink = 0;
+            act.style.color = UiKit.Bg;
+            act.style.backgroundColor = inForce ? UiKit.Red : UiKit.Green;
+            act.Radius(9).Border(0, Color.clear);
+            act.SetEnabled(allowed);
+            act.clicked += () =>
+            {
+                if (inForce) GovernanceManager.Instance.Repeal(law, out _);
+                else GovernanceManager.Instance.Adopt(law, out _);
+                OpenLaws();
+                Refresh();
+            };
+            row.Add(act);
+            return row;
+        }
+
+        // ---- the election
+        //
+        // The one channel that cannot lie. The number below comes from true district grievance
+        // and no minister touches it, which is why the authoritarian player is quietly pushed to
+        // cancel the exact instrument that would have cured their blindness.
+
+        void OpenElection()
+        {
+            float support = GovernanceManager.Instance.TrueSupport();
+
+            var card = OpenModal("panel_election", $"{_state.Turn}. TUR · SEÇİM",
+                "Sandık, bakanlarınızdan geçmeyen tek kanaldır. Buradaki rakam şehrin " +
+                "kendisinden gelir.", 700);
+            card.style.bottom = StyleKeyword.Auto;
+
+            var gauge = UiKit.Column().Margin(bottom: 16);
+            gauge.Add(UiKit.Caption("Sandıktan çıkacak destek"));
+            var big = UiKit.Text($"%{support:0}", 40, support >= 50 ? UiKit.Green : UiKit.Red, FontStyle.Bold);
+            gauge.Add(big);
+            gauge.Add(UiKit.Bar(support / 100f, support >= 50 ? UiKit.Green : UiKit.Red, 640, 8).Margin(top: 6));
+            card.Add(gauge);
+
+            var options = UiKit.Row();
+            options.style.alignItems = Align.Stretch;
+            options.Add(ElectionOption("yap", "YAP", UiKit.Green,
+                "Seçim yapılır. Şehir size ne düşündüğünü açıkça söyler — iyi ya da kötü.",
+                new[] { "Kazanırsanız +10 meşruiyet ve fraksiyonlarda iyi niyet",
+                        "Kaybederseniz −12 meşruiyet ve meclisin şart koştuğu bir tâviz" }));
+            options.Add(ElectionOption("ertele", "ERTELE", UiKit.Amber,
+                "Seçim ileri bir tarihe bırakılır.",
+                new[] { "otorite +12", "−15 meşruiyet", "her fraksiyonun havası bir kademe düşer" }));
+            options.Add(ElectionOption("hile", "HİLE YAP", UiKit.Red,
+                "Sonuç ilan edilir.",
+                new[] { "Bugün bedeli yok", "otorite +9",
+                        "Gerçek sonuç kayda geçer; bakan biri varsa birkaç tur içinde çıkar" }));
+            card.Add(options);
+        }
+
+        VisualElement ElectionOption(string id, string label, Color colour, string blurb, string[] terms)
+        {
+            var box = UiKit.Column();
+            box.style.flexGrow = 1;
+            box.style.flexBasis = 0;
+            box.style.marginRight = id == "hile" ? 0 : 12;
+            box.style.backgroundColor = new Color(1, 1, 1, 0.04f);
+            box.Radius(12).Border(1, UiKit.Hairline).Pad(14, 15);
+
+            box.Add(UiKit.Pill(label, colour));
+            var text = UiKit.Text(blurb, 11.5f, UiKit.Hex("#C9D4E2")).Margin(top: 10, bottom: 8);
+            text.style.whiteSpace = WhiteSpace.Normal;
+            box.Add(text);
+
+            foreach (var t in terms)
+            {
+                var row = UiKit.Row();
+                row.style.alignItems = Align.FlexStart;
+                row.style.marginBottom = 4;
+                row.Add(UiKit.Text("·", 11.5f, colour).Margin(right: 7));
+                var line = UiKit.Text(t, 11f, UiKit.Hex("#9AA8BC"));
+                line.style.whiteSpace = WhiteSpace.Normal;
+                line.style.flexGrow = 1;
+                row.Add(line);
+                box.Add(row);
+            }
+
+            box.Add(UiKit.Spacer());
+
+            var pick = new Button { name = "btn_election_" + id, text = label };
+            pick.style.marginTop = 10;
+            pick.style.marginLeft = 0; pick.style.marginRight = 0; pick.style.marginBottom = 0;
+            pick.style.paddingTop = 10; pick.style.paddingBottom = 10;
+            pick.style.fontSize = 11;
+            pick.style.unityFontStyleAndWeight = FontStyle.Bold;
+            pick.style.color = UiKit.Bg;
+            pick.style.backgroundColor = colour;
+            pick.Radius(9).Border(0, Color.clear);
+            pick.clicked += () =>
+            {
+                string outcome = GovernanceManager.Instance.ResolveElection(id);
+                CloseModal();
+                Refresh();
+                Debug.Log("[Seçim] " + outcome);
+            };
+            box.Add(pick);
+            return box;
+        }
+
         // ================================================================ appointment
         //
         // The central repeated choice, and it must be a fair trap: SADIK is genuinely the better
@@ -888,11 +1355,15 @@ namespace Mesruiyet.UI
             dock.style.flexDirection = FlexDirection.Row;
             dock.style.alignItems = Align.Center;
             dock.style.justifyContent = Justify.Center;
+            // Nineteen build tiles plus the instruments plus TURU BİTİR is wider than 1600 at
+            // full size, and a clipped hotbar is worse than a two-row one. Wrapping is the
+            // safety net; the sizes below are what keep it on one row at 1920.
+            dock.style.flexWrap = Wrap.WrapReverse;
             dock.pickingMode = PickingMode.Ignore;
             _root.Add(dock);
 
             // ---- build hotbar
-            var tools = UiKit.Glass().Pad(9, 10).Margin(right: 10);
+            var tools = UiKit.Glass().Pad(9, 8).Margin(right: 8);
             tools.style.flexDirection = FlexDirection.Row;
             tools.style.flexShrink = 0;
 
@@ -903,10 +1374,10 @@ namespace Mesruiyet.UI
 
                 var tile = new Button { name = "btn_build_" + id };
                 tile.text = string.Empty;
-                tile.style.width = 62;
+                tile.style.width = 51;
                 tile.style.paddingTop = 8; tile.style.paddingBottom = 7;
                 tile.style.paddingLeft = 0; tile.style.paddingRight = 0;
-                tile.style.marginRight = 5; tile.style.marginLeft = 0;
+                tile.style.marginRight = 3; tile.style.marginLeft = 0;
                 tile.style.marginTop = 0; tile.style.marginBottom = 0;
                 tile.style.backgroundColor = Color.clear;
                 // Captions are clipped rather than allowed to spill: "ENERJİ SANTRALİ" is wider
@@ -918,7 +1389,7 @@ namespace Mesruiyet.UI
                 tile.style.alignItems = Align.Center;
 
                 tile.Add(UiKit.Text(def.Glyph, 17, UiKit.Ink));
-                var caption = UiKit.Text(def.DockLabel.ToUpperInvariant(), 8.5f, UiKit.Hex("#8E9CB0"), FontStyle.Bold);
+                var caption = UiKit.Text(def.DockLabel.ToUpperInvariant(), 7.5f, UiKit.Hex("#8E9CB0"), FontStyle.Bold);
                 caption.style.letterSpacing = 0.6f;
                 caption.style.marginTop = 4;
                 caption.style.whiteSpace = WhiteSpace.NoWrap;
@@ -937,29 +1408,49 @@ namespace Mesruiyet.UI
             }
             dock.Add(tools);
 
-            // ---- law slots (4 of 7 unlocked; the book itself lands in a later slice)
-            var laws = UiKit.Glass().Pad(9, 12).Margin(right: 10);
-            laws.style.flexDirection = FlexDirection.Row;
-            laws.style.alignItems = Align.Center;
-            laws.style.flexShrink = 0;
-            laws.Add(UiKit.Caption("Yasa").Margin(right: 8));
-            for (int i = 0; i < 7; i++)
-            {
-                var slot = new VisualElement();
-                slot.style.width = 34; slot.style.height = 34;
-                slot.style.marginRight = 6;
-                slot.style.backgroundColor = new Color(1, 1, 1, 0.05f);
-                slot.Radius(9).Border(1, UiKit.Hairline);
-                if (i >= 4) slot.style.opacity = 0.35f;
-                laws.Add(slot);
-            }
-            dock.Add(laws);
+            // ---- decrees and the law book
+            var instruments = UiKit.Glass().Pad(9, 11).Margin(right: 8);
+            instruments.style.flexDirection = FlexDirection.Row;
+            instruments.style.alignItems = Align.Center;
+            instruments.style.flexShrink = 0;
+
+            _decreeButton = new Button { name = "btn_decrees", text = "KARARNAME" };
+            _decreeButton.style.marginTop = 0; _decreeButton.style.marginBottom = 0;
+            _decreeButton.style.marginLeft = 0; _decreeButton.style.marginRight = 14;
+            _decreeButton.style.paddingTop = 10; _decreeButton.style.paddingBottom = 10;
+            _decreeButton.style.paddingLeft = 11; _decreeButton.style.paddingRight = 11;
+            _decreeButton.style.fontSize = 9.5f;
+            _decreeButton.style.unityFontStyleAndWeight = FontStyle.Bold;
+            _decreeButton.style.color = UiKit.Ink;
+            _decreeButton.style.backgroundColor = new Color(1, 1, 1, 0.06f);
+            _decreeButton.Radius(9).Border(1, UiKit.Hairline);
+            _decreeButton.clicked += OpenDecrees;
+            instruments.Add(_decreeButton);
+
+            var lawButton = new Button { name = "btn_lawbook" };
+            lawButton.text = string.Empty;
+            lawButton.style.flexDirection = FlexDirection.Row;
+            lawButton.style.alignItems = Align.Center;
+            lawButton.style.backgroundColor = Color.clear;
+            lawButton.style.marginTop = 0; lawButton.style.marginBottom = 0;
+            lawButton.style.marginLeft = 0; lawButton.style.marginRight = 0;
+            lawButton.style.paddingTop = 0; lawButton.style.paddingBottom = 0;
+            lawButton.style.paddingLeft = 0; lawButton.style.paddingRight = 0;
+            lawButton.Border(0, Color.clear);
+            lawButton.Add(UiKit.Caption("Yasa").Margin(right: 8));
+
+            _lawSlotRow = UiKit.Row();
+            lawButton.Add(_lawSlotRow);
+            lawButton.clicked += OpenLaws;
+            instruments.Add(lawButton);
+
+            dock.Add(instruments);
 
             // ---- end turn
             _endTurn = new Button { name = "btn_end_turn" };
             _endTurn.text = string.Empty;
             _endTurn.style.paddingTop = 13; _endTurn.style.paddingBottom = 13;
-            _endTurn.style.paddingLeft = 30; _endTurn.style.paddingRight = 30;
+            _endTurn.style.paddingLeft = 22; _endTurn.style.paddingRight = 22;
             _endTurn.style.marginLeft = 0; _endTurn.style.marginRight = 0;
             _endTurn.style.backgroundColor = UiKit.Amber;
             _endTurn.style.flexShrink = 0;
@@ -1144,7 +1635,21 @@ namespace Mesruiyet.UI
 
             PaintChains();
             PaintMinisters();
+            PaintCouncil();
+            PaintLawSlots();
             PaintTelegrams();
+
+            ((Label)_councilHead[1]).text = _state.Council.Suspended
+                ? "TATİLDE" : $"{Council.Seats} SANDALYE";
+
+            _decreeButton.text = $"KARARNAME {_state.DecreesLeft}/{_state.DecreeAllowance}";
+            _decreeButton.style.color = _state.DecreesLeft > 0 ? UiKit.Ink : UiKit.Dim;
+
+            // An election is not a notification you can dismiss. It opens, and it waits — and
+            // it closes itself the moment it has been answered, however it was answered.
+            bool electionOpen = _modal != null && _modal.name == "panel_election";
+            if (_state.ElectionPending && !electionOpen) OpenElection();
+            else if (!_state.ElectionPending && electionOpen) CloseModal();
             ((Label)_telegramHead[1]).text = $"{_state.Turn}. TUR";
 
             PaintAxis(_axisRow0, "Otorite", "Özgürlük", Reporting.AxisOrder, v => v.x);
@@ -1156,6 +1661,36 @@ namespace Mesruiyet.UI
             _electionNote.text = toElection == 0 ? "SEÇİM BU TUR" : $"SEÇİM {toElection} TUR SONRA";
         }
 
+        /// <summary>
+        /// The law book as seven squares. Filled slots carry the law's glyph; the three beyond
+        /// the current allowance are dimmed, so the shape of the constraint is visible without
+        /// opening anything. A city that could hold every good law would not have to choose.
+        /// </summary>
+        void PaintLawSlots()
+        {
+            _lawSlotRow.Clear();
+
+            for (int i = 0; i < Laws.MaxSlots; i++)
+            {
+                bool unlocked = i < _state.LawSlots;
+                var law = i < _state.LawBook.Count ? _state.LawBook[i] : null;
+
+                var slot = UiKit.Text(law != null ? law.Glyph : (unlocked ? "+" : "·"),
+                                      law != null ? 15 : 12,
+                                      law != null ? UiKit.Amber : UiKit.Dim);
+                slot.style.width = 28; slot.style.height = 28;
+                slot.style.marginRight = 4;
+                slot.style.unityTextAlign = TextAnchor.MiddleCenter;
+                slot.style.backgroundColor = law != null
+                    ? UiKit.Alpha(UiKit.Amber, 0.14f)
+                    : new Color(1, 1, 1, 0.05f);
+                slot.Radius(9).Border(1, law != null ? UiKit.Alpha(UiKit.Amber, 0.42f) : UiKit.Hairline);
+                if (!unlocked) slot.style.opacity = 0.3f;
+                slot.tooltip = law != null ? $"{law.Name}\n{law.Blurb}" : "Boş yasa yuvası";
+                _lawSlotRow.Add(slot);
+            }
+        }
+
         static void RepaintPill(Label pill, string text, Color colour)
         {
             pill.text = text;
@@ -1164,6 +1699,9 @@ namespace Mesruiyet.UI
         }
     }
 }
+
+
+
 
 
 

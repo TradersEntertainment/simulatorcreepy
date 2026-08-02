@@ -28,6 +28,12 @@ namespace Mesruiyet.Core
 
         /// <summary>Stock the city is founded with, so turn one is not a famine.</summary>
         public float StartStock;
+
+        /// <summary>
+        /// True for the stage the land laws act on — Toprak Reformu raises its throughput,
+        /// Zorunlu Tahıl Stoku its buffer. Marked as data so no law needs to name a stage.
+        /// </summary>
+        public bool WorkedLand;
     }
 
     public sealed class ChainDef
@@ -65,7 +71,7 @@ namespace Mesruiyet.Core
                         Name = "Tarla", Holds = "tahıl", BuildingId = "tarla",
                         PerBuilding = 17f, BaseCapacity = 260f,
                         StoreBuildingId = "ambar", StorePer = 220f,
-                        StartStock = 130f,
+                        StartStock = 130f, WorkedLand = true,
                     },
                     new ChainStageDef
                     {
@@ -116,4 +122,5 @@ namespace Mesruiyet.Core
         }
     }
 }
+
 

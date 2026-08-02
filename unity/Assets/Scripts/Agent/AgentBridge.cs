@@ -163,6 +163,21 @@ namespace Mesruiyet.Agent
                     // Placement is the whole first slice, so the agent has to be able to do it.
                     return AgentInput.Build(c.id, c.x, c.y, out string why) ? Ok() : Err(why);
 
+                case "decree":
+                    return AgentInput.Decree(c.id, out string decreeWhy) ? Ok() : Err(decreeWhy);
+
+                case "law":
+                    // n != 0 adopts, n == 0 repeals.
+                    return AgentInput.Law(c.id, c.n != 0, out string lawWhy) ? Ok() : Err(lawWhy);
+
+                case "election":
+                    // {"cmd":"election","id":"yap"} — also "ertele" and "hile".
+                    return AgentInput.Election(c.id, out string electionWhy)
+                        ? Ok(JsonUtility.ToJson(new Wrap { v = electionWhy })) : Err(electionWhy);
+
+                case "council":
+                    return AgentInput.Council(c.n != 0, out string councilWhy) ? Ok() : Err(councilWhy);
+
                 case "appoint":
                     // {"cmd":"appoint","id":"tarim","n":1}  — n != 0 picks the loyalist.
                     return AgentInput.Appoint(c.id, c.n != 0, out string appointWhy)

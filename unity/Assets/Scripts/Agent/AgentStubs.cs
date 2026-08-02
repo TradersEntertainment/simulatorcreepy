@@ -122,6 +122,34 @@ namespace Mesruiyet.Agent
             }
             sb.Append("],");
 
+            // Governance: the chamber, the book, and what the city actually thinks. Murmurs are
+            // included verbatim so a test can assert that the truth still reaches the governor
+            // through the council even while every ministry is rounding it away.
+            sb.Append("\"council\":{");
+            Num(sb, "seats", Sim.Council.Seats); sb.Append(',');
+            Bool(sb, "suspended", g.Council.Suspended); sb.Append(',');
+            Num(sb, "support", Sim.GovernanceManager.Instance != null
+                               ? Sim.GovernanceManager.Instance.TrueSupport() : 0f); sb.Append(',');
+            sb.Append("\"murmurs\":[");
+            for (int i = 0; i < g.Council.Murmurs.Count; i++)
+            {
+                if (i > 0) sb.Append(',');
+                sb.Append('"').Append(g.Council.Murmurs[i].Replace("\"", "'")).Append('"');
+            }
+            sb.Append("]},");
+
+            sb.Append("\"laws\":[");
+            for (int i = 0; i < g.LawBook.Count; i++)
+            {
+                if (i > 0) sb.Append(',');
+                sb.Append('"').Append(g.LawBook[i].Id).Append('"');
+            }
+            sb.Append("],");
+
+            Num(sb, "lawSlots", g.LawSlots); sb.Append(',');
+            Num(sb, "decreesLeft", g.DecreesLeft); sb.Append(',');
+            Bool(sb, "electionPending", g.ElectionPending); sb.Append(',');
+
             sb.Append("\"factions\":{");
             for (int f = 0; f < 5; f++)
             {
@@ -238,6 +266,47 @@ namespace Mesruiyet.Agent
             return touched;
         }
 
+        /// <summary>Issue a decree by id — the same two-a-turn allowance the player has.</summary>
+        public static bool Decree(string id, out string message)
+        {
+            var def = Decrees.Get(id);
+            if (def == null) { message = $"bilinmeyen kararname '{id}'"; return false; }
+            if (Sim.GovernanceManager.Instance == null) { message = "governance not ready"; return false; }
+            return Sim.GovernanceManager.Instance.Issue(def, out message);
+        }
+
+        /// <summary>Adopt a law (on) or repeal it (off).</summary>
+        public static bool Law(string id, bool adopt, out string message)
+        {
+            var def = Laws.Get(id);
+            if (def == null) { message = $"bilinmeyen kanun '{id}'"; return false; }
+            if (Sim.GovernanceManager.Instance == null) { message = "governance not ready"; return false; }
+            return adopt
+                ? Sim.GovernanceManager.Instance.Adopt(def, out message)
+                : Sim.GovernanceManager.Instance.Repeal(def, out message);
+        }
+
+        /// <summary>Answer a pending election: "yap", "ertele" or "hile".</summary>
+        public static bool Election(string choice, out string message)
+        {
+            var state = GameState.Current;
+            if (state == null || !state.ElectionPending) { message = "bekleyen seçim yok"; return false; }
+            message = Sim.GovernanceManager.Instance.ResolveElection(choice);
+            return true;
+        }
+
+        /// <summary>Adjourn the chamber, or call it back.</summary>
+        public static bool Council(bool suspend, out string message)
+        {
+            message = "";
+            var g = Sim.GovernanceManager.Instance;
+            if (g == null) { message = "governance not ready"; return false; }
+            if (suspend && !g.CanSuspend)
+            { message = "meclis ancak otorite 75'e ulaşınca tatil edilebilir"; return false; }
+            g.SetSuspended(suspend);
+            return true;
+        }
+
         /// <summary>
         /// Appoint a minister: id is the domain (maliye/tarim/guvenlik/imar/halk), loyalist
         /// picks SADIK over UZMAN. The agent takes the same choice the player does.
@@ -272,3 +341,5 @@ namespace Mesruiyet.Agent
     }
 }
 #endif
+
+

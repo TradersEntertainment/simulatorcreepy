@@ -97,7 +97,14 @@ namespace Mesruiyet.Core
                 if (b.Def.Id == "matbaa" && b.Staffed) presses++;
 
             float t = 0.30f + 0.16f * presses;
-            t -= Mathf.Max(0, g.AxisOrder) / 200f;      // censorship, checkpoints, a quiet council
+            t += g.Modifiers.Transparency;                          // a free press law, or a censorship one
+            t += g.EffectMagnitude(DecreeEffect.OpenSession);       // an open session, while it lasts
+            t -= g.EffectMagnitude(DecreeEffect.PressDirective);
+            t -= Mathf.Max(0, g.AxisOrder) / 200f;                  // checkpoints, and a quieter council
+
+            // An adjourned chamber has nobody left to ask an awkward question.
+            if (g.Council != null && g.Council.Suspended) t -= 0.15f;
+
             return Mathf.Clamp01(t);
         }
 
@@ -105,3 +112,4 @@ namespace Mesruiyet.Core
         public const float NoiseThreshold = 0.18f;
     }
 }
+

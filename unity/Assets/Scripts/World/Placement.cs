@@ -130,6 +130,12 @@ namespace Mesruiyet.World
             _cursorMat.color = HoverValid ? Ok : No;
         }
 
+        public int MoneyCost(BuildingDef def)
+            => Mathf.RoundToInt(def.CostMoney * _state.Modifiers.BuildCost);
+
+        public int MaterialCost(BuildingDef def)
+            => Mathf.RoundToInt(def.CostMaterial * _state.Modifiers.BuildCost);
+
         /// <summary>Every reason a build can be refused, in one place, phrased for the player.</summary>
         public bool CanBuild(BuildingDef def, int x, int y, out string reason)
         {
@@ -137,13 +143,13 @@ namespace Mesruiyet.World
 
             if (!CityGrid.InBounds(x, y)) { reason = "Harita dışı."; return false; }
 
-            var TileKind = _grid.At(x, y);
-            if (TileKind == TileKind.Su) { reason = "Nehre inşa edilemez."; return false; }
-            if (TileKind == TileKind.Bataklik) { reason = "Bataklık önce kurutulmalı."; return false; }
-            if (TileKind == TileKind.Yol) { reason = "Yolun üstüne inşa edilemez."; return false; }
+            var kind = _grid.At(x, y);
+            if (kind == TileKind.Su) { reason = "Nehre inşa edilemez."; return false; }
+            if (kind == TileKind.Bataklik) { reason = "Bataklık önce kurutulmalı."; return false; }
+            if (kind == TileKind.Yol) { reason = "Yolun üstüne inşa edilemez."; return false; }
             if (_grid.Occupant[CityGrid.Index(x, y)] >= 0) { reason = "Bu parsel dolu."; return false; }
 
-            if (def.Requires.HasValue && TileKind != def.Requires.Value)
+            if (def.Requires.HasValue && kind != def.Requires.Value)
             {
                 reason = def.Requires.Value == TileKind.Verimli
                     ? "Verimli toprak gerekiyor (nehir kıyısı)."
@@ -153,22 +159,26 @@ namespace Mesruiyet.World
 
             if (Districts.At(x, y) == null) { reason = "Bu parsel hiçbir mahalleye ait değil."; return false; }
 
-            if (_state.Stock[(int)Res.Para] < def.CostMoney)
+            // Laws move what building costs, so quote the price the player will actually pay.
+            int money = MoneyCost(def);
+            int material = MaterialCost(def);
+
+            if (_state.Stock[(int)Res.Para] < money)
             {
-                reason = $"Para yetmiyor: {def.CostMoney} ₺ gerek.";
+                reason = $"Para yetmiyor: {money} ₺ gerek.";
                 return false;
             }
             // Construction draws from the depot, never from the ledger total. A quarry running
             // flat out into a stopped İşlik shows a healthy Malzeme figure and still cannot put
             // up a shed, and the refusal has to say so or the player learns nothing.
-            if (_state.DepotStock < def.CostMaterial)
+            if (_state.DepotStock < material)
             {
                 var chain = _state.MaterialChain;
                 float raw = chain.Total - chain.Final.Stock;
-                reason = raw > def.CostMaterial
-                    ? $"Depoda {chain.Final.Stock:0} işlenmiş malzeme var, {def.CostMaterial} gerek. " +
+                reason = raw > material
+                    ? $"Depoda {chain.Final.Stock:0} işlenmiş malzeme var, {material} gerek. " +
                       $"Ham taş bekliyor ({raw:0}) — {chain.Diagnosis()}."
-                    : $"Malzeme yetmiyor: depoda {chain.Final.Stock:0}, {def.CostMaterial} gerek.";
+                    : $"Malzeme yetmiyor: depoda {chain.Final.Stock:0}, {material} gerek.";
                 return false;
             }
 
@@ -198,8 +208,8 @@ namespace Mesruiyet.World
                 BuiltOnTurn = _state.Turn,
             };
 
-            _state.Stock[(int)Res.Para] -= def.CostMoney;
-            _state.MaterialChain.Draw(def.CostMaterial);
+            _state.Stock[(int)Res.Para] -= MoneyCost(def);
+            _state.MaterialChain.Draw(MaterialCost(def));
 
             _grid.Occupant[CityGrid.Index(x, y)] = _state.Buildings.Count;
             _state.Buildings.Add(placed);
@@ -223,4 +233,6 @@ namespace Mesruiyet.World
         }
     }
 }
+
+
 

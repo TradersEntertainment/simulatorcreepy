@@ -82,13 +82,24 @@ namespace Mesruiyet.Core
                 stage.Idle = 0;
             }
 
+            // Laws and standing decrees scale what a building can move. Applied here rather
+            // than at the call sites so a repeal takes effect the same turn, exactly.
+            float chainMult = state.Modifiers.ChainThroughput
+                            * (1f + state.EffectMagnitude(DecreeEffect.Overtime));
+
             foreach (var b in state.Buildings)
             {
                 foreach (var stage in Stages)
                 {
                     if (b.Def.Id == stage.Def.BuildingId)
                     {
-                        if (b.Staffed) { stage.Throughput += stage.Def.PerBuilding; stage.Working++; }
+                        if (b.Staffed)
+                        {
+                            float m = chainMult;
+                            if (stage.Def.WorkedLand) m *= state.Modifiers.FarmThroughput;
+                            stage.Throughput += stage.Def.PerBuilding * m;
+                            stage.Working++;
+                        }
                         else stage.Idle++;
                     }
 
@@ -97,6 +108,9 @@ namespace Mesruiyet.Core
                         stage.Capacity += stage.Def.StorePer;
                 }
             }
+
+            foreach (var stage in Stages)
+                if (stage.Def.WorkedLand) stage.Capacity *= state.Modifiers.GrainCapacity;
         }
 
         /// <summary>
@@ -250,3 +264,4 @@ namespace Mesruiyet.Core
         static string F(float v) => v.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
     }
 }
+

@@ -97,6 +97,46 @@ namespace Mesruiyet.Core
         /// <summary>This turn's telegrams, newest last. The onboarding channel and the trap in one.</summary>
         public readonly List<string> Telegrams = new List<string>();
 
+        // ---------------------------------------------------------------- governance
+        public Sim.Council Council;
+
+        /// <summary>Laws currently in force. Never longer than <see cref="LawSlots"/>.</summary>
+        public readonly List<LawDef> LawBook = new List<LawDef>();
+        public int LawSlots = Laws.BaseSlots;
+
+        /// <summary>Recomputed from the law book every tick, so a repeal undoes itself exactly.</summary>
+        public LawModifiers Modifiers = LawModifiers.Neutral;
+
+        public int DecreesLeft = Decrees.PerTurn;
+        public readonly List<ActiveEffect> Effects = new List<ActiveEffect>();
+
+        public readonly List<ElectionRecord> Elections = new List<ElectionRecord>();
+        /// <summary>Set when an election was rigged; the scandal surfaces on this turn.</summary>
+        public int ScandalTurn = -1;
+
+        /// <summary>An election is due and the governor has not answered it yet.</summary>
+        public bool ElectionPending;
+
+        public bool IsElectionTurn
+        {
+            get
+            {
+                for (int i = 0; i < ElectionTurns.Length; i++)
+                    if (ElectionTurns[i] == Turn) return true;
+                return false;
+            }
+        }
+
+        public int DecreeAllowance => Decrees.PerTurn + Modifiers.ExtraDecrees;
+
+        public float EffectMagnitude(DecreeEffect kind)
+        {
+            float total = 0;
+            foreach (var e in Effects)
+                if (e.Kind == kind) total += e.Magnitude;
+            return total;
+        }
+
         // ---------------------------------------------------------------- the city
         public DistrictState[] Districts;
         public readonly List<PlacedBuilding> Buildings = new List<PlacedBuilding>();
@@ -168,6 +208,7 @@ namespace Mesruiyet.Core
             }
 
             g.Cabinet = Cabinet.Founding();
+            g.Council = new Sim.Council();
 
             g.Chains = new Chain[Mesruiyet.Core.Chains.All.Length];
             for (int i = 0; i < g.Chains.Length; i++)

@@ -331,6 +331,98 @@ switch ($Scenario) {
         $state = Send-Cmd '{"cmd":"state"}'
     }
 
+    # The counterweight. With every ministry rounding in the governor's favour, the council is
+    # the only place the truth still arrives — and "Meclisi Tatil Et" is the button that ends
+    # that. Drift to it by ordinary governing rather than by setting a variable: this scenario
+    # never once picks "become authoritarian", it just answers each turn's problem quickly.
+    "meclis" {
+        function Field([string] $json, [string] $key) {
+            if ($json -match "`"$key`":(-?[\d.]+)") { return [double]$Matches[1] }
+            return [double]::NaN
+        }
+        function Reported([string] $json, [string] $key) {
+            if ($json -match "`"reported`":\{[^}]*`"$key`":(-?[\d.]+)") { return [double]$Matches[1] }
+            return [double]::NaN
+        }
+        $ok = $true
+        function Check([bool] $pass, [string] $label) {
+            if ($pass) { Write-Host "  ✔ $label" -ForegroundColor Green }
+            else { Write-Host "  ✘ $label" -ForegroundColor Red; $script:ok = $false }
+        }
+
+        Shot "01-acilis.png"
+
+        Write-Host "[loop] sadık bakan + duran değirmenler..." -ForegroundColor Cyan
+        Send-Cmd '{"cmd":"appoint","id":"tarim","n":1}' | Out-Null
+        Send-Cmd '{"cmd":"block","id":"degirmen","n":1}' | Out-Null
+        $t = Get-Turn
+        Send-Cmd '{"cmd":"endturn","n":4}' | Out-Null
+        Wait-Turn ($t + 4) 90 | Out-Null
+        Shot "02-meclis-uyariyor.png"
+        $fogged = Send-Cmd '{"cmd":"state"}'
+
+        Write-Host "`n[loop] MECLİS KONTROLÜ:" -ForegroundColor Cyan
+        Check (((Reported $fogged "yiyecek") - (Field $fogged "yiyecek")) -gt 1) `
+              "bakanlık rakamı şişiriyor"
+        Check ($fogged -match '"murmurs":\[[^\]]*ekmek') `
+              "meclis ekmeği konuşuyor — gerçek hâlâ ulaşıyor"
+
+        Write-Host "`n[loop] YÖNETİM ARAÇLARI:" -ForegroundColor Cyan
+        $o0 = Field $fogged "axisOrder"
+        Send-Cmd '{"cmd":"decree","id":"sokaga_cikma"}' | Out-Null
+        $s = Send-Cmd '{"cmd":"state"}'
+        Check ((Field $s "axisOrder") -gt $o0) "kararname ekseni oynattı"
+
+        Send-Cmd '{"cmd":"law","id":"kontrol_noktalari","n":1}' | Out-Null
+        $s = Send-Cmd '{"cmd":"state"}'
+        Check ($s -match '"laws":\[[^\]]*kontrol_noktalari') "kanun yasa kitabına girdi"
+
+        # Twelve reasonable emergency measures. Nothing here is labelled authoritarian.
+        Write-Host "`n[loop] her turun sorununa hızlı cevap veriliyor..." -ForegroundColor Cyan
+        foreach ($i in 1..7) {
+            Send-Cmd '{"cmd":"decree","id":"sokaga_cikma"}' | Out-Null
+            Send-Cmd '{"cmd":"decree","id":"basin_talimatnamesi"}' | Out-Null
+            $t = Get-Turn
+            Send-Cmd '{"cmd":"endturn","n":1}' | Out-Null
+            Wait-Turn ($t + 1) 30 | Out-Null
+        }
+        Send-Cmd '{"cmd":"block","id":"degirmen","n":0}' | Out-Null
+        $drifted = Send-Cmd '{"cmd":"state"}'
+        Shot "03-suruklenme.png"
+
+        $order = Field $drifted "axisOrder"
+        $transparency = Field $drifted "transparency"
+        Write-Host ("  otorite ekseni : {0,6:N0}   ({1})" -f $order, `
+                    ($(if ($drifted -match '"bandOrder":"([^"]+)"') { $Matches[1] } else { "?" })))
+        Write-Host ("  şeffaflık      : {0,6:N2}" -f $transparency)
+        Check ($order -ge 75) "sıradan yönetimle DÖNÜŞSÜZ eşiğine sürüklenildi"
+        Check ($transparency -lt 0.2) "sis kalınlaştı"
+
+        Write-Host "`n[loop] meclis tatil ediliyor..." -ForegroundColor Cyan
+        Send-Cmd '{"cmd":"council","n":1}' | Out-Null
+        $silent = Send-Cmd '{"cmd":"state"}'
+        Shot "04-meclis-tatilde.png"
+        Check ($silent -match '"suspended":true') "meclis tatilde"
+        Check ($silent -notmatch '"murmurs":\[[^\]]*ekmek') "son dürüst kanal da sustu"
+
+        Write-Host "`n[loop] seçim..." -ForegroundColor Cyan
+        $t = Get-Turn
+        $target = 12
+        if ($t -lt $target) {
+            Send-Cmd ('{"cmd":"endturn","n":' + ($target - $t) + '}') | Out-Null
+            Wait-Turn $target 120 | Out-Null
+        }
+        $atElection = Send-Cmd '{"cmd":"state"}'
+        Check ($atElection -match '"electionPending":true') "seçim sandığı kuruldu"
+        $reply = Send-Cmd '{"cmd":"election","id":"yap"}'
+        Write-Host "  $reply"
+        Check ($reply -match '"ok":true') "seçim sonuçlandı"
+        Shot "05-secim-sonrasi.png"
+
+        if (-not $ok) { $chainBroken = $true }
+        $state = Send-Cmd '{"cmd":"state"}'
+    }
+
     "turns40" {
         $t = Get-Turn
         Send-Cmd '{"cmd":"endturn","n":40}' | Out-Null

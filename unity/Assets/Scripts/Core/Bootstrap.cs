@@ -50,6 +50,10 @@ namespace Mesruiyet.Core
             var ministers = gameObject.AddComponent<MinisterManager>();
             ministers.Init(state);
 
+            // Governance before the resolver too: law modifiers scale the very first survey.
+            var governance = gameObject.AddComponent<GovernanceManager>();
+            governance.Init(state);
+
             var resolver = gameObject.AddComponent<TurnResolver>();
             resolver.Init(state);
 
@@ -159,3 +163,4 @@ namespace Mesruiyet.Core
         }
     }
 }
+

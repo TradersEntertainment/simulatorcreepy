@@ -73,8 +73,12 @@ namespace Mesruiyet.Sim
             g.BufferTurns = ComputeBuffer();
             g.RecordTrail();
 
-            // Transparency last, so this turn's new printing press counts, and the telegrams
-            // after that, so ministers quote the figures the player is about to be shown.
+            // Governance before transparency: a law adopted this turn changes how clean the
+            // numbers are, and the chamber has to hear the city as it stands now.
+            GovernanceManager.Instance.Tick();
+
+            // Transparency after that, so this turn's new printing press counts, and the
+            // telegrams last, so ministers quote the figures the player is about to be shown.
             MinisterManager.Instance.Refresh();
             MinisterManager.Instance.RecordTerm();
             MinisterManager.Instance.WriteTelegrams();
@@ -98,8 +102,12 @@ namespace Mesruiyet.Sim
                 if (supplied > 0) pool += Mathf.RoundToInt(supplied);
             }
             // Nobody works who isn't housed, and the population caps what the housing offers.
-            pool = Mathf.Min(pool, Mathf.RoundToInt(g.Population * 0.68f));
-            g.LabourPool = pool;
+            float participation = 0.68f + g.Modifiers.LabourParticipation;
+            pool = Mathf.Min(pool, Mathf.RoundToInt(g.Population * Mathf.Clamp(participation, 0.3f, 0.9f)));
+            // A mobilisation order puts more hands to work for a few turns; conscription
+            // takes them away again. Both arrive here as the same signed number.
+            pool += Mathf.RoundToInt(g.EffectMagnitude(DecreeEffect.LabourSurge));
+            g.LabourPool = Mathf.Max(0, pool);
 
             int used = 0;
             foreach (var b in g.Buildings)
@@ -138,10 +146,7 @@ namespace Mesruiyet.Sim
 
             // Tax. Wealthier districts yield more per head; the rate itself becomes a slider
             // when the budget panel lands.
-            float tax = 0;
-            foreach (var d in g.Districts)
-                tax += d.Population * 0.22f * (0.5f + d.Def.Wealth / 100f);
-            flow[(int)Res.Para] += tax;
+            flow[(int)Res.Para] += Tax();
 
             return flow;
         }
@@ -168,7 +173,7 @@ namespace Mesruiyet.Sim
             var g = _state;
             int pop = g.Population;
 
-            _breadDemand = pop * 0.12f;
+            _breadDemand = BreadDemand();
             _breadServed = g.FoodChain.Draw(_breadDemand);
 
             flow[(int)Res.Su] -= pop * 0.10f;
@@ -254,7 +259,15 @@ namespace Mesruiyet.Sim
             float t = 0;
             foreach (var d in _state.Districts)
                 t += d.Population * 0.22f * (0.5f + d.Def.Wealth / 100f);
-            return t;
+            return t * _state.Modifiers.Tax;
+        }
+
+        /// <summary>Rationing and the food laws both act here, on what the city asks for.</summary>
+        float BreadDemand()
+        {
+            var g = _state;
+            float rationing = 1f - Mathf.Clamp01(g.EffectMagnitude(DecreeEffect.Rationing));
+            return g.Population * 0.12f * g.Modifiers.FoodDemand * rationing;
         }
 
         float WorkshopIncome()
@@ -300,6 +313,7 @@ namespace Mesruiyet.Sim
             // Hunger is measured in bread handed out, not in the ledger's food total. A city
             // can be starving with a full granary, and the district feels the bread.
             float foodShare = _breadDemand <= 0.01f ? 1f : Mathf.Clamp01(_breadServed / _breadDemand);
+            _ = foodShare;
             float waterShare = Satisfaction(Res.Su, g.Population * 0.10f);
             float energyShare = Satisfaction(Res.Enerji, g.Population * 0.045f);
 
@@ -328,14 +342,17 @@ namespace Mesruiyet.Sim
                 float jobWeight = d.Def.Affinity == Faction.Isciler ? 26f : 12f;
                 target += joblessShare * jobWeight;
 
-                target += LocalPollution(d) * 1.15f;
+                target += (LocalPollution(d) + g.Modifiers.Pollution) * 1.15f;
+                // A curfew does not fix anything; it makes the street quiet for a few turns.
+                target -= g.EffectMagnitude(DecreeEffect.CalmStreets);
                 target -= LocalAmenity(d) * 0.55f;                  // parks, temples, clinics
 
                 target = Mathf.Clamp(target * intolerance, 0f, 100f);
 
                 // Trust is cheaper to lose than to earn back, so it climbs faster than it settles.
                 // Gelenek districts forgive a little quicker; it is what they are for.
-                float settle = d.Def.Affinity == Faction.Gelenek ? 4.5f : 3.5f;
+                float settle = (d.Def.Affinity == Faction.Gelenek ? 4.5f : 3.5f)
+                             + g.Modifiers.GrievanceSettle;
                 float step = target > d.Grievance ? 6f : settle;
 
                 d.Grievance = Mathf.MoveTowards(d.Grievance, target, step);
@@ -534,9 +551,16 @@ namespace Mesruiyet.Sim
                     if (b.District == d.Id) d.Housing += b.Def.Housing;
             }
 
-            _breadDemand = pop * 0.12f;
+            _breadDemand = BreadDemand();
             g.BufferTurns = ComputeBuffer();
             WriteLedgerNotes(flow);
+
+            if (GovernanceManager.Instance != null)
+            {
+                GovernanceManager.Instance.Recompute();
+                _state.Council.Apportion(_state);
+                _state.Council.Hear(_state);
+            }
 
             if (MinisterManager.Instance != null)
             {
@@ -546,6 +570,8 @@ namespace Mesruiyet.Sim
         }
     }
 }
+
+
 
 
 
