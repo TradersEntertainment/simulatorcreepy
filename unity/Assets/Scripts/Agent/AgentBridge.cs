@@ -21,6 +21,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using UnityEngine;
+using Mesruiyet.Core;
 
 namespace Mesruiyet.Agent
 {
@@ -184,6 +185,17 @@ namespace Mesruiyet.Agent
 
                 case "tax":
                     return AgentInput.Tax(c.n, out string taxWhy) ? Ok() : Err(taxWhy);
+
+                case "mute":
+                    // {"cmd":"mute","n":1} silences, n == 0 restores. Same switch the M key throws.
+                    if (AudioBus.Instance == null) return Err("ses yok");
+                    AudioBus.Instance.SetMuted(c.n != 0);
+                    return Ok();
+
+                case "grant":
+                    // Test affordance: fills the treasury and the depot so a scenario can ask
+                    // "is this parcel legal?" without also asking "can the city pay today?".
+                    return AgentInput.Grant(c.n, out string grantWhy) ? Ok() : Err(grantWhy);
 
                 case "clause":
                     return AgentInput.Clause(c.id, out string clauseWhy) ? Ok() : Err(clauseWhy);

@@ -53,6 +53,11 @@ namespace Mesruiyet.Core
         public bool IsFree(int x, int y)
             => InBounds(x, y) && Occupant[Index(x, y)] < 0 && Buildable(Tiles[Index(x, y)]);
 
+        /// <summary>Is any of the four neighbouring tiles this kind? Used for shore buildings.</summary>
+        public bool NextTo(int x, int y, TileKind kind)
+            => At(x + 1, y) == kind || At(x - 1, y) == kind
+            || At(x, y + 1) == kind || At(x, y - 1) == kind;
+
         // ---------------------------------------------------------------- generation
 
         public static CityGrid Generate(int seed = 20260802)
@@ -118,6 +123,7 @@ namespace Mesruiyet.Core
                 var def = Buildings.Get(id);
                 if (def == null || !IsFree(x, y)) return false;
                 if (def.Requires.HasValue && At(x, y) != def.Requires.Value) return false;
+                if (def.Adjacent.HasValue && !NextTo(x, y, def.Adjacent.Value)) return false;
 
                 var district = Districts.At(x, y);
                 if (district == null) return false;

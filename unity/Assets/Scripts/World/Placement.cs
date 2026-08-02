@@ -157,6 +157,14 @@ namespace Mesruiyet.World
                 return false;
             }
 
+            if (def.Adjacent.HasValue && !_grid.NextTo(x, y, def.Adjacent.Value))
+            {
+                reason = def.Adjacent.Value == TileKind.Su
+                    ? "Su kıyısına kurulmalı."
+                    : "Uygun arazinin bitişiğine kurulmalı.";
+                return false;
+            }
+
             var district = Districts.At(x, y);
             if (district == null) { reason = "Bu parsel hiçbir mahalleye ait değil."; return false; }
             if (_state.District(district.Id).Lost)
@@ -232,6 +240,12 @@ namespace Mesruiyet.World
 
             TurnResolver.Instance.ApplyPlacement(placed);
             CityRenderer.Instance.Rebuild();
+
+            if (AudioBus.Instance != null)
+            {
+                AudioBus.Instance.Hammer();
+                if (MoneyCost(def) >= 150) AudioBus.Instance.Coin();
+            }
 
             Inspected = placed;
             LastRefusal = "";

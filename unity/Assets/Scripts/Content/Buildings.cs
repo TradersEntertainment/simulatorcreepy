@@ -46,6 +46,13 @@ namespace Mesruiyet.Core
         public int Storeys = 1;
         /// <summary>Terrain this building insists on, or null for anything buildable.</summary>
         public TileKind? Requires;
+
+        /// <summary>
+        /// Terrain this building must sit next to without standing on. A shipyard belongs on the
+        /// bank, not in the river — and the river itself is never buildable, so <see cref="Requires"/>
+        /// cannot express it.
+        /// </summary>
+        public TileKind? Adjacent;
         public string Blurb;
 
         /// <summary>The politics of putting this building in that district. §3 of the design.</summary>
@@ -325,6 +332,204 @@ namespace Mesruiyet.Core
                 },
                 Blurb = "Sizi kurtaracak kadar büyük ordu, sizi devirecek kadar büyük ordudur.",
             },
+
+            // ---------------------------------------------------------------- health
+            // Grievance has always read `50 − Sağlık`, and until now nothing in the game raised
+            // Sağlık except a park at +4. Every city therefore carried a permanent penalty it
+            // could not answer. These are the answer.
+            new BuildingDef
+            {
+                Id = "klinik", Name = "Klinik", Category = "kamu", Glyph = "✚",
+                CostMoney = 110, CostMaterial = 25, Upkeep = 5, Workers = 8,
+                Health = 14,
+                Tint = C("#D6E2E6"), Storeys = 1,
+                Base = new PoliticalEffect
+                {
+                    Aydin = 4, Isci = 3, Grievance = -4,
+                    Tag = "+SAĞLIK · +AYDIN, +İŞÇİ",
+                },
+                ByDistrict = new Dictionary<DistrictId, PoliticalEffect>
+                {
+                    [DistrictId.Sanayi] = new PoliticalEffect
+                    {
+                        Isci = 7, Tuccar = -3, Grievance = -8,
+                        Tag = "SANAYİ'YE KURULDU · DUMANIN DİBİNDE, İŞÇİLER SAYDI",
+                    },
+                },
+                Blurb = "Salgın geldiğinde kaç kişi kaybedeceğinizi bu bina belirler.",
+            },
+            new BuildingDef
+            {
+                Id = "hastane", Name = "Hastane", Category = "kamu", Glyph = "✢",
+                CostMoney = 340, CostMaterial = 95, Upkeep = 14, Workers = 26,
+                Health = 34,
+                Tint = C("#E3ECEF"), Storeys = 3, Size = new Vector2Int(2, 2),
+                Base = new PoliticalEffect
+                {
+                    Economy = -3, Aydin = 7, Isci = 5, Grievance = -7,
+                    Tag = "+++SAĞLIK · PAHALI VE HERKESE AÇIK",
+                },
+                Blurb = "Şehrin en pahalı binası, ve tek bir kışta bedelini çıkaran tek bina.",
+            },
+
+            // ---------------------------------------------------------------- learning
+            new BuildingDef
+            {
+                Id = "okul", Name = "Okul", Category = "kamu", Glyph = "✎",
+                CostMoney = 95, CostMaterial = 22, Upkeep = 4, Workers = 9,
+                Education = 13,
+                Tint = C("#C6B89C"), Storeys = 2,
+                Base = new PoliticalEffect
+                {
+                    Aydin = 5, Isci = 3, Grievance = -3,
+                    Tag = "+EĞİTİM · +AYDIN",
+                },
+                ByDistrict = new Dictionary<DistrictId, PoliticalEffect>
+                {
+                    [DistrictId.Liman] = new PoliticalEffect
+                    {
+                        Isci = 8, Aydin = 4, Grievance = -7,
+                        Tag = "LİMAN'A KURULDU · ÇOCUKLAR RIHTIMDAN ÇIKTI",
+                    },
+                },
+                Blurb = "Bu turda hiçbir şey vermez. On beş yılda şehri değiştirir.",
+            },
+            new BuildingDef
+            {
+                Id = "kutuphane", Name = "Kütüphane", Category = "kamu", Glyph = "▤",
+                CostMoney = 150, CostMaterial = 38, Upkeep = 6, Workers = 6,
+                Education = 9, Culture = 8,
+                Tint = C("#A89478"), Storeys = 2,
+                Base = new PoliticalEffect
+                {
+                    Order = -4, Aydin = 8, Gelenek = -3,
+                    Tag = "+EĞİTİM, +KÜLTÜR · +AYDIN, −OTORİTE",
+                },
+                Blurb = "Neyin okunacağına karışmadığınız sürece işe yarar.",
+            },
+            new BuildingDef
+            {
+                Id = "hamam", Name = "Hamam", Category = "kamu", Glyph = "≈",
+                CostMoney = 105, CostMaterial = 30, Upkeep = 5,
+                Health = 8, Culture = 7, Output = Out(su: -6),
+                Tint = C("#B9C6C2"), Storeys = 1,
+                Base = new PoliticalEffect
+                {
+                    Gelenek = 6, Grievance = -7,
+                    Tag = "+SAĞLIK, +KÜLTÜR · +GELENEK",
+                },
+                Blurb = "Suyu çok içer, hoşnutsuzluğu ucuza söndürür.",
+            },
+
+            // ---------------------------------------------------------------- commerce
+            new BuildingDef
+            {
+                Id = "pazar", Name = "Pazar Yeri", Short = "PAZAR", Category = "sanayi", Glyph = "⌸",
+                CostMoney = 80, CostMaterial = 18, Upkeep = 3, Workers = 12,
+                Output = Out(para: 16),
+                Tint = C("#C2A15E"), Storeys = 1,
+                Base = new PoliticalEffect
+                {
+                    Economy = 3, Tuccar = 5, Grievance = -4,
+                    Tag = "+₺ · +TÜCCAR",
+                },
+                Blurb = "Ucuz gelir ve kalabalık. Halkın birbirini gördüğü yer de burasıdır.",
+            },
+            new BuildingDef
+            {
+                Id = "borsa", Name = "Serbest Borsa", Short = "BORSA", Category = "sanayi", Glyph = "⌷",
+                CostMoney = 300, CostMaterial = 70, Upkeep = 10, Workers = 18,
+                Output = Out(para: 62),
+                Tint = C("#D4B978"), Storeys = 4,
+                Base = new PoliticalEffect
+                {
+                    Economy = 9, Tuccar = 10, Isci = -6,
+                    Tag = "+++₺ · +SERMAYE · KİRALAR YÜKSELİR",
+                },
+                ByDistrict = new Dictionary<DistrictId, PoliticalEffect>
+                {
+                    [DistrictId.Liman] = new PoliticalEffect
+                    {
+                        Economy = 9, Tuccar = 10, Isci = -10, Grievance = 11,
+                        Tag = "LİMAN'A KURULDU · KİRALAR ARTTI, MAHALLE ÖDEDİ",
+                    },
+                },
+                Blurb = "Hazineyi en hızlı dolduran bina. Parayı kimin ödediği haritada görünür.",
+            },
+            new BuildingDef
+            {
+                Id = "tayinlama", Name = "Tayınlama Deposu", Short = "TAYIN", Category = "tarim", Glyph = "⊞",
+                CostMoney = 140, CostMaterial = 45, Upkeep = 8, Workers = 10,
+                Output = Out(yiyecek: 12),
+                Tint = C("#8C9E7E"), Storeys = 2,
+                Base = new PoliticalEffect
+                {
+                    Economy = -8, Tuccar = -7, Isci = 8, Grievance = -11,
+                    Tag = "PARASI OLMAYANA DA EKMEK · +EŞİTLİK, −TÜCCAR",
+                },
+                Blurb = "Kıtlıkta kimsenin aç kalmamasını sağlar. Tüccarlar bunu bir daha unutmaz.",
+            },
+
+            // ---------------------------------------------------------------- water and power
+            new BuildingDef
+            {
+                Id = "sukemeri", Name = "Su Kemeri", Short = "KEMER", Category = "altyapi", Glyph = "∩",
+                CostMoney = 230, CostMaterial = 85, Upkeep = 6,
+                Output = Out(su: 48),
+                Tint = C("#A9B3BC"), Storeys = 3,
+                Base = new PoliticalEffect { Order = 3, Tag = "+++SU" },
+                Blurb = "Kuyulardan pahalı, kuyulardan güvenilir. Kuraklık geldiğinde fark edilir.",
+            },
+            new BuildingDef
+            {
+                Id = "aritma", Name = "Arıtma", Category = "altyapi", Glyph = "◌",
+                CostMoney = 175, CostMaterial = 55, Upkeep = 7, Workers = 8,
+                Output = Out(su: 22), Health = 9, Pollution = -8,
+                Tint = C("#8FA8AE"), Storeys = 1,
+                Base = new PoliticalEffect
+                {
+                    Aydin = 5, Grievance = -4,
+                    Tag = "+SU, +SAĞLIK · −KİRLİLİK",
+                },
+                Blurb = "Kuyulardaki tadı alır. Hekim heyeti bunu ister.",
+            },
+
+            // ---------------------------------------------------------------- the hard edge
+            new BuildingDef
+            {
+                Id = "kontrol", Name = "Kontrol Noktası", Short = "KONTROL", Category = "ordu", Glyph = "⊤",
+                CostMoney = 70, CostMaterial = 20, Upkeep = 4, Workers = 6,
+                Security = 10,
+                Tint = C("#6A6E75"), Storeys = 1,
+                Base = new PoliticalEffect
+                {
+                    Order = 6, Ordu = 3, Aydin = -4, Grievance = 7,
+                    Tag = "+GÜVENLİK · +OTORİTE · KURULDUĞU MAHALLE ÖDER",
+                },
+                ByDistrict = new Dictionary<DistrictId, PoliticalEffect>
+                {
+                    [DistrictId.Universite] = new PoliticalEffect
+                    {
+                        Order = 6, Ordu = 3, Aydin = -11, Grievance = 10,
+                        Tag = "ÜNİVERSİTE'YE KURULDU · AYDINLAR BUNU BİR DAHA UNUTMAZ",
+                    },
+                },
+                Blurb = "Kaçakçılığı keser. Her sabah işe giden herkes de durdurulur.",
+            },
+            new BuildingDef
+            {
+                Id = "tersane", Name = "Tersane", Category = "ordu", Glyph = "⊿",
+                CostMoney = 280, CostMaterial = 90, Upkeep = 12, Workers = 30,
+                Output = Out(para: 20), Security = 6, Pollution = 5,
+                Adjacent = TileKind.Su,
+                Tint = C("#77828C"), Storeys = 2, Size = new Vector2Int(2, 2),
+                Base = new PoliticalEffect
+                {
+                    Order = 4, Ordu = 7, Tuccar = 4, Isci = 3,
+                    Tag = "+GARNİZON, +₺ · SUYA KURULUR",
+                },
+                Blurb = "Abluka geldiğinde limanın açık kalıp kalmayacağını bu bina belirler.",
+            },
         };
 
         static Dictionary<string, BuildingDef> _byId;
@@ -342,9 +547,11 @@ namespace Mesruiyet.Core
         /// <summary>Hotbar order, matching the reference mockup's bottom dock.</summary>
         public static readonly string[] Hotbar =
         {
-            "konut", "toplukonut", "tarla", "degirmen", "firin", "ambar",
-            "ocak", "islik", "depo", "kuyu", "santral", "dokuma",
-            "karakol", "matbaa", "park", "tapinak", "anit", "kisla", "yol",
+            "konut", "toplukonut", "tarla", "degirmen", "firin", "ambar", "tayinlama",
+            "ocak", "islik", "depo", "pazar", "borsa", "dokuma",
+            "kuyu", "sukemeri", "aritma", "santral", "yol",
+            "klinik", "hastane", "okul", "kutuphane", "hamam", "park", "tapinak", "matbaa", "anit",
+            "karakol", "kontrol", "kisla", "tersane",
         };
     }
 }

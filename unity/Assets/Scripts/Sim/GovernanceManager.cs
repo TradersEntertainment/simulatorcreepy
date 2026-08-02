@@ -113,6 +113,12 @@ namespace Mesruiyet.Sim
             g.Stock[(int)Res.Para] -= d.CostMoney;
             g.Legitimacy = Mathf.Clamp(g.Legitimacy - d.CostLegitimacy, 0, 100);
 
+            if (AudioBus.Instance != null)
+            {
+                AudioBus.Instance.Stamp();
+                if (d.CostMoney >= 100) AudioBus.Instance.Coin();
+            }
+
             g.ShiftAxes(d.Order, d.Economy);
             g.ShiftFaction(Faction.Tuccarlar, d.Tuccar);
             g.ShiftFaction(Faction.Isciler, d.Isci);

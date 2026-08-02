@@ -95,6 +95,17 @@ namespace Mesruiyet.Sim
 
             g.Legitimacy = Mathf.Clamp(
                 g.Legitimacy + LegitimacyDelta(), 0, 100);
+
+            // The turn's own sound. A telegraph tick for the reports, paper for the front page,
+            // a bell when a card is waiting, and the drum only while the garrison is counting.
+            var audio = AudioBus.Instance;
+            if (audio != null)
+            {
+                audio.Telegraph();
+                audio.Rustle();
+                if (g.PendingEvent != null) audio.Bell();
+                if (g.CoupCountdown > 0) audio.Drum();
+            }
         }
 
         /// <summary>

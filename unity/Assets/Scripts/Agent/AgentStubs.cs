@@ -163,6 +163,31 @@ namespace Mesruiyet.Agent
             Str(sb, "pendingEvent", g.PendingEvent != null ? g.PendingEvent.Id : ""); sb.Append(',');
             Str(sb, "lastEvent", g.LastEventOutcome); sb.Append(',');
 
+            // Audio cannot be verified by listening in an unattended run, so it reports itself:
+            // how many clips were synthesized, and what the two ambient voices are currently
+            // doing. A drone that never responds to grievance is a dead system, silently.
+            var audio = AudioBus.Instance;
+            sb.Append("\"audio\":{");
+            Num(sb, "clips", audio != null ? audio.ClipCount : 0); sb.Append(',');
+            Num(sb, "drone", audio != null ? audio.DroneLevel : 0f); sb.Append(',');
+            Num(sb, "murmur", audio != null ? audio.MurmurLevel : 0f); sb.Append(',');
+            sb.Append("\"muted\":").Append(audio != null && audio.Muted ? "true" : "false");
+            sb.Append("},");
+
+            // Which cards this run has actually drawn. A deck that reads well on paper can still
+            // deal the same four crises all game once its conditions narrow, and that is only
+            // visible from the outside.
+            Num(sb, "deckSize", Events.All.Length); sb.Append(',');
+            sb.Append("\"firedEvents\":[");
+            bool firstFired = true;
+            foreach (var id in g.FiredEvents)
+            {
+                if (!firstFired) sb.Append(',');
+                firstFired = false;
+                sb.Append('"').Append(id).Append('"');
+            }
+            sb.Append("],");
+
             sb.Append("\"loans\":[");
             for (int i = 0; i < g.Loans.Count; i++)
             {
@@ -366,6 +391,28 @@ namespace Mesruiyet.Agent
             if (state == null) { message = "state not bound"; return false; }
             state.Threat = Mathf.Clamp(value, 0, 100);
             message = $"tehdit {state.Threat:0}";
+            return true;
+        }
+
+        /// <summary>
+        /// Top up the treasury and the construction depot. Test affordance: whether a building
+        /// can be placed on a given parcel and whether the city can currently afford it are two
+        /// different questions, and a scenario checking the first must not be answering the second.
+        /// </summary>
+        public static bool Grant(int value, out string message)
+        {
+            var state = GameState.Current;
+            if (state == null) { message = "state not bound"; return false; }
+
+            int amount = value > 0 ? value : 20000;
+            state.Stock[(int)Res.Para] += amount;
+
+            // Overfill the depot rather than raising its capacity: capacity is derived from the
+            // workshops standing, so writing it here would be undone by the next tick anyway.
+            var depot = state.MaterialChain.Final;
+            depot.Stock += amount;
+
+            message = $"hazine {state.Stock[(int)Res.Para]:0} · depo {depot.Stock:0}";
             return true;
         }
 

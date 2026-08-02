@@ -246,7 +246,9 @@ namespace Mesruiyet.Core
         public int OrderFloor = -100, OrderCeiling = 100;
         public int EconomyFloor = -100, EconomyCeiling = 100;
 
-        public int DecreeAllowance => Decrees.PerTurn + Modifiers.ExtraDecrees;
+        // Laws can hand decrees back as well as grant them, so this floors at zero: none is a
+        // legitimate position to be in, below none is a counter running backwards.
+        public int DecreeAllowance => Mathf.Max(0, Decrees.PerTurn + Modifiers.ExtraDecrees);
 
         public float EffectMagnitude(DecreeEffect kind)
         {

@@ -193,6 +193,62 @@ namespace Mesruiyet.Core
                 Economy = 6, Tuccar = 4, Aydin = -4, Grievance = 3,
                 Effect = DecreeEffect.None, Magnitude = 140,
             },
+
+            new DecreeDef
+            {
+                Id = "gumruk_indirimi", Name = "Gümrük İndirimi",
+                Blurb = "Gümrük bir süre düşürülür. Mal akar, hazine daha az alır.",
+                CostMoney = 60, Economy = 5, Tuccar = 6, Isci = -3,
+                Effect = DecreeEffect.ImportMaterial, Magnitude = 90,
+            },
+            new DecreeDef
+            {
+                Id = "istikraz", Name = "İç İstikraz",
+                Blurb = "Şehrin kendi eşrafından borç alınır. Bugün para, yarın minnet.",
+                Economy = 4, Tuccar = -4, Gelenek = 2, CostLegitimacy = 3,
+                Effect = DecreeEffect.None, Magnitude = 320,
+            },
+            new DecreeDef
+            {
+                Id = "hekim_seferberligi", Name = "Hekim Seferberliği",
+                Blurb = "Bütün hekimler mahallelere dağıtılır. Pahalı ve etkili.",
+                CostMoney = 220, Economy = -4, Aydin = 5, Isci = 4, Grievance = -8,
+            },
+            new DecreeDef
+            {
+                Id = "yol_calismasi", Name = "Yol Çalışması Buyruğu",
+                Blurb = "İşgücü sokaklara verilir. Yollar açılır, atölyeler bir tur boşalır.",
+                Order = 3, Isci = 2, Tuccar = 3,
+                Effect = DecreeEffect.LabourSurge, Magnitude = -35, Duration = 2,
+            },
+            new DecreeDef
+            {
+                Id = "genel_af", Name = "Genel Af",
+                Blurb = "Tutukluların bir kısmı salıverilir. Sokak rahatlar, garnizon somurtur.",
+                Order = -6, Aydin = 7, Isci = 4, Ordu = -5, Grievance = -7,
+                CostLegitimacy = 3,
+            },
+            new DecreeDef
+            {
+                Id = "olaganustu_arama", Name = "Genel Arama Buyruğu",
+                Blurb = "Haneler aranır. Kaçak ve silah bulunur, mahalle bunu hatırlar.",
+                Order = 9, Ordu = 5, Aydin = -8, Isci = -5, Grievance = 8,
+                Effect = DecreeEffect.None, Magnitude = 180,
+            },
+            new DecreeDef
+            {
+                Id = "sansur_talimati", Name = "Telgraf Denetimi",
+                Blurb = "Giden gelen telgraf okunur. Dışarı sızan haber azalır.",
+                Order = 7, Aydin = -7, Ordu = 3,
+                Effect = DecreeEffect.PressDirective, Magnitude = 0.1f, Duration = 6,
+            },
+            new DecreeDef
+            {
+                Id = "bayram", Name = "Bayram İlanı",
+                Blurb = "Üç gün tatil. Kimse çalışmaz, herkes biraz daha iyi hisseder.",
+                CostMoney = 130, Gelenek = 6, Isci = 3, Grievance = -9,
+                Effect = DecreeEffect.LabourSurge, Magnitude = -25, Duration = 1,
+            },
         };
 
         public static DecreeDef Get(string id)

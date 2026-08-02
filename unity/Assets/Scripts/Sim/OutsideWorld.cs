@@ -181,6 +181,16 @@ namespace Mesruiyet.Sim
                 if (def.Once && g.FiredEvents.Contains(def.Id)) continue;
                 if (g.Threat < def.MinThreat) continue;
                 if (g.AverageGrievance < def.MinGrievance) continue;
+
+                // Was declared and never read, so cards written to land during a shortage were
+                // arriving in the middle of a surplus and reading as nonsense.
+                if (def.NeedsFoodShortage && g.BufferTurns > 3f) continue;
+
+                // A card that just fired is not news. Without this the deck reruns the same
+                // three crises whenever their conditions stay true, which is exactly when the
+                // conditions are most interesting.
+                if (_recent.Contains(def.Id)) continue;
+
                 pool.Add(def);
                 total += def.Weight;
             }
@@ -195,10 +205,18 @@ namespace Mesruiyet.Sim
             Fire(pool[pool.Count - 1]);
         }
 
+        /// <summary>Ids drawn lately, oldest first. Keeps the deck from repeating itself.</summary>
+        readonly List<string> _recent = new List<string>();
+        const int RecentMemory = 8;
+
         void Fire(EventDef def)
         {
             _state.PendingEvent = def;
             _state.FiredEvents.Add(def.Id);
+
+            _recent.Add(def.Id);
+            if (_recent.Count > RecentMemory) _recent.RemoveAt(0);
+
             Changed?.Invoke();
         }
 
@@ -292,6 +310,34 @@ namespace Mesruiyet.Sim
 
                 case EventEffect.Tribute:
                     return "Haraç ödendi. Elçi memnun ayrıldı; memnuniyeti bir yıl sürer.";
+
+                case EventEffect.Plague:
+                {
+                    // Taken out of the districts rather than off a total, because the labour pool
+                    // is rebuilt from district populations and the shortfall has to be felt there.
+                    int each = Mathf.RoundToInt(opt.Magnitude / g.Districts.Length);
+                    int lost = 0;
+                    foreach (var d in g.Districts)
+                    {
+                        int take = Mathf.Min(each, Mathf.Max(0, d.Population - 10));
+                        d.Population -= take;
+                        lost += take;
+                        d.Grievance = Mathf.Clamp(d.Grievance + 5, 0, 100);
+                    }
+                    return $"{lost} kişi kaybedildi. Mahalleler bunu tek tek saydı.";
+                }
+
+                case EventEffect.Material:
+                {
+                    var mat = g.MaterialChain;
+                    var last = mat.Stages[mat.Stages.Length - 1];
+                    float before = last.Stock;
+                    last.Stock = Mathf.Clamp(last.Stock + opt.Magnitude, 0, last.Capacity);
+                    float moved = last.Stock - before;
+                    return moved >= 0
+                        ? $"Depoya {moved:0} malzeme girdi."
+                        : $"Depodan {-moved:0} malzeme çıktı. İnşaat bunu üç tur sonra hisseder.";
+                }
 
                 default:
                     if (opt.Magnitude > 0) g.Stock[(int)Res.Para] += opt.Magnitude;

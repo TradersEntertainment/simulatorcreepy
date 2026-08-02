@@ -71,6 +71,125 @@ namespace Mesruiyet.Core
             }
         }
 
+        // ---------------------------------------------------------------- the diegetic tutorial
+
+        /// <summary>One onboarding telegram: a turn, whose desk it comes from, and the text.</summary>
+        public sealed class OnboardingLine
+        {
+            public int Turn;
+            public Domain Domain;
+            public string Text;
+        }
+
+        /// <summary>
+        /// There are no tutorial screens. The cabinet teaches the game by doing its job — one
+        /// system and one piece of the HUD per telegram, one or two a turn, across the ten turns
+        /// that carry no crises. The design reason matters: this establishes the ministers as the
+        /// player's information channel and teaches reliance on them *before* the player ever
+        /// learns that some of them shade the numbers. The tutorial and the trap are one content.
+        /// </summary>
+        public static readonly OnboardingLine[] Onboarding =
+        {
+            new OnboardingLine
+            {
+                Turn = 1, Domain = Domain.Maliye,
+                Text = "Sayın Vali, tepedeki şeritte altı rakam var; en soldaki hazinedir. " +
+                       "Altındaki küçük sayı o turda ne kazanıp ne harcadığınızdır. " +
+                       "Birikimi değil, o küçük sayıyı izleyin.",
+            },
+            new OnboardingLine
+            {
+                Turn = 1, Domain = Domain.Tarim,
+                Text = "Sağ üstteki GÜVENLİK PAYI kutusu, bir aksilik olursa şehrin kaç tur " +
+                       "dayanacağını söyler. Dokuz turdayız. Bu sayı benim en çok önemsediğim şeydir.",
+            },
+            new OnboardingLine
+            {
+                Turn = 2, Domain = Domain.Imar,
+                Text = "İnşaat parayla değil depodaki malzemeyle olur; alttaki yapı şeridinden " +
+                       "seçtiğinizde ikisinin de fiyatı görünür. Depo boşsa para işe yaramaz.",
+            },
+            new OnboardingLine
+            {
+                Turn = 2, Domain = Domain.Halk,
+                Text = "Haritadaki mahalle adlarının altında birer hoşnutsuzluk rakamı var. " +
+                       "Yeşilse mesele yok, kızarırsa o mahalleye gitmenizi tavsiye ederim.",
+            },
+            new OnboardingLine
+            {
+                Turn = 3, Domain = Domain.Guvenlik,
+                Text = "Sağ alttaki DIŞ DÜNYA kutusunda Mersa'nın tehdidi ve garnizonumuz yazar. " +
+                       "Tehdit yükselirken garnizon yerinde sayıyorsa, o farkı ben kapatamam.",
+            },
+            new OnboardingLine
+            {
+                Turn = 3, Domain = Domain.Maliye,
+                Text = "BÜTÇE düğmesinden vergi oranını ve beş kalemin ödeneğini ayarlarsınız. " +
+                       "Vergiyi dörtte birin üstüne çıkarırsanız bunu her mahallede duyarsınız.",
+            },
+            new OnboardingLine
+            {
+                Turn = 4, Domain = Domain.Tarim,
+                Text = "Sağdaki TEDARİK ZİNCİRLERİ kutusuna bakın: tarla, değirmen, fırın. " +
+                       "Halk yalnızca fırındakini yer. Ambardaki toplam büyük görünebilir; " +
+                       "önemli olan en sağdaki kutudur.",
+            },
+            new OnboardingLine
+            {
+                Turn = 5, Domain = Domain.Halk,
+                Text = "Bugün anayasa yazılıyor. Seçeceğiniz üç madde bütün dönemi bağlar ve " +
+                       "bazıları eksenlerinize duvar çeker. Sonradan değiştirilemez.",
+            },
+            new OnboardingLine
+            {
+                Turn = 6, Domain = Domain.Imar,
+                Text = "Yol da bir yapıdır. Mahalle büyürken yol açmazsanız sokaklar tıkanır, " +
+                       "ve tıkalı sokak atölyeye gidemeyen işçi demektir.",
+            },
+            new OnboardingLine
+            {
+                Turn = 7, Domain = Domain.Maliye,
+                Text = "Şeridin en solunda MEŞRUİYET yazar. Kanunları zorla geçirirken ve " +
+                       "skandal örtbas ederken oradan harcarsınız. Sıfırlanırsa gerisi konuşulmaz.",
+            },
+            new OnboardingLine
+            {
+                Turn = 8, Domain = Domain.Guvenlik,
+                Text = "Bazı rakamların yanında kırmızı bir soru işareti göreceksiniz. " +
+                       "O, size kesin bir sayı yerine bir aralık verildiği anlamına gelir. " +
+                       "Kimin verdiğini de sağdaki BAKANLAR sırasından görürsünüz.",
+            },
+            new OnboardingLine
+            {
+                Turn = 9, Domain = Domain.Tarim,
+                Text = "Meclisin fısıltıları benim telgraflarımdan bağımsızdır, efendim. " +
+                       "Bir vekil ambarın boş olduğunu söylüyorsa, ben ne yazarsam yazayım, " +
+                       "ambara bakın.",
+            },
+            new OnboardingLine
+            {
+                Turn = 10, Domain = Domain.Halk,
+                Text = "Yarından itibaren olay kartları gelmeye başlar. Her birinin yavaş ve " +
+                       "pahalı bir cevabı, bir de hızlı olanı vardır. Hangisini seçebileceğinizi " +
+                       "bugün biriktirdiğiniz belirler.",
+            },
+            new OnboardingLine
+            {
+                Turn = 10, Domain = Domain.Imar,
+                Text = "Bir bakanı görevden alabilirsiniz. Karşınıza iki aday çıkar: biri " +
+                       "işini bilir ve sizi meclise şikâyet eder, diğeri hiç itiraz etmez. " +
+                       "İkisi de aynı maaşı alır.",
+            },
+        };
+
+        /// <summary>The onboarding line for this domain on this turn, or null.</summary>
+        public static OnboardingLine LessonFor(int turn, Domain domain)
+        {
+            foreach (var l in Onboarding)
+                if (l.Turn == turn && l.Domain == domain) return l;
+            return null;
+        }
+
         // ---------------------------------------------------------------- the candidates
         //
         // Two per domain per slot: one loyalist, one expert. The pool is deliberately small and

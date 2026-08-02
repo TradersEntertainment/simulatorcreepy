@@ -1743,7 +1743,9 @@ namespace Mesruiyet.UI
             _selectionCard = UiKit.Glass().Pad(15, 17);
             _selectionCard.style.position = Position.Absolute;
             _selectionCard.style.left = 24;
-            _selectionCard.style.bottom = 128;
+            // Clears the build dock, which is two rows tall now that the hotbar carries
+            // thirty-one buildings. At 128 the dock cut the bottom line off this card.
+            _selectionCard.style.bottom = 190;
             _selectionCard.style.width = 340;
             _root.Add(_selectionCard);
         }
@@ -1965,6 +1967,12 @@ namespace Mesruiyet.UI
             var tools = UiKit.Glass().Pad(9, 8).Margin(right: 8);
             tools.style.flexDirection = FlexDirection.Row;
             tools.style.flexShrink = 0;
+            // Thirty-one buildings will not sit on one line without shrinking the captions past
+            // reading. Cap the panel and let it form two rows of its own, so the instruments and
+            // TURU BİTİR keep their place beside it instead of being shoved onto another line.
+            tools.style.maxWidth = 900;
+            tools.style.flexWrap = Wrap.Wrap;
+            tools.style.justifyContent = Justify.Center;
 
             foreach (string id in Buildings.Hotbar)
             {
@@ -1977,7 +1985,7 @@ namespace Mesruiyet.UI
                 tile.style.paddingTop = 8; tile.style.paddingBottom = 7;
                 tile.style.paddingLeft = 0; tile.style.paddingRight = 0;
                 tile.style.marginRight = 3; tile.style.marginLeft = 0;
-                tile.style.marginTop = 0; tile.style.marginBottom = 0;
+                tile.style.marginTop = 1; tile.style.marginBottom = 1;
                 tile.style.backgroundColor = Color.clear;
                 // Captions are clipped rather than allowed to spill: "ENERJİ SANTRALİ" is wider
                 // than any sane tile, and neighbouring labels running into each other is worse

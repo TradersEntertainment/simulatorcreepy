@@ -72,6 +72,11 @@ namespace Mesruiyet.Core
             var placement = gameObject.AddComponent<Placement>();
             placement.Init(grid, state, camera);
 
+            // Synthesized at startup; no audio file ships with the project. Bound to the true
+            // state, because the drone and the crowd are not reports.
+            var audio = gameObject.AddComponent<AudioBus>();
+            audio.Bind(state);
+
             var hud = BuildHud(state);
 
             // The agent plays through the same UI a human does — no private back door.

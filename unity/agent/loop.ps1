@@ -46,9 +46,23 @@ New-Item -ItemType Directory -Force -Path "$agent\logs","$agent\shots" | Out-Nul
 # unity/Assets is the tracked source; the project folder holds a working copy. Syncing here
 # rather than by hand removes the worst failure in this loop: building the previous edit and
 # spending ten minutes debugging a bug you already fixed.
+#
+# It has to mirror, not merely copy: `Copy-Item` never removes anything, so a file renamed or
+# moved in the source left its old self behind in the working copy and the build failed with
+# "already defines a member" from a class that exists once on disk. Scripts and shaders are
+# mirrored; Unity's own Library/ and the .meta files it regenerates are left alone.
 $src = Join-Path $root "Assets"
 if (Test-Path $src) {
-    Copy-Item -Recurse -Force (Join-Path $src "*") (Join-Path $game "Assets")
+    $dst = Join-Path $game "Assets"
+    $stale = Get-ChildItem -Recurse -File -Path $dst -Include *.cs,*.shader,*.hlsl -ErrorAction SilentlyContinue |
+             Where-Object { -not (Test-Path (Join-Path $src $_.FullName.Substring($dst.Length + 1))) }
+    foreach ($f in $stale) {
+        Write-Host "  [senkron] kaynakta yok, siliniyor: $($f.FullName.Substring($dst.Length + 1))" -ForegroundColor DarkYellow
+        Remove-Item $f.FullName -Force
+        if (Test-Path "$($f.FullName).meta") { Remove-Item "$($f.FullName).meta" -Force }
+    }
+
+    Copy-Item -Recurse -Force (Join-Path $src "*") $dst
     Write-Host "[loop] kaynaklar senkronlandı" -ForegroundColor DarkGray
 }
 
@@ -866,6 +880,220 @@ switch ($Scenario) {
         Wait-Turn ($t + 40) 300 | Out-Null
         Shot "40tur.png"
         $state = Send-Cmd '{"cmd":"state"}'
+    }
+
+    # Does the deck actually deal a varied game? A card table can look full on paper and still
+    # hand out the same four crises all run, because the conditions that gate the interesting
+    # cards are the conditions that stay true. Only a full term shows it.
+    # Audio ships with no files: every clip is synthesized at startup. An unattended run cannot
+    # listen, so the bus reports itself — how many clips exist, and whether the two ambient
+    # voices actually track the city. A drone wired to nothing sounds exactly like a drone.
+    "ses" {
+        Write-Host "`n[loop] SES:" -ForegroundColor Cyan
+
+        function Field([string] $json, [string] $key) {
+            if ($json -match "`"$key`":(-?[\d.]+)") { return [double]$Matches[1] }
+            return [double]::NaN
+        }
+        function Audio([string] $json, [string] $key) {
+            if ($json -match "`"audio`":\{[^}]*`"$key`":(-?[\d.]+)") { return [double]$Matches[1] }
+            return [double]::NaN
+        }
+        $ok = $true
+        function Check([bool] $pass, [string] $label) {
+            if ($pass) { Write-Host "  ✔ $label" -ForegroundColor Green }
+            else { Write-Host "  ✘ $label" -ForegroundColor Red; $script:ok = $false }
+        }
+
+        $t = Get-Turn
+        Send-Cmd '{"cmd":"endturn","n":2}' | Out-Null
+        Wait-Turn ($t + 2) 40 | Out-Null
+        Start-Sleep -Milliseconds 1200
+        $calm = Send-Cmd '{"cmd":"state"}'
+
+        Write-Host ("  sakin şehir : klip {0:N0} · uğultu {1:N2} · kalabalık {2:N2} · hoşnutsuzluk {3:N1}" -f `
+                    (Audio $calm "clips"), (Audio $calm "drone"), (Audio $calm "murmur"), `
+                    (Field $calm "enYuksekHosnutsuzluk"))
+        Check ((Audio $calm "clips") -ge 9) "bütün sesler çalışma anında sentezlendi"
+        Check ((Audio $calm "drone") -gt 0) "uğultu çalıyor"
+        Check ((Audio $calm "murmur") -lt 0.05) "sakin şehirde kalabalık sesi yok"
+
+        # Same escalation the crowd scenario uses: a struck quarter plus decrees nobody likes.
+        Write-Host "`n[loop] hoşnutsuzluk tırmandırılıyor..." -ForegroundColor Cyan
+        foreach ($id in @("dokuma","santral","tarla","kuyu")) {
+            Send-Cmd ('{"cmd":"block","id":"' + $id + '","n":1}') | Out-Null
+        }
+        $guard = 0
+        while ($guard -lt 14) {
+            Send-Cmd '{"cmd":"decree","id":"serbest_fiyat"}' | Out-Null
+            Send-Cmd '{"cmd":"decree","id":"imar_affi"}' | Out-Null
+            $t = Get-Turn
+            $s = Send-Cmd '{"cmd":"state"}'
+            if ($s -notmatch '"pendingEvent":""') { Send-Cmd '{"cmd":"event","n":2}' | Out-Null }
+            if ($s -match '"electionPending":true') { Send-Cmd '{"cmd":"election","id":"ertele"}' | Out-Null }
+            if ($s -match '"charterPending":true') {
+                Send-Cmd '{"cmd":"clause","id":"herkese_ekmek"}'   | Out-Null
+                Send-Cmd '{"cmd":"clause","id":"soz_serbest"}'     | Out-Null
+                Send-Cmd '{"cmd":"clause","id":"meclis_ustundur"}' | Out-Null
+            }
+            Send-Cmd '{"cmd":"endturn","n":1}' | Out-Null
+            Wait-Turn ($t + 1) 40 | Out-Null
+            if ((Audio (Send-Cmd '{"cmd":"state"}') "murmur") -gt 0.05) { break }
+            $guard++
+        }
+
+        Start-Sleep -Milliseconds 1500
+        $angry = Send-Cmd '{"cmd":"state"}'
+        Write-Host ("  öfkeli şehir: uğultu {0:N2} · kalabalık {1:N2} · hoşnutsuzluk {2:N1}" -f `
+                    (Audio $angry "drone"), (Audio $angry "murmur"), (Field $angry "enYuksekHosnutsuzluk"))
+
+        Check ((Audio $angry "drone") -gt (Audio $calm "drone")) "uğultu hoşnutsuzlukla kalınlaştı"
+        Check ((Audio $angry "murmur") -gt (Audio $calm "murmur")) "kalabalık sesi ayaklanmadan önce kabardı"
+
+        Send-Cmd '{"cmd":"mute","n":1}' | Out-Null
+        Start-Sleep -Milliseconds 300
+        $muted = Send-Cmd '{"cmd":"state"}'
+        Check ($muted -match '"muted":true') "susturma çalışıyor"
+        Send-Cmd '{"cmd":"mute","n":0}' | Out-Null
+
+        Shot "ses.png"
+        $state = $angry
+        if (-not $ok) { $chainBroken = $true }
+    }
+
+    # Every building must actually be placeable. A table entry that no tile in the city can
+    # satisfy is a dead hotbar tile, and the only way to find one is to try to build it.
+    "yapilar" {
+        Write-Host "`n[loop] YAPILAR:" -ForegroundColor Cyan
+
+        function Field([string] $json, [string] $key) {
+            if ($json -match "`"$key`":(-?[\d.]+)") { return [double]$Matches[1] }
+            return [double]::NaN
+        }
+        $ok = $true
+        function Check([bool] $pass, [string] $label) {
+            if ($pass) { Write-Host "  ✔ $label" -ForegroundColor Green }
+            else { Write-Host "  ✘ $label" -ForegroundColor Red; $script:ok = $false }
+        }
+
+        # The city indices are recomputed on the tick, not on placement, so the baseline has to be
+        # read after a turn has actually run — otherwise both readings are the untouched default.
+        $t = Get-Turn
+        Send-Cmd '{"cmd":"endturn","n":1}' | Out-Null
+        Wait-Turn ($t + 1) 40 | Out-Null
+
+        # Fund the experiment: everything at once costs far more than a founding treasury holds,
+        # and this scenario is asking whether a parcel is legal, not whether the city is rich.
+        Send-Cmd '{"cmd":"grant","n":40000}' | Out-Null
+        $before = Send-Cmd '{"cmd":"state"}'
+        $healthBefore = Field $before "saglik"
+
+        $ids = @("konut","toplukonut","tarla","degirmen","firin","ambar","tayinlama",
+                 "ocak","islik","depo","pazar","borsa","dokuma",
+                 "kuyu","sukemeri","aritma","santral","yol",
+                 "klinik","hastane","okul","kutuphane","hamam","park","tapinak","matbaa","anit",
+                 "karakol","kontrol","kisla","tersane")
+
+        # Sweep the map for each one rather than guessing a tile: a refusal only counts if every
+        # parcel refuses it.
+        $script:placed = 0
+        $failed = @()
+        foreach ($id in $ids) {
+            $done = $false
+            foreach ($x in 4..40) {
+                if ($done) { break }
+                foreach ($y in 3..26) {
+                    $reply = Send-Cmd ('{"cmd":"build","id":"' + $id + '","x":' + $x + ',"y":' + $y + '}')
+                    if ($reply -match '"ok":true') { $done = $true; $script:placed++; break }
+                }
+            }
+            if (-not $done) { $failed += $id }
+        }
+
+        $t = Get-Turn
+        Send-Cmd '{"cmd":"endturn","n":1}' | Out-Null
+        Wait-Turn ($t + 1) 60 | Out-Null
+
+        $after = Send-Cmd '{"cmd":"state"}'
+        $healthAfter = Field $after "saglik"
+
+        Write-Host ("  {0}/{1} yapı haritaya kondu" -f $script:placed, $ids.Count)
+        if ($failed.Count) {
+            Write-Host ("  kurulamayan: {0}" -f ($failed -join ', ')) -ForegroundColor Red
+        }
+        Write-Host ("  sağlık {0:N1} -> {1:N1}" -f $healthBefore, $healthAfter)
+
+        Check ($ids.Count -ge 30) "yapı tablosu tasarım çıtasında (en az 30)"
+        Check ($failed.Count -eq 0) "her yapının kurulabileceği bir parsel var"
+        Check ($healthAfter -gt $healthBefore + 5) "sağlık binaları endeksi gerçekten yükseltti"
+
+        Shot "yapilar.png"
+        $state = $after
+        if (-not $ok) { $chainBroken = $true }
+    }
+
+    "deste" {
+        Write-Host "`n[loop] DESTE — 55 tur oynanıyor, her kart cevaplanıyor:" -ForegroundColor Cyan
+
+        function Field([string] $json, [string] $key) {
+            if ($json -match "`"$key`":(-?[\d.]+)") { return [double]$Matches[1] }
+            return [double]::NaN
+        }
+        $ok = $true
+        function Check([bool] $pass, [string] $label) {
+            if ($pass) { Write-Host "  ✔ $label" -ForegroundColor Green }
+            else { Write-Host "  ✘ $label" -ForegroundColor Red; $script:ok = $false }
+        }
+
+        $t = Get-Turn
+        $script:answered = 0
+        $ended = ""
+        while ($t -lt 55) {
+            $s = Send-Cmd '{"cmd":"state"}'
+
+            # Rotating the answers walks the axes hard, so this run can genuinely collapse before
+            # turn 55. That is the game working; the deck is still measurable from what it dealt.
+            if ($s -match '"isOver":true') {
+                if ($s -match '"ending":"([^"]*)"') { $ended = $Matches[1] }
+                Write-Host ("  koşu {0}. turda bitti: {1}" -f $t, $ended) -ForegroundColor DarkYellow
+                break
+            }
+
+            if ($s -match '"charterPending":true') {
+                Send-Cmd '{"cmd":"clause","id":"herkese_ekmek"}'   | Out-Null
+                Send-Cmd '{"cmd":"clause","id":"soz_serbest"}'     | Out-Null
+                Send-Cmd '{"cmd":"clause","id":"meclis_ustundur"}' | Out-Null
+            }
+            if ($s -match '"electionPending":true') { Send-Cmd '{"cmd":"election","id":"yap"}' | Out-Null }
+            if ($s -notmatch '"pendingEvent":""') {
+                Send-Cmd ('{"cmd":"event","n":' + ($script:answered % 3) + '}') | Out-Null
+                $script:answered++
+            }
+
+            Send-Cmd '{"cmd":"endturn","n":1}' | Out-Null
+            Wait-Turn ($t + 1) 40 | Out-Null
+            $t = Get-Turn
+        }
+
+        $state = Send-Cmd '{"cmd":"state"}'
+        Shot "deste.png"
+
+        $deck = [int](Field $state "deckSize")
+        $fired = @()
+        if ($state -match '"firedEvents":\[(.*?)\]') {
+            $fired = ($Matches[1] -split ',') | Where-Object { $_ -ne '' }
+        }
+        $distinct = $fired.Count
+
+        Write-Host ("  deste {0} kart · bir dönemde {1} ayrı kart geldi · {2} kart cevaplandı" `
+                    -f $deck, $distinct, $script:answered)
+        Write-Host ("  gelenler: {0}" -f (($fired -replace '"','') -join ', ')) -ForegroundColor DarkGray
+
+        Check ($deck -ge 50) "deste tasarım çıtasında (en az 50 kart)"
+        Check ($script:answered -ge 10) "bir dönem boyunca kriz akışı var"
+        Check ($distinct -ge 12) "deste kendini tekrar etmiyor"
+
+        if (-not $ok) { $chainBroken = $true }
     }
 
     default { throw "Bilinmeyen senaryo: $Scenario" }

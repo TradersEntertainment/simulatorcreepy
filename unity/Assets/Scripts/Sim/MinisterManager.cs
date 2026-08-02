@@ -84,10 +84,19 @@ namespace Mesruiyet.Sim
                 var m = g.Cabinet.Ministers[i];
                 if (m == null) continue;
 
-                // Turns 1–10: they introduce themselves, one domain at a time, so the player
-                // meets the cabinet before they ever have reason to doubt it.
+                // Turns 1–10 are the diegetic tutorial. First the minister introduces themselves,
+                // so the player meets the cabinet before they have reason to doubt it; after that
+                // the onboarding table teaches one system and one piece of the HUD per telegram.
+                // Only five of those ten turns carried anything before, which left the second half
+                // of the learning window silent.
                 bool introTurn = g.Turn <= 10 && g.Turn == i * 2 + 1;
-                m.Telegram = introTurn ? m.Def.Intro : Report(m);
+                var lesson = g.Turn <= 10 && !introTurn
+                    ? Ministers.LessonFor(g.Turn, (Domain)i)
+                    : null;
+
+                m.Telegram = introTurn ? m.Def.Intro
+                           : lesson != null ? lesson.Text
+                           : Report(m);
                 g.Telegrams.Add($"{Ministers.DomainNames[i]}|{m.Name}|{m.Telegram}");
             }
         }
