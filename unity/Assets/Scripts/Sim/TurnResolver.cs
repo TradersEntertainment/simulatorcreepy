@@ -59,6 +59,9 @@ namespace Mesruiyet.Sim
             g.Turn++;
 
             Staff();
+            SurveyChains();
+            TickChains();
+
             var flow = Produce();
             Consume(flow);
             ApplyFlow(flow);
@@ -89,12 +92,13 @@ namespace Mesruiyet.Sim
                 if (supplied > 0) pool += Mathf.RoundToInt(supplied);
             }
             // Nobody works who isn't housed, and the population caps what the housing offers.
-            pool = Mathf.Min(pool, Mathf.RoundToInt(g.Population * 0.62f));
+            pool = Mathf.Min(pool, Mathf.RoundToInt(g.Population * 0.68f));
             g.LabourPool = pool;
 
             int used = 0;
             foreach (var b in g.Buildings)
             {
+                if (b.Disabled) { b.Staffed = false; continue; }        // strike, fire, sabotage
                 if (b.Def.Workers <= 0) { b.Staffed = true; continue; }
                 if (used + b.Def.Workers <= pool)
                 {
@@ -136,12 +140,31 @@ namespace Mesruiyet.Sim
             return flow;
         }
 
+        void SurveyChains()
+        {
+            foreach (var c in _state.Chains) c.Survey(_state);
+        }
+
+        void TickChains()
+        {
+            foreach (var c in _state.Chains) c.Tick();
+        }
+
+        /// <summary>
+        /// The city eats bread, not "food". Grain sitting in a granary behind a stopped mill
+        /// feeds nobody — but it still counts towards the Yiyecek line in the ledger, which is
+        /// exactly the blind spot the design is built around.
+        /// </summary>
+        float _breadDemand, _breadServed;
+
         void Consume(float[] flow)
         {
             var g = _state;
             int pop = g.Population;
 
-            flow[(int)Res.Yiyecek] -= pop * 0.12f;
+            _breadDemand = pop * 0.12f;
+            _breadServed = g.FoodChain.Draw(_breadDemand);
+
             flow[(int)Res.Su] -= pop * 0.10f;
             flow[(int)Res.Enerji] -= pop * 0.045f;
         }
@@ -149,12 +172,114 @@ namespace Mesruiyet.Sim
         void ApplyFlow(float[] flow)
         {
             var g = _state;
+
             for (int r = 0; r < 6; r++)
             {
                 if (r == (int)Res.Isgucu) { g.Flow[r] = g.LabourPool - g.LabourUsed; continue; }
+                if (r == (int)Res.Yiyecek || r == (int)Res.Malzeme) continue;   // chains own these
+
                 g.Flow[r] = flow[r];
                 g.Stock[r] = Mathf.Max(0, g.Stock[r] + flow[r]);
             }
+
+            // Chain totals are written back into the ledger, so the headline figure is the sum
+            // of every stage — the number that looks healthy while the middle is blocked.
+            foreach (var c in g.Chains)
+            {
+                int r = (int)c.Def.Ledger;
+                float before = g.Stock[r];
+                g.Stock[r] = c.Total;
+                g.Flow[r] = g.Stock[r] - before;
+            }
+
+            WriteLedgerNotes(flow);
+        }
+
+        /// <summary>
+        /// Spell out where each line came from. §14: a player who cannot see why a number moved
+        /// cannot learn the game, and this game is only worth playing if it can be learned.
+        /// </summary>
+        void WriteLedgerNotes(float[] flow)
+        {
+            var g = _state;
+            foreach (var list in g.Ledger) list.Clear();
+
+            int pop = g.Population;
+
+            g.Ledger[(int)Res.Para].Add($"vergi · nüfus {pop} (+{Tax():0})");
+            g.Ledger[(int)Res.Para].Add($"atölye ve borsa geliri (+{WorkshopIncome():0})");
+            g.Ledger[(int)Res.Para].Add($"bakım giderleri (−{Upkeep():0})");
+
+            var food = g.FoodChain;
+            g.Ledger[(int)Res.Yiyecek].Add($"toplam = {string.Join(" + ", StageSummary(food))}");
+            g.Ledger[(int)Res.Yiyecek].Add($"halk ekmek yer: −{_breadDemand:0} istendi, {_breadServed:0} verildi");
+            g.Ledger[(int)Res.Yiyecek].Add($"zincir: {food.Diagnosis()}");
+
+            var mat = g.MaterialChain;
+            g.Ledger[(int)Res.Malzeme].Add($"toplam = {string.Join(" + ", StageSummary(mat))}");
+            g.Ledger[(int)Res.Malzeme].Add($"inşaat yalnızca depodan çeker: {mat.Final.Stock:0}");
+            g.Ledger[(int)Res.Malzeme].Add($"zincir: {mat.Diagnosis()}");
+
+            g.Ledger[(int)Res.Su].Add($"kuyular (+{Produced(Res.Su):0})");
+            g.Ledger[(int)Res.Su].Add($"nüfus {pop} (−{pop * 0.10f:0}), tarlalar (−{Consumed(Res.Su):0})");
+
+            g.Ledger[(int)Res.Enerji].Add($"santraller (+{Produced(Res.Enerji):0})");
+            g.Ledger[(int)Res.Enerji].Add($"nüfus {pop} (−{pop * 0.045f:0}), sanayi (−{Consumed(Res.Enerji):0})");
+
+            g.Ledger[(int)Res.Isgucu].Add($"konutlardan {g.LabourPool} kişi");
+            g.Ledger[(int)Res.Isgucu].Add($"çalışan {g.LabourUsed}, boşta {g.LabourPool - g.LabourUsed}");
+
+            int unstaffed = 0;
+            foreach (var b in g.Buildings) if (!b.Staffed) unstaffed++;
+            if (unstaffed > 0)
+                g.Ledger[(int)Res.Isgucu].Add($"{unstaffed} yapı işçisiz duruyor");
+        }
+
+        string[] StageSummary(Chain c)
+        {
+            var parts = new string[c.Stages.Length];
+            for (int i = 0; i < c.Stages.Length; i++)
+                parts[i] = $"{c.Stages[i].Def.Holds} {c.Stages[i].Stock:0}";
+            return parts;
+        }
+
+        float Tax()
+        {
+            float t = 0;
+            foreach (var d in _state.Districts)
+                t += d.Population * 0.22f * (0.5f + d.Def.Wealth / 100f);
+            return t;
+        }
+
+        float WorkshopIncome()
+        {
+            float v = 0;
+            foreach (var b in _state.Buildings)
+                if (b.Staffed) v += Mathf.Max(0, b.Def.Output[(int)Res.Para]);
+            return v;
+        }
+
+        float Upkeep()
+        {
+            float v = 0;
+            foreach (var b in _state.Buildings) v += b.Def.Upkeep;
+            return v;
+        }
+
+        float Produced(Res r)
+        {
+            float v = 0;
+            foreach (var b in _state.Buildings)
+                if (b.Staffed) v += Mathf.Max(0, b.Def.Output[(int)r]);
+            return v;
+        }
+
+        float Consumed(Res r)
+        {
+            float v = 0;
+            foreach (var b in _state.Buildings)
+                if (b.Staffed) v += Mathf.Max(0, -b.Def.Output[(int)r]);
+            return v;
         }
 
         /// <summary>
@@ -166,7 +291,9 @@ namespace Mesruiyet.Sim
         {
             var g = _state;
 
-            float foodShare = Satisfaction(Res.Yiyecek, g.Population * 0.12f);
+            // Hunger is measured in bread handed out, not in the ledger's food total. A city
+            // can be starving with a full granary, and the district feels the bread.
+            float foodShare = _breadDemand <= 0.01f ? 1f : Mathf.Clamp01(_breadServed / _breadDemand);
             float waterShare = Satisfaction(Res.Su, g.Population * 0.10f);
             float energyShare = Satisfaction(Res.Enerji, g.Population * 0.045f);
 
@@ -313,8 +440,22 @@ namespace Mesruiyet.Sim
             var g = _state;
             float worst = 9f;
 
-            Res[] essentials = { Res.Yiyecek, Res.Su, Res.Enerji, Res.Malzeme, Res.Para };
-            foreach (var r in essentials)
+            // Bread on hand, not the food total. This is the single most important honesty in
+            // the whole slice: the buffer must be computed from what people can actually eat,
+            // so that when a minister later inflates the granary the buffer becomes a lie too.
+            if (_breadDemand > 0.01f)
+            {
+                var food = g.FoodChain;
+                // Against the chain's narrowest stage, not the bakeries' nameplate capacity.
+                // Four ovens behind two farms bake what two farms grow, and a buffer computed
+                // off the ovens would report nine calm turns straight into a famine.
+                float shortfall = _breadDemand - food.EffectiveRate;
+                float turns = shortfall <= 0.01f ? 9f : food.Final.Stock / shortfall;
+                if (turns < worst) worst = turns;
+            }
+
+            Res[] pooled = { Res.Su, Res.Enerji, Res.Para };
+            foreach (var r in pooled)
             {
                 float flow = g.Flow[(int)r];
                 if (flow >= -0.01f) continue;
@@ -356,23 +497,43 @@ namespace Mesruiyet.Sim
             Recompute();
         }
 
-        /// <summary>Refresh derived numbers without advancing time — after a build, say.</summary>
+        /// <summary>
+        /// Refresh derived numbers without advancing time — after a build, say. Deliberately
+        /// does not tick or draw from the chains: placing a mill must show its new throughput
+        /// immediately without also feeding the city a free turn's worth of bread.
+        /// </summary>
         public void Recompute()
         {
-            Staff();
-            var flow = Produce();
-            Consume(flow);
-            for (int r = 0; r < 6; r++)
-                _state.Flow[r] = r == (int)Res.Isgucu ? _state.LabourPool - _state.LabourUsed : flow[r];
+            var g = _state;
+            int pop = g.Population;
 
-            foreach (var d in _state.Districts)
+            Staff();
+            SurveyChains();
+
+            var flow = Produce();
+            flow[(int)Res.Su] -= pop * 0.10f;
+            flow[(int)Res.Enerji] -= pop * 0.045f;
+
+            for (int r = 0; r < 6; r++)
+            {
+                if (r == (int)Res.Isgucu) { g.Flow[r] = g.LabourPool - g.LabourUsed; continue; }
+                if (r == (int)Res.Yiyecek || r == (int)Res.Malzeme) continue;
+                g.Flow[r] = flow[r];
+            }
+
+            foreach (var c in g.Chains) g.Stock[(int)c.Def.Ledger] = c.Total;
+
+            foreach (var d in g.Districts)
             {
                 d.Housing = 0;
-                foreach (var b in _state.Buildings)
+                foreach (var b in g.Buildings)
                     if (b.District == d.Id) d.Housing += b.Def.Housing;
             }
 
-            _state.BufferTurns = ComputeBuffer();
+            _breadDemand = pop * 0.12f;
+            g.BufferTurns = ComputeBuffer();
+            WriteLedgerNotes(flow);
         }
     }
 }
+

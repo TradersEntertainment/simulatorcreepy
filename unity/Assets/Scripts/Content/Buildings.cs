@@ -111,8 +111,8 @@ namespace Mesruiyet.Core
             new BuildingDef
             {
                 Id = "tarla", Name = "Tarla", Category = "tarim", Glyph = "≡",
-                CostMoney = 40, CostMaterial = 8, Upkeep = 1, Workers = 18,
-                Output = Out(yiyecek: 16, su: -4),
+                CostMoney = 40, CostMaterial = 8, Upkeep = 1, Workers = 14,
+                Output = Out(su: -4),                       // grain itself flows through the chain
                 Requires = TileKind.Verimli,
                 Tint = C("#7E9455"), Storeys = 0,
                 Base = PoliticalEffect.None,
@@ -122,7 +122,7 @@ namespace Mesruiyet.Core
             {
                 Id = "degirmen", Name = "Değirmen", Category = "tarim", Glyph = "✳",
                 CostMoney = 90, CostMaterial = 30, Upkeep = 3, Workers = 14,
-                Output = Out(yiyecek: 10, enerji: -3),
+                Output = Out(enerji: -3),
                 Tint = C("#C2AE86"), Storeys = 2,
                 Base = PoliticalEffect.None,
                 Blurb = "Zincirin tıkanan halkası. Ambar dolu görünürken şehir aç kalabilir.",
@@ -131,7 +131,7 @@ namespace Mesruiyet.Core
             {
                 Id = "firin", Name = "Fırın", Category = "tarim", Glyph = "◍",
                 CostMoney = 70, CostMaterial = 22, Upkeep = 3, Workers = 12,
-                Output = Out(yiyecek: 12, enerji: -4),
+                Output = Out(enerji: -4),
                 Tint = C("#C98F5E"), Storeys = 1,
                 Base = PoliticalEffect.None,
                 Blurb = "Ekmek buradan çıkar. Kapanırsa bunu herkes aynı gün öğrenir.",
@@ -140,10 +140,30 @@ namespace Mesruiyet.Core
             {
                 Id = "ambar", Name = "Tahıl Ambarı", Short = "AMBAR", Category = "tarim", Glyph = "▣",
                 CostMoney = 80, CostMaterial = 30, Upkeep = 2,
-                Output = Out(yiyecek: 4),
                 Tint = C("#A8956E"), Storeys = 2,
                 Base = PoliticalEffect.None,
-                Blurb = "Tampon. Oyunun tek gerçek para birimi olan güvenlik payını büyütür.",
+                Blurb = "Tahıl deposunu büyütür — ama tahıl ekmek değildir. Değirmen tıkalıysa " +
+                        "ambar dolar, şehir aç kalır ve defterdeki toplam hiçbir şey belli etmez.",
+            },
+            new BuildingDef
+            {
+                Id = "islik", Name = "Taş İşliği", Short = "İŞLİK", Category = "sanayi", Glyph = "⛏",
+                CostMoney = 100, CostMaterial = 30, Upkeep = 4, Workers = 16,
+                Output = Out(enerji: -5),
+                Pollution = 3,
+                Tint = C("#8A7F6E"), Storeys = 1,
+                Base = new PoliticalEffect { Tag = "HAM TAŞI İNŞAAT MALZEMESİNE ÇEVİRİR" },
+                Blurb = "Ocak ile depo arasındaki halka. Durursa ham taş birikir ve üç tur " +
+                        "sonra hiçbir şey inşa edemezsiniz.",
+            },
+            new BuildingDef
+            {
+                Id = "depo", Name = "İnşaat Deposu", Short = "DEPO", Category = "altyapi", Glyph = "▦",
+                CostMoney = 90, CostMaterial = 35, Upkeep = 3, Workers = 6,
+                Tint = C("#9A9384"), Storeys = 2,
+                Base = PoliticalEffect.None,
+                Blurb = "İnşaat buradan çeker. Deponun büyüklüğü, kesinti anında kaç tur " +
+                        "inşaata devam edebileceğinizdir.",
             },
             new BuildingDef
             {
@@ -158,7 +178,7 @@ namespace Mesruiyet.Core
             {
                 Id = "santral", Name = "Enerji Santrali", Short = "SANTRAL", Category = "altyapi", Glyph = "⚡",
                 CostMoney = 160, CostMaterial = 55, Upkeep = 8, Workers = 22,
-                Output = Out(enerji: 48, malzeme: -2),
+                Output = Out(enerji: 48),
                 Pollution = 9,
                 Tint = C("#77808C"), Storeys = 3,
                 Base = new PoliticalEffect { Grievance = 3, Tag = "KİRLETİR · KURULDUĞU MAHALLE ÖDER" },
@@ -179,8 +199,8 @@ namespace Mesruiyet.Core
             new BuildingDef
             {
                 Id = "ocak", Name = "Taş Ocağı", Short = "OCAK", Category = "sanayi", Glyph = "⛰",
-                CostMoney = 110, CostMaterial = 20, Upkeep = 4, Workers = 26,
-                Output = Out(malzeme: 20, enerji: -4),
+                CostMoney = 110, CostMaterial = 20, Upkeep = 4, Workers = 22,
+                Output = Out(enerji: -4),
                 Requires = TileKind.Tepelik,
                 Pollution = 5,
                 Tint = C("#8A8175"), Storeys = 1,
@@ -295,7 +315,7 @@ namespace Mesruiyet.Core
             new BuildingDef
             {
                 Id = "kisla", Name = "Kışla", Category = "ordu", Glyph = "▮",
-                CostMoney = 150, CostMaterial = 50, Upkeep = 9, Workers = 30,
+                CostMoney = 150, CostMaterial = 50, Upkeep = 9, Workers = 24,
                 Security = 8,
                 Tint = C("#6E7A6A"), Storeys = 2,
                 Base = new PoliticalEffect
@@ -323,11 +343,13 @@ namespace Mesruiyet.Core
         public static readonly string[] Hotbar =
         {
             "konut", "toplukonut", "tarla", "degirmen", "firin", "ambar",
-            "kuyu", "santral", "ocak", "dokuma", "karakol", "matbaa",
-            "park", "tapinak", "anit", "kisla", "yol",
+            "ocak", "islik", "depo", "kuyu", "santral", "dokuma",
+            "karakol", "matbaa", "park", "tapinak", "anit", "kisla", "yol",
         };
     }
 }
+
+
 
 
 

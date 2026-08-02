@@ -57,6 +57,27 @@ namespace Mesruiyet.Core
             Agent.AgentHooks.Bind(state, grid, hud.rootVisualElement);
 
             Debug.Log($"[Bootstrap] şehir kuruldu · {state.Buildings.Count} yapı · {state.Population} nüfus");
+            CheckChains(state);
+        }
+
+        /// <summary>
+        /// A founding city with a dead chain stage is a bug, not a challenge. This used to fail
+        /// silently — the quarry landed outside every district, so the material chain started
+        /// stopped and nothing said so until a state dump was read by hand.
+        /// </summary>
+        static void CheckChains(GameState state)
+        {
+            foreach (var chain in state.Chains)
+            {
+                chain.Survey(state);
+                foreach (var stage in chain.Stages)
+                {
+                    if (stage.Throughput > 0.01f) continue;
+                    Debug.LogError($"[Bootstrap] {chain.Def.Name} zinciri kurulamadı: " +
+                                   $"'{stage.Name}' aşamasını çalıştıran yapı yok " +
+                                   $"({stage.Def.BuildingId}).");
+                }
+            }
         }
 
         Camera BuildCamera()

@@ -34,6 +34,8 @@ namespace Mesruiyet.UI
         readonly List<VisualElement> _resWarn = new List<VisualElement>();
         VisualElement _axisRow0, _axisRow1;
         VisualElement _factionList;
+        VisualElement _chainList;
+        readonly List<VisualElement> _resCell = new List<VisualElement>();
         VisualElement _selectionCard;
         VisualElement _labelLayer;
         readonly List<VisualElement> _districtLabels = new List<VisualElement>();
@@ -159,6 +161,7 @@ namespace Mesruiyet.UI
             _resValue.Add(value);
             _resFlow.Add(flow);
             _resWarn.Add(warn);
+            _resCell.Add(cell);
             return cell;
         }
 
@@ -174,8 +177,114 @@ namespace Mesruiyet.UI
             _root.Add(rail);
 
             rail.Add(BuildBufferCard());
+            rail.Add(BuildChainCard());
             rail.Add(BuildAxisCard());
             rail.Add(BuildFactionCard());
+        }
+
+        // ---- supply chains
+        //
+        // The most important panel on the screen this slice. The ledger's Yiyecek line adds up
+        // every stage and therefore cannot show a blockage; this is where the player sees that
+        // the grain is fine and the bread is not.
+
+        VisualElement BuildChainCard()
+        {
+            var card = UiKit.Glass().Pad(14, 16).Margin(bottom: 12);
+            card.Add(UiKit.Heading("Tedarik Zincirleri", "aşama aşama"));
+            _chainList = UiKit.Column();
+            card.Add(_chainList);
+            return card;
+        }
+
+        void PaintChains()
+        {
+            _chainList.Clear();
+
+            for (int c = 0; c < _state.Chains.Length; c++)
+            {
+                var chain = _state.Chains[c];
+                string diagnosis = Reporting.Diagnosis(chain.Def.Id);
+                bool flowing = diagnosis == "akıyor";
+
+                var block = UiKit.Column().Margin(bottom: c == 0 ? 20 : 0);
+
+                var head = UiKit.Row();
+                head.style.justifyContent = Justify.SpaceBetween;
+                head.style.marginBottom = 7;
+                head.Add(UiKit.Text(chain.Def.Name, 11.5f, UiKit.Ink, FontStyle.Bold));
+                head.Add(UiKit.Pill(diagnosis, flowing ? UiKit.Green : UiKit.Red));
+                block.Add(head);
+
+                var stages = UiKit.Row();
+                stages.style.alignItems = Align.Stretch;
+
+                var bottleneck = chain.Bottleneck();
+
+                for (int i = 0; i < chain.Stages.Length; i++)
+                {
+                    if (i > 0)
+                    {
+                        var arrow = UiKit.Text("▸", 11, UiKit.Dim);
+                        arrow.style.marginLeft = 4; arrow.style.marginRight = 4;
+                        arrow.style.unityTextAlign = TextAnchor.MiddleCenter;
+                        stages.Add(arrow);
+                    }
+
+                    var stage = chain.Stages[i];
+                    bool guilty = stage == bottleneck;
+
+                    var box = UiKit.Column();
+                    box.style.flexGrow = 1;
+                    box.style.flexBasis = 0;
+                    box.style.backgroundColor = guilty
+                        ? UiKit.Alpha(UiKit.Red, 0.15f)
+                        : new Color(1, 1, 1, 0.04f);
+                    box.Radius(8).Border(1, guilty ? UiKit.Alpha(UiKit.Red, 0.45f) : UiKit.Hairline).Pad(7, 8);
+
+                    var name = UiKit.Text(stage.Name.ToUpperInvariant(), 8.5f,
+                                          guilty ? UiKit.Red : UiKit.Muted, FontStyle.Bold);
+                    name.style.letterSpacing = 0.6f;
+                    box.Add(name);
+
+                    var reported = Reporting.StageStock(chain, i);
+                    var amount = UiKit.Row();
+                    amount.Add(UiKit.Text($"{reported.Value:0}", 15, UiKit.Ink, FontStyle.Bold).Margin(top: 2));
+                    if (!reported.Reliable) amount.Add(UiKit.WarnBadge());
+                    box.Add(amount);
+
+                    // Throughput is the diagnosis: a stage moving nothing has nobody working it,
+                    // a stage moving less than it could is either starved or has nowhere to put
+                    // what it makes — and a full buffer is a surplus, not a fault.
+                    string rate;
+                    Color rateColour;
+                    if (stage.Dead) { rate = "durdu"; rateColour = UiKit.Red; }
+                    else if (stage.Full) { rate = "dolu"; rateColour = UiKit.Green; }
+                    else { rate = $"{stage.Moved:0}/{stage.Throughput:0} tur"; rateColour = UiKit.Dim; }
+                    box.Add(UiKit.Text(rate, 9, rateColour));
+
+                    if (stage.Idle > 0)
+                        box.Add(UiKit.Text($"{stage.Idle} çalışmıyor", 9, UiKit.Amber));
+
+                    box.tooltip = $"{stage.Name}: {stage.Def.Holds} · " +
+                                  $"stok {stage.Stock:0}/{stage.Capacity:0} · " +
+                                  $"{stage.Working} çalışıyor, {stage.Idle} boş";
+                    stages.Add(box);
+                }
+
+                block.Add(stages);
+
+                // The sentence that makes the trap legible without giving the answer away.
+                var final = chain.Final;
+                string note = chain.Def.Id == "yiyecek"
+                    ? $"halk yalnızca {final.Def.Holds} yer · defterdeki toplam {chain.Total:0}"
+                    : $"inşaat yalnızca depodan çeker · defterdeki toplam {chain.Total:0}";
+                                var noteLabel = UiKit.Text(note, 9.5f, UiKit.Muted).Margin(top: 9);
+                noteLabel.style.whiteSpace = WhiteSpace.Normal;
+                block.Add(noteLabel);
+
+                _chainList.Add(block);
+            }
         }
 
         VisualElement BuildBufferCard()
@@ -730,6 +839,17 @@ namespace Mesruiyet.UI
                 buffer.Value <= 2 ? "KRİTİK" : buffer.Value <= 4 ? "İNCE" : "SAĞLAM",
                 buffer.Value <= 2 ? UiKit.Red : buffer.Value <= 4 ? UiKit.Amber : UiKit.Green);
 
+            // Every ledger figure explains itself on hover. §14 of the design: a player who
+            // cannot see why a number moved cannot learn the game.
+            for (int r = 0; r < 6; r++)
+            {
+                var terms = Reporting.Explain((Res)r);
+                _resCell[r].tooltip = terms.Count == 0
+                    ? Naming.ResourceNames[r]
+                    : Naming.ResourceNames[r] + "\n· " + string.Join("\n· ", terms);
+            }
+
+            PaintChains();
             PaintAxis(_axisRow0, "Otorite", "Özgürlük", Reporting.AxisOrder, v => v.x);
             PaintAxis(_axisRow1, "Sermaye", "Eşitlik", Reporting.AxisEconomy, v => v.y);
             PaintFactions();
@@ -747,3 +867,4 @@ namespace Mesruiyet.UI
         }
     }
 }
+

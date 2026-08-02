@@ -163,6 +163,12 @@ namespace Mesruiyet.Agent
                     // Placement is the whole first slice, so the agent has to be able to do it.
                     return AgentInput.Build(c.id, c.x, c.y, out string why) ? Ok() : Err(why);
 
+                case "block":
+                    // Stop (n != 0) or restart (n == 0) every building of a type, so a supply
+                    // blockage can be reproduced on demand instead of waited for.
+                    int hit = AgentInput.Block(c.id, c.n != 0, out string blockWhy);
+                    return hit > 0 ? Ok(hit.ToString()) : Err(blockWhy);
+
                 case "endturn":
                     StartCoroutine(EndTurns(Mathf.Max(1, c.n)));
                     return Ok();

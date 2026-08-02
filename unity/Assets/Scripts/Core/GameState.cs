@@ -17,6 +17,11 @@ namespace Mesruiyet.Core
         public DistrictId District;
         /// <summary>False when it has no workers or no power — it stands there costing upkeep.</summary>
         public bool Staffed = true;
+        /// <summary>
+        /// Shut down regardless of labour: a strike, a fire, a sabotaged mill. Events set this
+        /// in a later slice; today it is how the agent loop reproduces a chain blockage.
+        /// </summary>
+        public bool Disabled;
         public int BuiltOnTurn;
     }
 
@@ -90,6 +95,29 @@ namespace Mesruiyet.Core
         public DistrictState[] Districts;
         public readonly List<PlacedBuilding> Buildings = new List<PlacedBuilding>();
 
+        /// <summary>The two supply chains. Their totals feed the Yiyecek and Malzeme ledger lines.</summary>
+        public Chain[] Chains;
+
+        /// <summary>
+        /// Why each ledger line moved, in the player's words. §14 of the design: a player who
+        /// cannot see why a number moved cannot learn the game.
+        /// </summary>
+        public readonly List<string>[] Ledger =
+        {
+            new List<string>(), new List<string>(), new List<string>(),
+            new List<string>(), new List<string>(), new List<string>(),
+        };
+
+        public Chain GetChain(string id)
+        {
+            foreach (var c in Chains)
+                if (c.Def.Id == id) return c;
+            return null;
+        }
+
+        public Chain FoodChain => GetChain("yiyecek");
+        public Chain MaterialChain => GetChain("malzeme");
+
         /// <summary>How many turns the city could absorb a shock. Pillar 3, made a number.</summary>
         public float BufferTurns = 6f;
 
@@ -133,12 +161,15 @@ namespace Mesruiyet.Core
                 };
             }
 
-            // 400 settlers, a small treasury, a blank grid.
+            g.Chains = new Chain[Mesruiyet.Core.Chains.All.Length];
+            for (int i = 0; i < g.Chains.Length; i++)
+                g.Chains[i] = Mesruiyet.Core.Chain.FromDef(Mesruiyet.Core.Chains.All[i]);
+
+            // 400 settlers, a small treasury, a blank grid. Yiyecek and Malzeme are not stored
+            // here — they are the sum of their chain's stages, written back on every tick.
             g.Stock[(int)Res.Para] = 900;
-            g.Stock[(int)Res.Yiyecek] = 320;
             g.Stock[(int)Res.Su] = 260;
             g.Stock[(int)Res.Enerji] = 120;
-            g.Stock[(int)Res.Malzeme] = 240;
 
             g.AxisTrail.Add(Vector2Int.zero);
             return g;
@@ -146,8 +177,11 @@ namespace Mesruiyet.Core
 
         public DistrictState District(DistrictId id) => Districts[(int)id];
 
+        /// <summary>Dressed material sitting in the depot — what construction can actually draw.</summary>
+        public float DepotStock => MaterialChain.Final.Stock;
+
         public bool CanAfford(BuildingDef def)
-            => Stock[(int)Res.Para] >= def.CostMoney && Stock[(int)Res.Malzeme] >= def.CostMaterial;
+            => Stock[(int)Res.Para] >= def.CostMoney && DepotStock >= def.CostMaterial;
 
         /// <summary>Clamp an axis and remember that it moved. Everything that shifts politics comes here.</summary>
         public void ShiftAxes(int order, int economy)
@@ -166,3 +200,4 @@ namespace Mesruiyet.Core
         }
     }
 }
+

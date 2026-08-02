@@ -70,14 +70,22 @@ if (-not $SkipBuild) {
     $buildLog = "$agent\logs\build.log"
     Remove-Item $buildLog -ErrorAction SilentlyContinue
 
-    # Start-Process -Wait, not `& $UnityExe`: Unity.exe is a GUI-subsystem binary, so the call
-    # operator returns immediately and leaves $LASTEXITCODE empty. Reading the log at that
-    # point gives you the previous run's output, which is a genuinely baffling way to fail.
-    $unity = Start-Process -FilePath $UnityExe -Wait -PassThru -ArgumentList @(
+    # Two traps here, both of which cost an hour the first time.
+    #
+    # `& $UnityExe` does not block at all: Unity.exe is a GUI-subsystem binary, so the call
+    # operator returns immediately and leaves $LASTEXITCODE empty, and you end up reading the
+    # previous run's log.
+    #
+    # `Start-Process -Wait` overshoots the other way: it waits for the process *and all its
+    # descendants*, and Unity leaves a shared Roslyn compiler server (dotnet.exe) running on
+    # purpose so the next build is faster. The build finishes, the log says so, and the script
+    # sits there for as long as that server lives. WaitForExit waits for Unity and nothing else.
+    $unity = Start-Process -FilePath $UnityExe -PassThru -ArgumentList @(
         "-batchmode", "-quit", "-nographics",
         "-projectPath", $game,
         "-executeMethod", "Mesruiyet.EditorTools.BuildScript.Windows",
         "-logFile", $buildLog)
+    $unity.WaitForExit()
     $code = $unity.ExitCode
 
     if (-not (Test-Path $buildLog)) {
@@ -213,6 +221,48 @@ switch ($Scenario) {
         $state = Send-Cmd '{"cmd":"state"}'
     }
 
+    # The point of the whole slice: stop the mills and watch the ledger stay calm while the
+    # city runs out of bread. If Yiyecek does not rise while ekmek falls, the trap is broken.
+    "chain" {
+        Shot "01-acilis.png"
+        $before = Send-Cmd '{"cmd":"state"}'
+
+        Write-Host "[loop] değirmenler durduruluyor..." -ForegroundColor Cyan
+        Send-Cmd '{"cmd":"block","id":"degirmen","n":1}' | Out-Null
+
+        $t = Get-Turn
+        Send-Cmd '{"cmd":"endturn","n":6}' | Out-Null
+        Wait-Turn ($t + 6) 90 | Out-Null
+        Shot "02-degirmen-durdu.png"
+        $blocked = Send-Cmd '{"cmd":"state"}'
+
+        Write-Host "[loop] değirmenler yeniden çalışıyor..." -ForegroundColor Cyan
+        Send-Cmd '{"cmd":"block","id":"degirmen","n":0}' | Out-Null
+        $t = Get-Turn
+        Send-Cmd '{"cmd":"endturn","n":5}' | Out-Null
+        Wait-Turn ($t + 5) 90 | Out-Null
+        Shot "03-toparlanma.png"
+
+        function Field([string] $json, [string] $key) {
+            if ($json -match "`"$key`":(-?[\d.]+)") { return [double]$Matches[1] }
+            return [double]::NaN
+        }
+
+        Write-Host "`n[loop] TUZAK KONTROLÜ:" -ForegroundColor Cyan
+        $y0 = Field $before  "yiyecek"; $b0 = Field $before  "bread"
+        $y1 = Field $blocked "yiyecek"; $b1 = Field $blocked "bread"
+        Write-Host ("  defterdeki Yiyecek : {0,7:N0}  ->  {1,7:N0}" -f $y0, $y1)
+        Write-Host ("  gerçekte ekmek     : {0,7:N0}  ->  {1,7:N0}" -f $b0, $b1)
+        if ($y1 -ge $y0 -and $b1 -lt $b0) {
+            Write-Host "  ✔ toplam yükselirken ekmek tükendi — tuzak çalışıyor" -ForegroundColor Green
+        } else {
+            Write-Host "  ✘ tuzak çalışmıyor: toplam düşmemeli, ekmek düşmeli" -ForegroundColor Red
+            $chainBroken = $true
+        }
+
+        $state = Send-Cmd '{"cmd":"state"}'
+    }
+
     "turns40" {
         $t = Get-Turn
         Send-Cmd '{"cmd":"endturn","n":40}' | Out-Null
@@ -240,12 +290,18 @@ Get-ChildItem "$agent\shots" -Filter *.png | ForEach-Object {
 }
 
 # Only real failures: Unity prints plenty of lines containing the word "error" that are not.
-$errors = Select-String -Path $playerLog -Pattern "Exception|NullReference|error CS|Shader error|\[Bootstrap\] .*bulunamadı" `
+$errors = Select-String -Path $playerLog `
+          -Pattern "Exception|NullReference|error CS|Shader error|\[Bootstrap\] .*(bulunamadı|kurulamadı)|\[CityGrid\] .*yerleştirilemedi" `
           -ErrorAction SilentlyContinue
 if ($errors) {
     Write-Host "`n[loop] ÇALIŞMA ZAMANI HATALARI:" -ForegroundColor Red
     $errors | Select-Object -First 20 | ForEach-Object { Write-Host $_.Line }
     exit 3
+}
+
+if ($chainBroken) {
+    Write-Host "`n[loop] SENARYO BAŞARISIZ: tedarik zinciri tuzağı beklendiği gibi davranmadı." -ForegroundColor Red
+    exit 5
 }
 
 Write-Host "`n[loop] temiz. Görüntüler: agent\shots\" -ForegroundColor Green

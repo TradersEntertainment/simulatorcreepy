@@ -60,6 +60,38 @@ namespace Mesruiyet.Core
         public static Reported Labour() => Distort(G.LabourUsed, "HALK");
         public static Reported LabourPool() => Distort(G.LabourPool, "HALK");
 
+        // ---------------------------------------------------------------- supply chains
+        //
+        // Two reads, and the difference between them is the whole design. Stock(Yiyecek) is the
+        // sum of every stage — grain, flour and bread added together — and it is what a minister
+        // will happily quote. Product() is what the city can actually eat this turn. A city can
+        // sit on a full granary and starve, and only one of these two numbers will say so.
+
+        public static Chain ChainOf(string id) => G.GetChain(id);
+
+        /// <summary>What the last stage holds: bread, dressed material.</summary>
+        public static Reported Product(string chainId)
+        {
+            var chain = G.GetChain(chainId);
+            return Distort(chain.Final.Stock, chain.Def.Domain);
+        }
+
+        public static Reported StageStock(Chain chain, int index)
+            => Distort(chain.Stages[index].Stock, chain.Def.Domain);
+
+        /// <summary>
+        /// Where the chain is stuck, in words. Once ministers exist a loyalist simply declines
+        /// to mention this, which is why it is a separate call rather than part of the total.
+        /// </summary>
+        public static string Diagnosis(string chainId)
+        {
+            var chain = G.GetChain(chainId);
+            return Mathf.Abs(BiasFor(chain.Def.Domain)) < 0.0001f ? chain.Diagnosis() : "bildirilmedi";
+        }
+
+        /// <summary>The line-by-line breakdown behind a ledger figure, for its tooltip.</summary>
+        public static System.Collections.Generic.List<string> Explain(Res r) => G.Ledger[(int)r];
+
         // ---------------------------------------------------------------- the city
         public static Reported Grievance(DistrictId id) => Distort(G.District(id).Grievance, "HALK");
         public static Reported Population() => Distort(G.Population, "HALK");

@@ -72,8 +72,10 @@ namespace Mesruiyet.Core
                 if (y < bank) t = TileKind.Su;
                 else if (y < bank + 3.2f) t = TileKind.Verimli;      // silt, where the farms belong
 
-                // Ore in the north-east hills.
-                if (x > 34 && y > 22 && (x - 34) + (y - 22) > 8) t = TileKind.Tepelik;
+                // Ore in the north-east hills. The wedge deliberately reaches down into TEPE:
+                // quarries have to be buildable inside a district or the material chain has
+                // nowhere to start, and TEPE having the ore is its own political problem.
+                if (x > 32 && y > 17 && (x - 32) + (y - 17) > 9) t = TileKind.Tepelik;
 
                 // Marsh in the north-west, which must be drained before it takes a building.
                 if (x < 11 && y > 24 && (11 - x) + (y - 24) > 6) t = TileKind.Bataklik;
@@ -111,14 +113,14 @@ namespace Mesruiyet.Core
         /// </summary>
         public void SeedStartingCity(GameState state)
         {
-            void Place(string id, int x, int y)
+            bool PlaceExactly(string id, int x, int y)
             {
                 var def = Buildings.Get(id);
-                if (def == null || !IsFree(x, y)) return;
-                if (def.Requires.HasValue && At(x, y) != def.Requires.Value) return;
+                if (def == null || !IsFree(x, y)) return false;
+                if (def.Requires.HasValue && At(x, y) != def.Requires.Value) return false;
 
                 var district = Districts.At(x, y);
-                if (district == null) return;
+                if (district == null) return false;
 
                 var b = new PlacedBuilding
                 {
@@ -129,6 +131,26 @@ namespace Mesruiyet.Core
                 };
                 Occupant[Index(x, y)] = state.Buildings.Count;
                 state.Buildings.Add(b);
+                return true;
+            }
+
+            // Spiral out from the hint until a legal tile turns up. Hard-coded coordinates are
+            // brittle against a terrain tweak — an earlier version silently dropped the quarry
+            // and both river farms because the river had moved a tile, and the city started
+            // with no material chain at all and nothing said so.
+            void Place(string id, int x, int y, int radius = 6)
+            {
+                if (PlaceExactly(id, x, y)) return;
+
+                for (int r = 1; r <= radius; r++)
+                for (int dy = -r; dy <= r; dy++)
+                for (int dx = -r; dx <= r; dx++)
+                {
+                    if (Mathf.Max(Mathf.Abs(dx), Mathf.Abs(dy)) != r) continue;   // ring only
+                    if (PlaceExactly(id, x + dx, y + dy)) return;
+                }
+
+                Debug.LogWarning($"[CityGrid] kurucu yapı yerleştirilemedi: {id} ({x},{y}) çevresinde yer yok");
             }
 
             // Housing scattered through every district, denser where the population starts high.
@@ -146,14 +168,17 @@ namespace Mesruiyet.Core
                 }
             }
 
-            // The founding works: enough to run, not enough to relax.
+            // The founding works: enough to run, not enough to relax. Both chains start whole —
+            // the player's first real lesson is watching population growth outpace the mills.
             Place("tarla", 7, 4); Place("tarla", 8, 4); Place("tarla", 20, 4); Place("tarla", 21, 5);
-            Place("degirmen", 14, 8);
-            Place("firin", 20, 15);
+            Place("degirmen", 14, 8); Place("degirmen", 15, 8);
+            Place("firin", 20, 15); Place("firin", 21, 15);
             Place("ambar", 15, 4);
             Place("kuyu", 9, 8); Place("kuyu", 26, 16); Place("kuyu", 37, 16);
             Place("santral", 25, 8);
-            Place("ocak", 40, 27);
+            Place("ocak", 42, 23);
+            Place("islik", 37, 19);
+            Place("depo", 30, 16);
             Place("dokuma", 27, 7);
             Place("tapinak", 24, 19);
             Place("kisla", 22, 27);

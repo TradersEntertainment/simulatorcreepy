@@ -91,6 +91,19 @@ namespace Mesruiyet.Agent
             }
             sb.Append("],");
 
+            // The chains in full. The agent has to be able to compare the ledger total against
+            // what the last stage actually holds — that gap is the thing under test.
+            sb.Append("\"chains\":[");
+            for (int i = 0; i < g.Chains.Length; i++)
+            {
+                if (i > 0) sb.Append(',');
+                sb.Append(g.Chains[i].ToJson());
+            }
+            sb.Append("],");
+
+            Num(sb, "depot", g.DepotStock); sb.Append(',');
+            Num(sb, "bread", g.FoodChain.Final.Stock); sb.Append(',');
+
             sb.Append("\"factions\":{");
             for (int f = 0; f < 5; f++)
             {
@@ -176,6 +189,32 @@ namespace Mesruiyet.Agent
             using (var e = new NavigationSubmitEvent { target = element })
                 element.SendEvent(e);
             return true;
+        }
+
+        /// <summary>
+        /// Shut down every building of a type, or start them again. This is how the loop
+        /// reproduces a supply blockage without waiting for an event card to roll one: stop the
+        /// mills and watch the granary fill while the bakeries empty.
+        /// </summary>
+        public static int Block(string buildingId, bool on, out string message)
+        {
+            message = "";
+            var state = GameState.Current;
+            if (state == null) { message = "state not bound"; return 0; }
+
+            int touched = 0;
+            foreach (var b in state.Buildings)
+            {
+                if (b.Def.Id != buildingId) continue;
+                b.Disabled = on;
+                touched++;
+            }
+
+            if (touched == 0) { message = $"'{buildingId}' türünde yapı yok"; return 0; }
+
+            TurnResolver.Instance.Recompute();
+            Debug.Log($"[AgentInput] {(on ? "block" : "unblock")} {buildingId} ×{touched}");
+            return touched;
         }
 
         /// <summary>Place a building by id at a tile — the agent's version of a mouse click on the map.</summary>

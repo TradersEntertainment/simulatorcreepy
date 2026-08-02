@@ -158,9 +158,17 @@ namespace Mesruiyet.World
                 reason = $"Para yetmiyor: {def.CostMoney} ₺ gerek.";
                 return false;
             }
-            if (_state.Stock[(int)Res.Malzeme] < def.CostMaterial)
+            // Construction draws from the depot, never from the ledger total. A quarry running
+            // flat out into a stopped İşlik shows a healthy Malzeme figure and still cannot put
+            // up a shed, and the refusal has to say so or the player learns nothing.
+            if (_state.DepotStock < def.CostMaterial)
             {
-                reason = $"Malzeme yetmiyor: {def.CostMaterial} gerek.";
+                var chain = _state.MaterialChain;
+                float raw = chain.Total - chain.Final.Stock;
+                reason = raw > def.CostMaterial
+                    ? $"Depoda {chain.Final.Stock:0} işlenmiş malzeme var, {def.CostMaterial} gerek. " +
+                      $"Ham taş bekliyor ({raw:0}) — {chain.Diagnosis()}."
+                    : $"Malzeme yetmiyor: depoda {chain.Final.Stock:0}, {def.CostMaterial} gerek.";
                 return false;
             }
 
@@ -191,7 +199,7 @@ namespace Mesruiyet.World
             };
 
             _state.Stock[(int)Res.Para] -= def.CostMoney;
-            _state.Stock[(int)Res.Malzeme] -= def.CostMaterial;
+            _state.MaterialChain.Draw(def.CostMaterial);
 
             _grid.Occupant[CityGrid.Index(x, y)] = _state.Buildings.Count;
             _state.Buildings.Add(placed);
