@@ -263,14 +263,7 @@ namespace Mesruiyet.World
                 _builder.AddBox(ground, new Vector3(footprint, height, depth), tint);
                 AddWindows(ground, footprint, depth, height, storeys, b.Tile);
 
-                // A rooftop box on the taller blocks so the skyline is not a row of dominoes.
-                if (storeys >= 2 && hash > 0.4f)
-                {
-                    _builder.AddBox(
-                        ground + new Vector3((hash - 0.5f) * footprint * 0.3f, height, (hash2 - 0.5f) * depth * 0.3f),
-                        new Vector3(footprint * 0.34f, 0.9f, depth * 0.34f),
-                        MeshBuilder.Shade(tint, 0.7f));
-                }
+                if (storeys >= 2) AddRoofClutter(ground, footprint, depth, height, tint, b.Tile);
 
                 if (def.Id == "anit")
                     _builder.AddPyramid(ground + Vector3.up * height, footprint * 0.5f, 4.2f, MeshBuilder.Shade(tint, 1.1f));
@@ -363,6 +356,56 @@ namespace Mesruiyet.World
             }
         }
 
+        /// <summary>
+        /// What sits on a roof. The design asks for rooftop units placed procedurally so no two
+        /// blocks look identical, and one grey box on every tall building was the opposite of
+        /// that — a row of dominoes wearing the same hat. Four pieces, each on its own coin
+        /// flip, gives sixteen silhouettes for the price of one.
+        /// </summary>
+        void AddRoofClutter(Vector3 ground, float w, float d, float height, Color tint, Vector2Int tile)
+        {
+            Vector3 roof = ground + Vector3.up * height;
+            Color dark = MeshBuilder.Shade(tint, 0.66f);
+
+            float a = CityGrid.Hash(tile.x, tile.y, 41);
+            float b = CityGrid.Hash(tile.x, tile.y, 43);
+            float c = CityGrid.Hash(tile.x, tile.y, 47);
+            float e = CityGrid.Hash(tile.x, tile.y, 53);
+
+            // A stair head — the box that was always there, but now it moves around.
+            if (a > 0.35f)
+                _builder.AddBox(roof + new Vector3((a - 0.5f) * w * 0.4f, 0, (b - 0.5f) * d * 0.4f),
+                                new Vector3(w * 0.3f, 0.85f, d * 0.3f), dark);
+
+            // A water tank on four legs. The legs are what make it read as a tank rather than
+            // another box, and they cost four thin boxes.
+            if (b > 0.55f)
+            {
+                Vector3 at = roof + new Vector3((b - 0.5f) * w * 0.5f, 0, (c - 0.5f) * d * 0.5f);
+                float leg = 0.7f;
+                for (int i = 0; i < 4; i++)
+                {
+                    float sx = (i & 1) == 0 ? -1 : 1;
+                    float sz = (i & 2) == 0 ? -1 : 1;
+                    _builder.AddBox(at + new Vector3(sx * 0.34f, leg * 0.5f, sz * 0.34f),
+                                    new Vector3(0.14f, leg, 0.14f), MeshBuilder.Shade(dark, 0.8f));
+                }
+                _builder.AddBox(at + Vector3.up * (leg + 0.45f), new Vector3(1.1f, 0.9f, 1.1f),
+                                Hex("#6E6357"));
+            }
+
+            // Vents, in a little row.
+            if (c > 0.5f)
+                for (int i = 0; i < 3; i++)
+                    _builder.AddBox(roof + new Vector3(w * (-0.22f + i * 0.22f), 0.18f, -d * 0.3f),
+                                    new Vector3(0.3f, 0.36f, 0.3f), MeshBuilder.Shade(dark, 0.9f));
+
+            // An aerial. Thin, tall, and the only thing up here that breaks the skyline.
+            if (e > 0.7f)
+                _builder.AddBox(roof + new Vector3((e - 0.5f) * w * 0.5f, 1.5f, (a - 0.5f) * d * 0.5f),
+                                new Vector3(0.1f, 3f, 0.1f), MeshBuilder.Shade(dark, 0.75f));
+        }
+
         void AddFurrows(Vector3 ground, float hash)
         {
             Color furrow = Hex("#6C7C42");
@@ -436,9 +479,58 @@ namespace Mesruiyet.World
                     _builder.AddBox(p + Vector3.up * 4.2f, new Vector3(0.7f, 0.28f, 0.7f),
                                     new Color(1f, 0.84f, 0.6f, 0f));
                 }
+                else if (t == TileKind.Su && r < 0.05f)
+                {
+                    AddBoat(CityGrid.World(x, y, -0.5f), CityGrid.Hash(x, y, 9));
+                }
+
+                // Market stalls cluster where people already gather: an empty plot on the street
+                // in the old town or the docks. The design names them as one of the things that
+                // stops two blocks looking alike, and a canopy is three boxes.
+                if ((t == TileKind.Cayir || t == TileKind.Verimli) && HasRoadNeighbour(x, y))
+                {
+                    var d = Districts.At(x, y);
+                    bool market = d != null && (d.Id == DistrictId.EskiSehir || d.Id == DistrictId.Liman);
+                    if (market && CityGrid.Hash(x, y, 13) < 0.3f)
+                        AddStall(CityGrid.World(x, y), CityGrid.Hash(x, y, 17));
+                }
             }
 
             _builder.Into(_propMesh);
+        }
+
+        static readonly Color[] StallCanopy =
+        {
+            Hex("#C4553F"), Hex("#3E8C6E"), Hex("#D0A24A"), Hex("#8B6BA8"),
+        };
+
+        /// <summary>A market stall: a table, two posts and a coloured canopy over them.</summary>
+        void AddStall(Vector3 at, float hash)
+        {
+            Vector3 p = at + new Vector3((hash - 0.5f) * 2.4f, 0, (hash - 0.5f) * 2.4f);
+            Color canopy = StallCanopy[Mathf.FloorToInt(hash * StallCanopy.Length) % StallCanopy.Length];
+
+            _builder.AddBox(p + Vector3.up * 0.5f, new Vector3(2.1f, 0.16f, 1.3f), Hex("#6B5A45"));
+            _builder.AddBox(p + new Vector3(-0.9f, 0.85f, 0), new Vector3(0.12f, 1.7f, 0.12f), Hex("#4A4034"));
+            _builder.AddBox(p + new Vector3(0.9f, 0.85f, 0), new Vector3(0.12f, 1.7f, 0.12f), Hex("#4A4034"));
+            _builder.AddBox(p + Vector3.up * 1.75f, new Vector3(2.4f, 0.14f, 1.6f), canopy);
+        }
+
+        /// <summary>
+        /// A moored boat. The river was the one part of the map with nothing on it, which made
+        /// a delta city read as a city that happened to be next to water rather than one that
+        /// lives off it.
+        /// </summary>
+        void AddBoat(Vector3 at, float hash)
+        {
+            bool along = hash > 0.5f;
+            Vector3 hull = along ? new Vector3(3.4f, 0.55f, 1.3f) : new Vector3(1.3f, 0.55f, 3.4f);
+
+            _builder.AddBox(at + Vector3.up * 0.3f, hull, Hex("#6E5A46"));
+            _builder.AddBox(at + Vector3.up * 0.62f, hull * 0.55f, Hex("#8A7458"));
+            // A mast, on about half of them, so the moorings are not a row of identical hulls.
+            if (hash > 0.62f)
+                _builder.AddBox(at + Vector3.up * 2f, new Vector3(0.12f, 3f, 0.12f), Hex("#4A4034"));
         }
 
         void AddTree(Vector3 at, float scale)

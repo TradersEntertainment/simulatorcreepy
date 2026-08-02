@@ -90,6 +90,11 @@ namespace Mesruiyet.World
             var mouse = Mouse.current;
             if (mouse == null || _cam == null) return;
 
+            // A menu is on top of the world; clicking through it and founding a mill behind the
+            // pause screen is exactly the kind of thing nobody reports and everybody hits.
+            var hud = UI.Hud.Instance;
+            if (hud != null && hud.MenuOpen) return;
+
             UpdateHover(mouse.position.ReadValue());
 
             if (mouse.leftButton.wasPressedThisFrame && !UI.Hud.PointerOverUi)

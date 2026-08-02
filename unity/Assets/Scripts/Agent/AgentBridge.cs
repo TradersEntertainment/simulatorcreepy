@@ -186,6 +186,24 @@ namespace Mesruiyet.Agent
                 case "tax":
                     return AgentInput.Tax(c.n, out string taxWhy) ? Ok() : Err(taxWhy);
 
+                case "key":
+                    // Only the keys that open or close something. Synthesising real key events
+                    // through the Input System is far more machinery than calling the one
+                    // handler they reach, and the handler is what actually needs testing.
+                    if (c.id == "escape")
+                    {
+                        if (UI.Hud.Instance == null) return Err("hud yok");
+                        UI.Hud.Instance.OnEscape();
+                        return Ok();
+                    }
+                    if (c.id == "m")
+                    {
+                        if (AudioBus.Instance == null) return Err("ses yok");
+                        AudioBus.Instance.ToggleMute();
+                        return Ok();
+                    }
+                    return Err($"bilinmeyen tuş '{c.id}'");
+
                 case "mute":
                     // {"cmd":"mute","n":1} silences, n == 0 restores. Same switch the M key throws.
                     if (AudioBus.Instance == null) return Err("ses yok");

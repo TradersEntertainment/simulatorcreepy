@@ -196,6 +196,14 @@ if (-not $ready) {
 Write-Host "[loop] köprü hazır" -ForegroundColor Green
 Start-Sleep -Seconds 1
 
+# The game now opens on a title screen. The agent starts a term the way a player does — by
+# pressing the button — rather than through a back door, so every scenario below begins in the
+# same place a human would. The `menus` scenario is the exception: it tests the screen itself.
+if ($Scenario -ne "menus") {
+    Send-Cmd '{"cmd":"click","id":"btn_new_term"}' | Out-Null
+    Start-Sleep -Milliseconds 700
+}
+
 # ---------------------------------------------------------------- scenarios
 switch ($Scenario) {
     "smoke" {
@@ -885,6 +893,83 @@ switch ($Scenario) {
     # Does the deck actually deal a varied game? A card table can look full on paper and still
     # hand out the same four crises all run, because the conditions that gate the interesting
     # cards are the conditions that stay true. Only a full term shows it.
+    # The menus. The game used to boot straight into a running city with no way to pause, restart
+    # or leave; this walks the whole surface a player touches before and around a term.
+    "menus" {
+        Write-Host "`n[loop] MENÜLER:" -ForegroundColor Cyan
+
+        $ok = $true
+        function Check([bool] $pass, [string] $label) {
+            if ($pass) { Write-Host "  ✔ $label" -ForegroundColor Green }
+            else { Write-Host "  ✘ $label" -ForegroundColor Red; $script:ok = $false }
+        }
+        function Menu {
+            $s = Send-Cmd '{"cmd":"state"}'
+            if ($s -match '"menu":"([^"]*)"') { return $Matches[1] }
+            return "?"
+        }
+
+        Shot "menu-01-baslangic.png"
+        Check ((Menu) -eq "baslangic") "oyun başlangıç ekranıyla açılıyor"
+
+        # Settings, from the title.
+        Send-Cmd '{"cmd":"click","id":"btn_title_settings"}' | Out-Null
+        Start-Sleep -Milliseconds 500
+        Shot "menu-02-ayarlar.png"
+        Check ((Menu) -eq "ayarlar") "ayarlar açılıyor"
+
+        Send-Cmd '{"cmd":"click","id":"btn_mute"}' | Out-Null
+        Start-Sleep -Milliseconds 300
+        Check ((Send-Cmd '{"cmd":"state"}') -match '"muted":true') "ayarlardan susturma çalışıyor"
+        Send-Cmd '{"cmd":"click","id":"btn_mute"}' | Out-Null
+        Send-Cmd '{"cmd":"click","id":"btn_settings_close"}' | Out-Null
+        Start-Sleep -Milliseconds 400
+        Check ((Menu) -eq "baslangic") "ayarlardan geldiği yere dönüyor"
+
+        # Into the term.
+        Send-Cmd '{"cmd":"click","id":"btn_new_term"}' | Out-Null
+        Start-Sleep -Milliseconds 700
+        Shot "menu-03-donem-basladi.png"
+        Check ((Menu) -eq "") "YENİ DÖNEM oyunu başlatıyor"
+
+        $t = Get-Turn
+        Send-Cmd '{"cmd":"endturn","n":2}' | Out-Null
+        Wait-Turn ($t + 2) 40 | Out-Null
+        Check ((Get-Turn) -ge ($t + 2)) "dönem başladıktan sonra turlar işliyor"
+
+        # Pause on top of a running city.
+        Send-Cmd '{"cmd":"key","id":"escape"}' | Out-Null
+        Start-Sleep -Milliseconds 500
+        Shot "menu-04-duraklatildi.png"
+        Check ((Menu) -eq "duraklatildi") "ESC duraklatma menüsünü açıyor"
+
+        Send-Cmd '{"cmd":"click","id":"btn_resume"}' | Out-Null
+        Start-Sleep -Milliseconds 400
+        Check ((Menu) -eq "") "DEVAM oyuna döndürüyor"
+
+        # Restarting reloads the scene, and the scene ships empty — the world is assembled at
+        # runtime. If Bootstrap does not re-run, this comes back to a black frame, which is
+        # exactly the kind of break nobody notices until they press the button.
+        Send-Cmd '{"cmd":"key","id":"escape"}' | Out-Null
+        Start-Sleep -Milliseconds 400
+        Send-Cmd '{"cmd":"click","id":"btn_restart"}' | Out-Null
+        Start-Sleep -Seconds 3
+        Shot "menu-05-yeniden.png"
+        $fresh = Send-Cmd '{"cmd":"state"}'
+
+        Check ($fresh -match '"buildings":(\d+)' -and [int]$Matches[1] -gt 20) "yeniden kurulan şehir gerçekten var"
+        Check ($fresh -match '"turn":1\b') "yeniden kurmak dönemi başa aldı"
+        Check ((Menu) -eq "") "yeniden kurmak doğrudan yeni döneme giriyor"
+
+        $t = Get-Turn
+        Send-Cmd '{"cmd":"endturn","n":1}' | Out-Null
+        Wait-Turn ($t + 1) 40 | Out-Null
+        Check ((Get-Turn) -ge ($t + 1)) "yeniden kurulan şehirde turlar işliyor"
+
+        $state = Send-Cmd '{"cmd":"state"}'
+        if (-not $ok) { $chainBroken = $true }
+    }
+
     # Audio ships with no files: every clip is synthesized at startup. An unattended run cannot
     # listen, so the bus reports itself — how many clips exist, and whether the two ambient
     # voices actually track the city. A drone wired to nothing sounds exactly like a drone.

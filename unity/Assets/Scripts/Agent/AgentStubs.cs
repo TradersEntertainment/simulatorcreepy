@@ -163,6 +163,11 @@ namespace Mesruiyet.Agent
             Str(sb, "pendingEvent", g.PendingEvent != null ? g.PendingEvent.Id : ""); sb.Append(',');
             Str(sb, "lastEvent", g.LastEventOutcome); sb.Append(',');
 
+            // Which menu, if any, is covering the game. The agent opens a term through the title
+            // screen the same way a player does, so it has to be able to see one.
+            var hud = UI.Hud.Instance;
+            Str(sb, "menu", hud == null ? "" : hud.MenuName); sb.Append(',');
+
             // Audio cannot be verified by listening in an unattended run, so it reports itself:
             // how many clips were synthesized, and what the two ambient voices are currently
             // doing. A drone that never responds to grievance is a dead system, silently.

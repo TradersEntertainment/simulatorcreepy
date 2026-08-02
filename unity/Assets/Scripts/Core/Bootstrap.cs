@@ -19,7 +19,20 @@ namespace Mesruiyet.Core
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void EnsurePresent()
         {
-            // Belt and braces: if the scene somehow ships without the component, put it back.
+            // This attribute fires once per application start, not once per scene load. Starting
+            // a new term reloads the scene, and the scene in Build Settings is deliberately empty
+            // — the world is assembled here — so without the sceneLoaded hook a restart would
+            // come back to an empty frame.
+            UnityEngine.SceneManagement.SceneManager.sceneLoaded -= OnSceneLoaded;
+            UnityEngine.SceneManagement.SceneManager.sceneLoaded += OnSceneLoaded;
+            Spawn();
+        }
+
+        static void OnSceneLoaded(UnityEngine.SceneManagement.Scene scene,
+                                  UnityEngine.SceneManagement.LoadSceneMode mode) => Spawn();
+
+        static void Spawn()
+        {
             if (FindFirstObjectByType<Bootstrap>() == null)
                 new GameObject("Bootstrap").AddComponent<Bootstrap>();
         }
@@ -84,18 +97,33 @@ namespace Mesruiyet.Core
 
             // The city has to keep looking like what it is: crowds re-read their districts and
             // the walls re-grow their politics after every tick.
-            Sim.TurnResolver.TurnCompleted += () =>
+            //
+            // Held in a field rather than written inline, because TurnCompleted is static and
+            // outlives the scene: restarting a term used to leave this closure subscribed to the
+            // previous city, and the first tick of the new one wrote into a NativeArray that had
+            // already been disposed. The unsubscribe in OnDestroy is the whole point.
+            _afterTick = () =>
             {
+                if (crowd == null || renderer == null) return;
                 crowd.Repopulate();
                 crowd.SyncMoods();
                 renderer.RefreshIdeology();
                 SeasonLight(state);
             };
+            Sim.TurnResolver.TurnCompleted += _afterTick;
             crowd.SyncMoods();
             SeasonLight(state);
 
             Debug.Log($"[Bootstrap] şehir kuruldu · {state.Buildings.Count} yapı · {state.Population} nüfus");
             CheckChains(state);
+        }
+
+        System.Action _afterTick;
+
+        void OnDestroy()
+        {
+            if (_afterTick != null) Sim.TurnResolver.TurnCompleted -= _afterTick;
+            _afterTick = null;
         }
 
         /// <summary>

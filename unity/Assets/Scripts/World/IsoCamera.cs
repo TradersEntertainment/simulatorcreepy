@@ -45,6 +45,19 @@ namespace Mesruiyet.World
         {
             if (_cam == null) return;
 
+            // At the title the camera drifts on its own, slowly, and takes no input. A still
+            // frame behind a menu is a poster; a city you are watching breathe is an invitation
+            // — and the drift also shows off the far side of the map before you have to govern it.
+            var hud = UI.Hud.Instance;
+            if (hud != null && hud.AtTitle)
+            {
+                _yaw += Time.deltaTime * 2.2f;
+                _targetYaw = _yaw;
+                _size = Mathf.Lerp(_size, DefaultSize * 1.12f, Time.deltaTime * 0.7f);
+                Apply();
+                return;
+            }
+
             var keyboard = Keyboard.current;
             if (keyboard != null)
             {
@@ -70,6 +83,18 @@ namespace Mesruiyet.World
             _yaw = Mathf.LerpAngle(_yaw, _targetYaw, Time.deltaTime * 9f);
             _size = Mathf.Lerp(_size, _targetSize, Time.deltaTime * 11f);
             Apply();
+        }
+
+        /// <summary>
+        /// Snap back to the framing the game is designed to be read at. The title screen lets the
+        /// yaw wander, which looks good and would be unplayable: the whole city is drawn to be
+        /// legible from a 45° multiple, and half a degree off makes every road read as a stair.
+        /// </summary>
+        public void ResetFraming()
+        {
+            _targetYaw = 45f;
+            _focus = Vector3.zero;
+            _targetSize = DefaultSize;
         }
 
         /// <summary>Pan in screen space, so W always means "up the screen" whatever the yaw is.</summary>

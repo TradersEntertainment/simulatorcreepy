@@ -38,7 +38,36 @@ namespace Mesruiyet.UI
         VisualElement _chainList;
         VisualElement _ministerRow, _telegramList, _telegramHead;
         VisualElement _councilHead, _councilBody, _outsideBody;
-        VisualElement _appointmentCard, _modal, _scrim, _finalSession;
+        VisualElement _appointmentCard, _modal, _scrim, _finalSession, _chrome;
+
+        // ---- menus. Kept out of _modal on purpose: a menu outranks every in-game panel and
+        // must be able to sit on top of the charter, the ballot or the accountability session.
+        VisualElement _menu;
+        /// <summary>True until the player starts a term. The city renders behind the title.</summary>
+        public bool AtTitle { get; private set; } = true;
+        public bool Paused { get; private set; }
+        /// <summary>Nothing in the world should respond while a menu is up.</summary>
+        public bool MenuOpen => _menu != null;
+
+        /// <summary>
+        /// Which panel is actually on screen. Derived from the panel rather than from AtTitle
+        /// and Paused, because those two describe where the player will return to, not what
+        /// they are looking at — settings opened from the title leaves AtTitle true.
+        /// </summary>
+        public string MenuName
+        {
+            get
+            {
+                if (_menu == null) return "";
+                switch (_menu.name)
+                {
+                    case "panel_title":    return "baslangic";
+                    case "panel_pause":    return "duraklatildi";
+                    case "panel_settings": return "ayarlar";
+                    default:               return _menu.name;
+                }
+            }
+        }
         VisualElement _lawSlotRow, _budgetSummary;
         Button _decreeButton;
         readonly List<VisualElement> _resCell = new List<VisualElement>();
@@ -60,6 +89,15 @@ namespace Mesruiyet.UI
             _root.style.flexGrow = 1;
             _root.pickingMode = PickingMode.Ignore;
 
+            // One container for everything that belongs to a term in progress, so the title
+            // screen can hide the lot with a single display flag rather than chasing panels.
+            _chrome = new VisualElement { name = "chrome" };
+            _chrome.style.position = Position.Absolute;
+            _chrome.style.left = 0; _chrome.style.top = 0;
+            _chrome.style.right = 0; _chrome.style.bottom = 0;
+            _chrome.pickingMode = PickingMode.Ignore;
+            _root.Add(_chrome);
+
             BuildLabelLayer();
             BuildTop();
             BuildRail();
@@ -75,6 +113,111 @@ namespace Mesruiyet.UI
             OutsideWorld.Changed += Refresh;
             CollapseWatcher.Changed += Refresh;
             Refresh();
+
+            // "DÖNEMİ YENİDEN KUR" means another term, not another look at the title card.
+            if (_resumeStraightIntoTerm) { _resumeStraightIntoTerm = false; StartTerm(); }
+            else OpenTitle();
+        }
+
+        /// <summary>
+        /// Static events outlive the scene. Without this, restarting a term leaves the old HUD
+        /// subscribed to every manager, and the first tick of the new city calls Refresh on a
+        /// destroyed MonoBehaviour — which throws once per event, per restart, forever.
+        /// </summary>
+        void OnDestroy()
+        {
+            TurnResolver.TurnCompleted -= Refresh;
+            MinisterManager.Changed -= Refresh;
+            GovernanceManager.Changed -= Refresh;
+            OutsideWorld.Changed -= Refresh;
+            CollapseWatcher.Changed -= Refresh;
+            if (Instance == this) Instance = null;
+        }
+
+        // ================================================================ menus
+
+        void ShowMenu(VisualElement panel)
+        {
+            _menu?.RemoveFromHierarchy();
+            _menu = panel;
+            _root.Add(panel);
+        }
+
+        void CloseMenu()
+        {
+            _menu?.RemoveFromHierarchy();
+            _menu = null;
+        }
+
+        public void OpenTitle()
+        {
+            AtTitle = true;
+            Paused = false;
+            ShowMenu(Menus.Title(StartTerm, () => OpenSettings(OpenTitle), Quit));
+        }
+
+        void StartTerm()
+        {
+            AtTitle = false;
+            Paused = false;
+            CloseMenu();
+            IsoCamera.Instance?.ResetFraming();
+            Refresh();
+        }
+
+        public void OpenPause()
+        {
+            if (AtTitle) return;
+            Paused = true;
+            ShowMenu(Menus.Pause(
+                Resume,
+                () => OpenSettings(OpenPause),
+                () => Reload(straightIntoTerm: true),
+                () => Reload(straightIntoTerm: false),
+                Quit));
+        }
+
+        void Resume()
+        {
+            Paused = false;
+            CloseMenu();
+        }
+
+        void OpenSettings(System.Action back) => ShowMenu(Menus.Settings(back));
+
+        /// <summary>
+        /// Survives the scene reload, which is the whole point: it is how the rebuilt HUD knows
+        /// whether the player asked for another term or asked to go back to the title.
+        /// </summary>
+        static bool _resumeStraightIntoTerm;
+
+        /// <summary>
+        /// Rebuild the world from scratch. Reloading the scene is the honest way to do it: the
+        /// city is assembled at runtime by Bootstrap, so re-running Bootstrap *is* a new term,
+        /// and there is no half-reset state left behind to go stale.
+        /// </summary>
+        void Reload(bool straightIntoTerm)
+        {
+            _resumeStraightIntoTerm = straightIntoTerm;
+            UnityEngine.SceneManagement.SceneManager.LoadScene(
+                UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex);
+        }
+
+        static void Quit()
+        {
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+#else
+            Application.Quit();
+#endif
+        }
+
+        /// <summary>ESC pauses, and backs out of a settings panel opened from a menu.</summary>
+        public void OnEscape()
+        {
+            if (_menu != null && _menu.name == "panel_settings") { if (AtTitle) OpenTitle(); else OpenPause(); return; }
+            if (AtTitle) return;
+            if (Paused) Resume(); else OpenPause();
         }
 
         // ================================================================ top strip
@@ -86,7 +229,7 @@ namespace Mesruiyet.UI
             top.style.top = 20; top.style.left = 24; top.style.right = 24;
             top.style.flexDirection = FlexDirection.Row;
             top.pickingMode = PickingMode.Ignore;
-            _root.Add(top);
+            _chrome.Add(top);
 
             // ---- identity
             var ident = UiKit.Glass().Pad(13, 20);
@@ -226,7 +369,7 @@ namespace Mesruiyet.UI
             scroll.style.top = 110; scroll.style.right = 24; scroll.style.bottom = 130;
             scroll.verticalScrollerVisibility = ScrollerVisibility.Auto;
             scroll.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
-            _root.Add(scroll);
+            _chrome.Add(scroll);
 
             var rail = scroll.contentContainer;
             rail.style.width = Length.Percent(100);
@@ -1747,7 +1890,7 @@ namespace Mesruiyet.UI
             // thirty-one buildings. At 128 the dock cut the bottom line off this card.
             _selectionCard.style.bottom = 190;
             _selectionCard.style.width = 340;
-            _root.Add(_selectionCard);
+            _chrome.Add(_selectionCard);
         }
 
         void PaintSelection()
@@ -1961,7 +2104,7 @@ namespace Mesruiyet.UI
             // safety net; the sizes below are what keep it on one row at 1920.
             dock.style.flexWrap = Wrap.WrapReverse;
             dock.pickingMode = PickingMode.Ignore;
-            _root.Add(dock);
+            _chrome.Add(dock);
 
             // ---- build hotbar
             var tools = UiKit.Glass().Pad(9, 8).Margin(right: 8);
@@ -2211,6 +2354,16 @@ namespace Mesruiyet.UI
 
         void Update()
         {
+            var keyboard = UnityEngine.InputSystem.Keyboard.current;
+            if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame) OnEscape();
+
+            // Everything the HUD draws is about a term in progress. At the title there is no
+            // term, so the panels stay hidden and only the city and the title card are visible.
+            bool inGame = !AtTitle;
+            _chrome.style.display = inGame ? DisplayStyle.Flex : DisplayStyle.None;
+            _labelLayer.style.display = inGame ? DisplayStyle.Flex : DisplayStyle.None;
+            if (!inGame) { UpdatePointerOverUi(); return; }
+
             UpdateLabels();
             UpdatePointerOverUi();
 
@@ -2242,6 +2395,11 @@ namespace Mesruiyet.UI
         /// <summary>Repaint everything that only changes on a tick or a build.</summary>
         public void Refresh()
         {
+            // At the title the term has not begun. Repainting is harmless, but opening the
+            // charter or an event card behind the title screen is not: the player would start
+            // their first turn with a decision already taken off-screen.
+            if (AtTitle) return;
+
             _turn.text = _state.Turn.ToString();
             _season.text = $"{_state.SeasonName} · {_state.Year}. YIL";
 
