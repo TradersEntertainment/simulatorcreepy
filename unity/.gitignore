@@ -1,0 +1,17 @@
+# Unity project (Game/) generated dirs
+Game/[Ll]ibrary/
+Game/[Tt]emp/
+Game/[Oo]bj/
+Game/[Bb]uild/
+Game/[Bb]uilds/
+Game/[Ll]ogs/
+Game/[Uu]ser[Ss]ettings/
+Game/[Mm]emoryCaptures/
+Game/.vs/
+Game/*.csproj
+Game/*.sln
+
+# agent loop output
+agent/build/
+agent/logs/
+agent/shots/
