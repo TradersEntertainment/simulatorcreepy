@@ -44,6 +44,7 @@ namespace Mesruiyet.UI
         VisualElement _selectionCard;
         VisualElement _labelLayer;
         readonly List<VisualElement> _districtLabels = new List<VisualElement>();
+        readonly List<VisualElement> _crisisMarkers = new List<VisualElement>();
         readonly List<Button> _hotbar = new List<Button>();
         Button _endTurn;
         Label _electionNote;
@@ -1519,7 +1520,9 @@ namespace Mesruiyet.UI
             BuildingDef def = armed ?? inspected?.Def;
             if (def == null)
             {
-                _selectionCard.style.display = DisplayStyle.None;
+                // Nothing selected: use the space for the turn report instead of leaving a
+                // hole. §10 opens every turn with RAPOR, and displayed values only.
+                PaintTurnReport();
                 return;
             }
             _selectionCard.style.display = DisplayStyle.Flex;
@@ -1602,6 +1605,105 @@ namespace Mesruiyet.UI
                 if (delta == 0) return;
                 AddRow(name, (delta > 0 ? "+" : "") + delta, delta > 0 ? UiKit.Green : UiKit.Red);
             }
+        }
+
+        /// <summary>
+        /// The turn report: what changed, in the governor's own numbers. Deliberately short —
+        /// four lines a player will actually read beats a page they will not — and deliberately
+        /// through Reporting, so a loyalist cabinet writes you a calm report about a famine.
+        /// </summary>
+        void PaintTurnReport()
+        {
+            _selectionCard.style.display = DisplayStyle.Flex;
+            _selectionCard.Clear();
+
+            _selectionCard.Add(UiKit.Caption($"{_state.Turn}. TUR RAPORU"));
+
+            // The headline is whatever is worst right now, stated plainly and without advice.
+            var buffer = Reporting.Buffer();
+            var food = _state.FoodChain;
+            string headline;
+            Color headlineColour;
+
+            if (buffer.Value <= 1.5f)
+            {
+                headline = "Güvenlik payı tükendi.";
+                headlineColour = UiKit.Red;
+            }
+            else if (WorstReportedGrievance(out var worst) >= 70f)
+            {
+                headline = $"{worst.Name} üçüncü turdur sakinleşmiyor.";
+                headlineColour = UiKit.Red;
+            }
+            else if (_state.Threat >= 60f)
+            {
+                headline = "Mersa sınırda hareketli.";
+                headlineColour = UiKit.Amber;
+            }
+            else if (_state.Loans.Count > 0 && _state.SealedSlots >= 2)
+            {
+                headline = "Yasa kitabının yarısı alacaklıların.";
+                headlineColour = UiKit.Amber;
+            }
+            else
+            {
+                headline = "Şehir bu tur ayakta.";
+                headlineColour = UiKit.Green;
+            }
+
+            var head = UiKit.Text(headline, 15, headlineColour, FontStyle.Bold).Margin(top: 6, bottom: 10);
+            head.style.whiteSpace = WhiteSpace.Normal;
+            _selectionCard.Add(head);
+
+            void Line(string k, string v, Color colour)
+            {
+                var row = UiKit.Row();
+                row.style.justifyContent = Justify.SpaceBetween;
+                row.style.paddingTop = 5; row.style.paddingBottom = 5;
+                row.style.borderTopWidth = 1;
+                row.style.borderTopColor = new Color(1, 1, 1, 0.07f);
+                row.Add(UiKit.Text(k, 12, UiKit.Hex("#8E9CB0")));
+                row.Add(UiKit.Text(v, 12, colour, FontStyle.Bold));
+                _selectionCard.Add(row);
+            }
+
+            Line("Güvenlik payı", $"{buffer.Value:0} tur" + (buffer.Reliable ? "" : " ?"),
+                 buffer.Value <= 2 ? UiKit.Red : buffer.Value <= 4 ? UiKit.Amber : UiKit.Green);
+
+            var money = Reporting.Flow(Res.Para);
+            Line("Hazine", UiKit.Signed(money.Value) + " ₺ / tur", UiKit.FlowColour(money.Value));
+
+            Line("Ekmek zinciri", Reporting.Diagnosis("yiyecek"),
+                 Reporting.Diagnosis("yiyecek") == "akıyor" ? UiKit.Green : UiKit.Red);
+
+            WorstReportedGrievance(out var loudest);
+            Line("En hareketli mahalle",
+                 $"{loudest.Name} · {Reporting.Grievance(loudest.Id).Value:0}",
+                 UiKit.GrievanceColour(Reporting.Grievance(loudest.Id).Value));
+
+            if (_state.Threat > 5f)
+                Line("Mersa", $"{_state.Threat:0}",
+                     _state.Threat >= 70 ? UiKit.Red : _state.Threat >= 40 ? UiKit.Amber : UiKit.Muted);
+
+            if (!string.IsNullOrEmpty(_state.LastEventOutcome))
+            {
+                var note = UiKit.Text(_state.LastEventOutcome, 11, UiKit.Hex("#9AA8BC")).Margin(top: 9);
+                note.style.whiteSpace = WhiteSpace.Normal;
+                _selectionCard.Add(note);
+            }
+        }
+
+        /// <summary>The loudest district *as reported*, which is not always the loudest one.</summary>
+        float WorstReportedGrievance(out DistrictState worst)
+        {
+            worst = _state.Districts[0];
+            float top = Reporting.Grievance(worst.Id).Value;
+            foreach (var d in _state.Districts)
+            {
+                float v = Reporting.Grievance(d.Id).Value;
+                if (v > top) { top = v; worst = d; }
+            }
+            return top;
         }
 
         // ================================================================ bottom dock
@@ -1768,6 +1870,27 @@ namespace Mesruiyet.UI
 
                 _labelLayer.Add(holder);
                 _districtLabels.Add(holder);
+
+                // The crisis marker: a dashed ring on the map with a floating tag above it.
+                // It reads Reporting like everything else, so a Halk minister who rounds
+                // grievance down also quietly removes the ring — which is the correct and
+                // frightening behaviour.
+                var alarm = new VisualElement();
+                alarm.style.position = Position.Absolute;
+                alarm.pickingMode = PickingMode.Ignore;
+                alarm.style.alignItems = Align.Center;
+                alarm.style.display = DisplayStyle.None;
+
+                var tag = UiKit.Text("AYAKLANMA · 1. TUR", 10, UiKit.Red, FontStyle.Bold);
+                tag.style.letterSpacing = 1.2f;
+                tag.style.backgroundColor = (Color)new Color32(11, 14, 19, 217);
+                tag.Radius(5).Pad(3, 8).Margin(bottom: 3);
+                tag.style.whiteSpace = WhiteSpace.NoWrap;
+                alarm.Add(tag);
+                alarm.Add(new CrisisRing(118, 62));
+
+                _labelLayer.Add(alarm);
+                _crisisMarkers.Add(alarm);
             }
         }
 
@@ -1793,6 +1916,25 @@ namespace Mesruiyet.UI
                 float w = _root.resolvedStyle.width, h = _root.resolvedStyle.height;
                 bool clear = panel.x > 20 && panel.x < w - 400
                           && panel.y > 108 && panel.y < h - 140;
+                var reported = Reporting.Grievance(d.Id);
+
+                // The ring is placed first and is not subject to the label's safe area: a
+                // district in crisis behind the rail is still a district in crisis.
+                var marker = _crisisMarkers[i];
+                bool crisis = reported.Value >= 70f;
+                marker.style.display = crisis ? DisplayStyle.Flex : DisplayStyle.None;
+                if (crisis)
+                {
+                    Vector3 ground = CityGrid.World(bounds.xMin + bounds.width / 2,
+                                                    bounds.yMin + bounds.height / 2);
+                    Vector2 at = RuntimePanelUtils.CameraTransformWorldToPanel(_labelLayer.panel, ground, cam);
+                    marker.style.left = at.x - marker.resolvedStyle.width * 0.5f;
+                    marker.style.top = at.y - marker.resolvedStyle.height * 0.5f;
+
+                    ((Label)marker[0]).text = $"AYAKLANMA · {d.AngryStreak + 1}. TUR";
+                    ((CrisisRing)marker[1]).SetAlarm(Mathf.Clamp01((reported.Value - 70f) / 30f));
+                }
+
                 holder.style.display = clear ? DisplayStyle.Flex : DisplayStyle.None;
                 if (!clear) continue;
 
@@ -1801,7 +1943,6 @@ namespace Mesruiyet.UI
 
                 var box = holder[0];
                 var grievance = (Label)box[1];
-                var reported = Reporting.Grievance(d.Id);
                 grievance.text = $"hoşnutsuzluk {reported.Value:0}" + (reported.Reliable ? "" : " ?");
                 grievance.style.color = UiKit.GrievanceColour(reported.Value);
             }
@@ -1974,6 +2115,11 @@ namespace Mesruiyet.UI
         }
     }
 }
+
+
+
+
+
 
 
 

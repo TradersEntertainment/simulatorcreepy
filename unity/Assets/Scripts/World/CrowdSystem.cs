@@ -134,6 +134,15 @@ namespace Mesruiyet.World
         Matrix4x4[] _banners;
         int _bannerCount;
 
+        // Smoke over the industrial quarter. Opaque low-poly puffs rather than a particle
+        // system: it matches the toy-city look, needs no extra shader or material to survive
+        // variant stripping, and rides the instanced draw path that already exists.
+        struct Puff { public Vector3 Base; public float Height; public float Speed; public float Size; }
+        Puff[] _puffs = new Puff[0];
+        Matrix4x4[] _puffMatrices = new Matrix4x4[0];
+        Mesh _puffMesh;
+        Material _smokeMat;
+
         JobHandle _handle;
         uint _frame;
 
@@ -161,6 +170,7 @@ namespace Mesruiyet.World
             }
             _banners = new Matrix4x4[MaxAgents];
 
+            BuildSmoke(template);
             Repopulate();
 
             Debug.Log($"[Crowd] kişi {_personMesh.vertexCount}v · araba {_carMesh.vertexCount}v · " +
@@ -218,6 +228,79 @@ namespace Mesruiyet.World
             _bannerMat.SetColor("_Tint", new Color(0.88f, 0.25f, 0.18f));
         }
 
+        // ---------------------------------------------------------------- smoke
+
+        void BuildSmoke(Material template)
+        {
+            var b = new MeshBuilder();
+            b.AddBox(new Vector3(0, 0, 0), new Vector3(1f, 1f, 1f), Color.white, includeBottom: true);
+            _puffMesh = b.ToMesh("Puff");
+
+            _smokeMat = new Material(template) { name = "Smoke", enableInstancing = true };
+            _smokeMat.SetColor("_Tint", new Color(0.72f, 0.76f, 0.80f));
+
+            RescanStacks();
+        }
+
+        /// <summary>Re-find the chimneys. Called whenever the city changes, so a new works smokes.</summary>
+        void RescanStacks()
+        {
+            // Six puffs per chimney, staggered up the column.
+            var stacks = new System.Collections.Generic.List<Vector3>();
+            foreach (var bld in _state.Buildings)
+            {
+                if (bld.Def.Pollution <= 0) continue;
+                var at = CityGrid.World(bld.Tile.x, bld.Tile.y);
+                stacks.Add(new Vector3(at.x + 1.3f, bld.Def.Storeys * 3.1f + 5.5f, at.z - 1.2f));
+            }
+
+            _puffs = new Puff[stacks.Count * 6];
+            _puffMatrices = new Matrix4x4[_puffs.Length];
+            uint seed = 0x51ED2701u;
+            for (int i = 0; i < _puffs.Length; i++)
+            {
+                _puffs[i] = new Puff
+                {
+                    Base = stacks[i / 6],
+                    Height = Rand(ref seed) * 14f,
+                    Speed = 1.4f + Rand(ref seed) * 1.1f,
+                    Size = 1.1f + Rand(ref seed) * 1.3f,
+                };
+            }
+        }
+
+        void DrawSmoke()
+        {
+            if (_puffs.Length == 0) return;
+
+            // Emission scales with Kirlilik: a clean city has a thin wisp, a filthy one a plume
+            // you can see from the far side of the map.
+            float pollution = Mathf.Clamp01(_state.Kirlilik / 45f);
+            int count = Mathf.RoundToInt(_puffs.Length * pollution);
+            if (count == 0) return;
+
+            for (int i = 0; i < count; i++)
+            {
+                var puff = _puffs[i];
+                puff.Height += puff.Speed * Time.deltaTime;
+                if (puff.Height > 16f) puff.Height = 0f;
+                _puffs[i] = puff;
+
+                float t = puff.Height / 16f;
+                float size = puff.Size * (0.5f + t * 1.9f);
+                var pos = puff.Base + new Vector3(t * 3.5f, puff.Height, t * 2.2f);
+                _puffMatrices[i] = Matrix4x4.TRS(pos, Quaternion.Euler(0, t * 90f, 0), Vector3.one * size);
+            }
+
+            var rp = new RenderParams(_smokeMat)
+            {
+                shadowCastingMode = ShadowCastingMode.Off,
+                receiveShadows = false,
+                worldBounds = new Bounds(Vector3.zero, Vector3.one * 400f),
+            };
+            Graphics.RenderMeshInstanced(rp, _puffMesh, 0, _puffMatrices, count);
+        }
+
         // ---------------------------------------------------------------- population
 
         static float Rand(ref uint s)
@@ -232,6 +315,8 @@ namespace Mesruiyet.World
         /// </summary>
         public void Repopulate()
         {
+            RescanStacks();
+
             int wanted = Mathf.Clamp(_state.Population / 3, 40, MaxAgents);
             uint seed = 0x9E3779B9u;
 
@@ -343,6 +428,7 @@ namespace Mesruiyet.World
             _handle.Complete();
 
             Draw();
+            DrawSmoke();
         }
 
         void Draw()
@@ -431,6 +517,8 @@ namespace Mesruiyet.World
         }
     }
 }
+
+
 
 
 

@@ -605,10 +605,32 @@ switch ($Scenario) {
                     (Crowd $angry "walking"), (Crowd $angry "idle"), (Crowd $angry "marching"), (Crowd $angry "hidden"))
         Check ((Crowd $angry "marching") -gt 0) "kalabalık meydana yürüdü, pankart taşıyor"
 
-        # ---- 4. the city looks like its politics — verified by eye, close up
+        # ---- 4. the crisis ring, and who decides whether you can see it.
+        #        The city is identical either side of this appointment.
+        Write-Host "`n[loop] HARİTADAKİ KRİZ:" -ForegroundColor Cyan
+        $trueWorst = 0
+        if ($angry -match '"grievance":([\d.]+)') { }
+        foreach ($m in ([regex]::Matches($angry, '"grievance":([\d.]+)'))) {
+            $v = [double]$m.Groups[1].Value
+            if ($v -gt $trueWorst) { $trueWorst = $v }
+        }
+        $saidLoyal = Field $angry "enYuksekHosnutsuzluk"
+        Write-Host ("  sadık bakanla : gerçek {0:N0} · bildirilen {1:N0}" -f $trueWorst, $saidLoyal)
+        Check ($trueWorst -ge 70) "mahalle gerçekten ayaklanma eşiğinde"
+        Check ($saidLoyal -lt 70) "sadık bakan eşiğin altında bildiriyor — haritada halka yok"
+
+        Send-Cmd '{"cmd":"appoint","id":"halk","n":0}' | Out-Null
+        Start-Sleep -Milliseconds 800
+        Shot "04-kriz-halkasi.png"
+        $honest = Send-Cmd '{"cmd":"state"}'
+        $saidHonest = Field $honest "enYuksekHosnutsuzluk"
+        Write-Host ("  uzman bakanla : bildirilen {0:N0}" -f $saidHonest)
+        Check ($saidHonest -ge 70) "uzman bakan gerçeği bildiriyor — halka haritada belirir"
+
+        # ---- 5. the city looks like its politics — verified by eye, close up
         foreach ($i in 1..7) { Send-Cmd '{"cmd":"press","key":"zoomin"}' | Out-Null }
         Start-Sleep -Milliseconds 900
-        Shot "04-yakin-ideoloji.png"
+        Shot "05-yakin-ideoloji.png"
 
         Write-Host "`n[loop] İDEOLOJİ PROPLARI:" -ForegroundColor Cyan
         Write-Host ("  otorite {0:N0} · ekonomi {1:N0}" -f `
@@ -661,5 +683,6 @@ if ($chainBroken) {
 }
 
 Write-Host "`n[loop] temiz. Görüntüler: agent\shots\" -ForegroundColor Green
+
 
 

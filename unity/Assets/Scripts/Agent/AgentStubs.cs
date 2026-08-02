@@ -204,6 +204,16 @@ namespace Mesruiyet.Agent
             Num(sb, "para", Reporting.Stock(Res.Para).Value); sb.Append(',');
             Num(sb, "malzeme", Reporting.Stock(Res.Malzeme).Value); sb.Append(',');
             Str(sb, "yiyecekTeshis", Reporting.Diagnosis("yiyecek")); sb.Append(',');
+
+            // The loudest district as the governor is told it, which is what decides whether a
+            // crisis ring appears on the map at all.
+            float loudest = 0;
+            foreach (var d in g.Districts)
+            {
+                float v = Reporting.Grievance(d.Id).Value;
+                if (v > loudest) loudest = v;
+            }
+            Num(sb, "enYuksekHosnutsuzluk", loudest); sb.Append(',');
             Bool(sb, "yiyecekReliable", Reporting.Stock(Res.Yiyecek).Reliable);
             sb.Append('}');
 
@@ -428,6 +438,7 @@ namespace Mesruiyet.Agent
     }
 }
 #endif
+
 
 
 

@@ -6,6 +6,7 @@
 // an order that is easy to read and easy to reorder.
 
 using UnityEngine;
+using UnityEngine.Rendering.Universal;
 using UnityEngine.UIElements;
 using Mesruiyet.Sim;
 using Mesruiyet.UI;
@@ -137,7 +138,42 @@ namespace Mesruiyet.Core
             cam.tag = "MainCamera";
 
             go.AddComponent<IsoCamera>().Init(cam);
+            BuildPostFx(cam);
             return cam;
+        }
+
+        /// <summary>
+        /// The vignette the design asks for: corners pulled down so the city reads as an object
+        /// floating in space rather than a texture filling a rectangle. Built as a runtime URP
+        /// volume — no profile asset to author, nothing to keep in sync.
+        ///
+        /// Bloom is deliberately faint. The lit windows are emissive quads and a heavy bloom
+        /// would smear the flat colours the whole art direction depends on.
+        /// </summary>
+        void BuildPostFx(Camera cam)
+        {
+            var data = cam.GetUniversalAdditionalCameraData();
+            data.renderPostProcessing = true;
+            data.antialiasing = UnityEngine.Rendering.Universal.AntialiasingMode.FastApproximateAntialiasing;
+
+            var profile = ScriptableObject.CreateInstance<UnityEngine.Rendering.VolumeProfile>();
+
+            var vignette = profile.Add<UnityEngine.Rendering.Universal.Vignette>(true);
+            vignette.intensity.Override(0.42f);
+            vignette.smoothness.Override(0.55f);
+            vignette.color.Override(UiKit.Hex("#06090E"));
+
+            var bloom = profile.Add<UnityEngine.Rendering.Universal.Bloom>(true);
+            bloom.intensity.Override(0.38f);
+            bloom.threshold.Override(0.92f);
+            bloom.scatter.Override(0.62f);
+
+            var go = new GameObject("PostFx");
+            go.transform.SetParent(transform, false);
+            var volume = go.AddComponent<UnityEngine.Rendering.Volume>();
+            volume.isGlobal = true;
+            volume.priority = 1f;
+            volume.profile = profile;
         }
 
         void BuildLighting()
@@ -200,6 +236,7 @@ namespace Mesruiyet.Core
         }
     }
 }
+
 
 
 
