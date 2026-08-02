@@ -87,8 +87,11 @@ namespace Mesruiyet.Core
 
             // Laws and standing decrees scale what a building can move. Applied here rather
             // than at the call sites so a repeal takes effect the same turn, exactly.
+            // Competence multiplies everything. It is what a purged ministry or a city that
+            // never accumulates actually costs you, and no panel ever names it.
             float chainMult = state.Modifiers.ChainThroughput
-                            * (1f + state.EffectMagnitude(DecreeEffect.Overtime));
+                            * (1f + state.EffectMagnitude(DecreeEffect.Overtime))
+                            * state.Competence;
 
             foreach (var b in state.Buildings)
             {
@@ -273,6 +276,7 @@ namespace Mesruiyet.Core
         static string F(float v) => v.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
     }
 }
+
 
 
 

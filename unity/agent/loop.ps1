@@ -641,6 +641,69 @@ switch ($Scenario) {
         $state = Send-Cmd '{"cmd":"state"}'
     }
 
+    # The end of a term, and the session that reads it back. Drift to DÖNÜŞSÜZ by answering
+    # each turn quickly, watch the eight-turn countdown start, and let it run out.
+    "son" {
+        function Field([string] $json, [string] $key) {
+            if ($json -match "`"$key`":(-?[\d.]+)") { return [double]$Matches[1] }
+            return [double]::NaN
+        }
+        $ok = $true
+        function Check([bool] $pass, [string] $label) {
+            if ($pass) { Write-Host "  ✔ $label" -ForegroundColor Green }
+            else { Write-Host "  ✘ $label" -ForegroundColor Red; $script:ok = $false }
+        }
+
+        Write-Host "`n[loop] SÜRÜKLENME:" -ForegroundColor Cyan
+        $countdownSeen = $false
+        $guard = 0
+        while ($guard -lt 40) {
+            $s = Send-Cmd '{"cmd":"state"}'
+            if ($s -match '"isOver":true') { break }
+            if ((Field $s "noReturnCountdown") -gt 0 -and -not $countdownSeen) {
+                $countdownSeen = $true
+                Write-Host ("  geri dönüş sayacı başladı · otorite {0:N0}" -f (Field $s "axisOrder"))
+                Shot "01-geri-donus.png"
+            }
+            if ($s -notmatch '"pendingEvent":""') { Send-Cmd '{"cmd":"event","n":0}' | Out-Null }
+            if ($s -match '"electionPending":true') { Send-Cmd '{"cmd":"election","id":"ertele"}' | Out-Null }
+
+            Send-Cmd '{"cmd":"decree","id":"sokaga_cikma"}' | Out-Null
+            Send-Cmd '{"cmd":"decree","id":"basin_talimatnamesi"}' | Out-Null
+
+            $t = Get-Turn
+            Send-Cmd '{"cmd":"endturn","n":1}' | Out-Null
+            Wait-Turn ($t + 1) 40 | Out-Null
+            $guard++
+        }
+
+        $final = Send-Cmd '{"cmd":"state"}'
+        Start-Sleep -Milliseconds 1200
+        Shot "02-hesap-verme.png"
+
+        $ending = ""
+        if ($final -match '"ending":"([^"]*)"') { $ending = $Matches[1] }
+        Write-Host "`n[loop] SON:" -ForegroundColor Cyan
+        Write-Host ("  {0} · {1}. tur" -f $ending, (Field $final "turn"))
+        Write-Host ("  otorite {0:N0} · yetkinlik {1:N2} · kaybedilen mahalle {2:N0}" -f `
+                    (Field $final "axisOrder"), (Field $final "competence"), (Field $final "lostDistricts"))
+
+        Check $countdownSeen "geri dönüş sayacı göründü"
+        Check ($final -match '"isOver":true') "görev sona erdi"
+        Check ($ending -ne "") "bir son kartı seçildi"
+        Check ((Field $final "historyRows") -gt 5) "tur tur kayıt tutuldu — oturum okuyabilir"
+        Check ((Field $final "competence") -lt 1) "tasfiyeler yetkinliği kalıcı olarak aşındırdı"
+
+        # A finished term must not keep ticking.
+        $t = Get-Turn
+        Send-Cmd '{"cmd":"endturn","n":1}' | Out-Null
+        Start-Sleep -Seconds 2
+        Check ((Get-Turn) -eq $t) "biten görev tur ilerletmiyor"
+
+        if (-not $ok) { $chainBroken = $true }
+        $state = $final
+    }
+
     "turns40" {
         $t = Get-Turn
         Send-Cmd '{"cmd":"endturn","n":40}' | Out-Null

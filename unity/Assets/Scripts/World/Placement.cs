@@ -131,10 +131,10 @@ namespace Mesruiyet.World
         }
 
         public int MoneyCost(BuildingDef def)
-            => Mathf.RoundToInt(def.CostMoney * _state.Modifiers.BuildCost);
+            => Mathf.RoundToInt(def.CostMoney * _state.Modifiers.BuildCost * _state.Consent);
 
         public int MaterialCost(BuildingDef def)
-            => Mathf.RoundToInt(def.CostMaterial * _state.Modifiers.BuildCost);
+            => Mathf.RoundToInt(def.CostMaterial * _state.Modifiers.BuildCost * _state.Consent);
 
         /// <summary>Every reason a build can be refused, in one place, phrased for the player.</summary>
         public bool CanBuild(BuildingDef def, int x, int y, out string reason)
@@ -157,7 +157,13 @@ namespace Mesruiyet.World
                 return false;
             }
 
-            if (Districts.At(x, y) == null) { reason = "Bu parsel hiçbir mahalleye ait değil."; return false; }
+            var district = Districts.At(x, y);
+            if (district == null) { reason = "Bu parsel hiçbir mahalleye ait değil."; return false; }
+            if (_state.District(district.Id).Lost)
+            {
+                reason = $"{district.Name} artık valiliğe bağlı değil.";
+                return false;
+            }
 
             // Laws move what building costs, so quote the price the player will actually pay.
             int money = MoneyCost(def);
@@ -233,6 +239,7 @@ namespace Mesruiyet.World
         }
     }
 }
+
 
 
 

@@ -37,7 +37,7 @@ namespace Mesruiyet.UI
         VisualElement _chainList;
         VisualElement _ministerRow, _telegramList, _telegramHead;
         VisualElement _councilHead, _councilBody, _outsideBody;
-        VisualElement _appointmentCard, _modal, _scrim;
+        VisualElement _appointmentCard, _modal, _scrim, _finalSession;
         VisualElement _lawSlotRow;
         Button _decreeButton;
         readonly List<VisualElement> _resCell = new List<VisualElement>();
@@ -47,7 +47,7 @@ namespace Mesruiyet.UI
         readonly List<VisualElement> _crisisMarkers = new List<VisualElement>();
         readonly List<Button> _hotbar = new List<Button>();
         Button _endTurn;
-        Label _electionNote;
+        Label _electionNote, _noReturn;
 
         public void Init(GameState state, UIDocument doc)
         {
@@ -72,6 +72,7 @@ namespace Mesruiyet.UI
             MinisterManager.Changed += Refresh;
             GovernanceManager.Changed += Refresh;
             OutsideWorld.Changed += Refresh;
+            CollapseWatcher.Changed += Refresh;
             Refresh();
         }
 
@@ -837,6 +838,16 @@ namespace Mesruiyet.UI
             _axisRow1 = UiKit.Column();
             card.Add(_axisRow0);
             card.Add(_axisRow1);
+
+            // The eight-turn countdown the design asks for, stated plainly and impossible to
+            // miss. Pulling back below 80 stops it and costs something real.
+            _noReturn = UiKit.Text("GERİ DÖNÜŞ · 8 TUR", 11, UiKit.Red, FontStyle.Bold);
+            _noReturn.style.letterSpacing = 1.4f;
+            _noReturn.style.unityTextAlign = TextAnchor.MiddleCenter;
+            _noReturn.style.backgroundColor = UiKit.Alpha(UiKit.Red, 0.18f);
+            _noReturn.Radius(7).Pad(7, 10).Margin(top: 12);
+            _noReturn.style.display = DisplayStyle.None;
+            card.Add(_noReturn);
             return card;
         }
 
@@ -2048,6 +2059,22 @@ namespace Mesruiyet.UI
 
             // An election is not a notification you can dismiss. It opens, and it waits — and
             // it closes itself the moment it has been answered, however it was answered.
+            // The term is over: nothing else on this screen matters any more.
+            if (_state.IsOver)
+            {
+                if (_finalSession == null)
+                {
+                    CloseModal();
+                    _finalSession = FinalSession.Build(_state, () =>
+                    {
+                        _finalSession.RemoveFromHierarchy();
+                        _finalSession = null;
+                    });
+                    _root.Add(_finalSession);
+                }
+                return;
+            }
+
             bool electionOpen = _modal != null && _modal.name == "panel_election";
             if (_state.ElectionPending && !electionOpen) OpenElection();
             else if (!_state.ElectionPending && electionOpen) CloseModal();
@@ -2061,6 +2088,10 @@ namespace Mesruiyet.UI
 
             PaintAxis(_axisRow0, "Otorite", "Özgürlük", Reporting.AxisOrder, v => v.x);
             PaintAxis(_axisRow1, "Sermaye", "Eşitlik", Reporting.AxisEconomy, v => v.y);
+
+            _noReturn.style.display = _state.NoReturnCountdown > 0 ? DisplayStyle.Flex : DisplayStyle.None;
+            if (_state.NoReturnCountdown > 0)
+                _noReturn.text = $"GERİ DÖNÜŞ · {_state.NoReturnCountdown} TUR";
             PaintFactions();
             PaintSelection();
 
@@ -2115,6 +2146,7 @@ namespace Mesruiyet.UI
         }
     }
 }
+
 
 
 

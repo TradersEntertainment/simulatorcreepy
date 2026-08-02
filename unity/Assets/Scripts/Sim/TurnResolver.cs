@@ -33,7 +33,7 @@ namespace Mesruiyet.Sim
 
         public void BeginTurn()
         {
-            if (!Idle) return;
+            if (!Idle || _state.IsOver) return;
             Idle = false;
             StartCoroutine(Resolve());
         }
@@ -72,6 +72,9 @@ namespace Mesruiyet.Sim
 
             g.BufferTurns = ComputeBuffer();
             g.RecordTrail();
+
+            CollapseWatcher.Instance.Tick();
+            RecordHistory();
 
             // Governance before transparency: a law adopted this turn changes how clean the
             // numbers are, and the chamber has to hear the city as it stands now.
@@ -123,6 +126,7 @@ namespace Mesruiyet.Sim
             foreach (var b in g.Buildings)
             {
                 if (b.Disabled) { b.Staffed = false; continue; }        // strike, fire, sabotage
+                if (g.District(b.District).Lost) { b.Staffed = false; continue; }  // no longer yours
                 if (b.Def.Workers <= 0) { b.Staffed = true; continue; }
                 if (used + b.Def.Workers <= pool)
                 {
@@ -275,7 +279,11 @@ namespace Mesruiyet.Sim
         {
             float t = 0;
             foreach (var d in _state.Districts)
+            {
+                // A district that has passed to a local strongman keeps its own taxes.
+                if (d.Lost) continue;
                 t += d.Population * 0.22f * (0.5f + d.Def.Wealth / 100f);
+            }
             return t * _state.Modifiers.Tax;
         }
 
@@ -504,6 +512,37 @@ namespace Mesruiyet.Sim
             return Mathf.Clamp(worst, 0f, 9f);
         }
 
+        /// <summary>
+        /// One row a turn: what was true, and what the governor was told. Written here rather
+        /// than in the HUD because the accountability session has to be able to read back a
+        /// term nobody was watching closely at the time.
+        /// </summary>
+        void RecordHistory()
+        {
+            var g = _state;
+            float trueWorst = 0, shownWorst = 0;
+            foreach (var d in g.Districts)
+            {
+                if (d.Grievance > trueWorst) trueWorst = d.Grievance;
+                float shown = Reporting.Grievance(d.Id).Value;
+                if (shown > shownWorst) shownWorst = shown;
+            }
+
+            g.History.Add(new TurnRecord
+            {
+                Turn = g.Turn,
+                TrueFood = g.FoodChain.Final.Stock,
+                ShownFood = Reporting.Stock(Res.Yiyecek).Value,
+                TrueBuffer = g.BufferTurns,
+                ShownBuffer = Reporting.Buffer().Value,
+                TrueGrievance = trueWorst,
+                ShownGrievance = shownWorst,
+                AxisOrder = g.AxisOrder,
+                AxisEconomy = g.AxisEconomy,
+                Legitimacy = g.Legitimacy,
+            });
+        }
+
         int LegitimacyDelta()
         {
             var g = _state;
@@ -587,6 +626,8 @@ namespace Mesruiyet.Sim
         }
     }
 }
+
+
 
 
 

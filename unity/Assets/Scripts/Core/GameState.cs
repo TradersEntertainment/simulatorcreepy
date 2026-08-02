@@ -34,8 +34,22 @@ namespace Mesruiyet.Core
         /// <summary>Turns spent above 70 grievance. Three in a row and the district acts.</summary>
         public int AngryStreak;
 
+        /// <summary>Passed to a local strongman. Its production and its tiles are no longer yours.</summary>
+        public bool Lost;
+
         public string Name => Def.Name;
         public DistrictId Id => Def.Id;
+    }
+
+    /// <summary>A single turn, as it was and as it was described.</summary>
+    public struct TurnRecord
+    {
+        public int Turn;
+        public float TrueFood, ShownFood;
+        public float TrueBuffer, ShownBuffer;
+        public float TrueGrievance, ShownGrievance;
+        public int AxisOrder, AxisEconomy;
+        public int Legitimacy;
     }
 
     public sealed class GameState
@@ -157,6 +171,43 @@ namespace Mesruiyet.Core
                 for (int i = 0; i < ElectionTurns.Length; i++)
                     if (ElectionTurns[i] == Turn) return true;
                 return false;
+            }
+        }
+
+        // ---------------------------------------------------------------- collapse
+        /// <summary>
+        /// What the administration can still actually do, 1 down to 0.45. Purges and a city that
+        /// never accumulates both erode it, permanently, and nothing announces it.
+        /// </summary>
+        public float Competence = 1f;
+
+        /// <summary>Build cost multiplier from needing everyone's consent. 1 upward.</summary>
+        public float Consent = 1f;
+
+        public float SecessionPressure;
+        public int BankruptTurns;
+
+        /// <summary>Turns left before DÖNÜŞSÜZ becomes final, or 0.</summary>
+        public int NoReturnCountdown;
+        /// <summary>True once a term has gone past 90 on an axis and come back. The best ending.</summary>
+        public bool PulledBack;
+
+        public Ending Ending = Ending.None;
+        public bool IsOver => Ending != Ending.None;
+
+        /// <summary>
+        /// One row per turn: what was true and what the governor was told. The accountability
+        /// session reads this back line by line, and it is the only reason it can.
+        /// </summary>
+        public readonly List<TurnRecord> History = new List<TurnRecord>();
+
+        public int LostDistricts
+        {
+            get
+            {
+                int n = 0;
+                foreach (var d in Districts) if (d.Lost) n++;
+                return n;
             }
         }
 
@@ -282,4 +333,5 @@ namespace Mesruiyet.Core
         }
     }
 }
+
 

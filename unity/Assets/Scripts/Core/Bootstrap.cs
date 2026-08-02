@@ -63,6 +63,9 @@ namespace Mesruiyet.Core
             var outside = gameObject.AddComponent<OutsideWorld>();
             outside.Init(state);
 
+            var collapse = gameObject.AddComponent<CollapseWatcher>();
+            collapse.Init(state);
+
             var resolver = gameObject.AddComponent<TurnResolver>();
             resolver.Init(state);
 
@@ -236,6 +239,7 @@ namespace Mesruiyet.Core
         }
     }
 }
+
 
 
 

@@ -188,6 +188,16 @@ namespace Mesruiyet.Agent
                 sb.Append("},");
             }
 
+            // How the term is going, and how it ended if it has.
+            Str(sb, "ending", g.Ending == Ending.None ? "" : Endings.Get(g.Ending).Title); sb.Append(',');
+            Bool(sb, "isOver", g.IsOver); sb.Append(',');
+            Num(sb, "noReturnCountdown", g.NoReturnCountdown); sb.Append(',');
+            Bool(sb, "pulledBack", g.PulledBack); sb.Append(',');
+            Num(sb, "competence", g.Competence); sb.Append(',');
+            Num(sb, "consent", g.Consent); sb.Append(',');
+            Num(sb, "lostDistricts", g.LostDistricts); sb.Append(',');
+            Num(sb, "historyRows", g.History.Count); sb.Append(',');
+
             sb.Append("\"factions\":{");
             for (int f = 0; f < 5; f++)
             {
@@ -438,6 +448,7 @@ namespace Mesruiyet.Agent
     }
 }
 #endif
+
 
 
 
