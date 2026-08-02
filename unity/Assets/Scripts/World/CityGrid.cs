@@ -187,6 +187,44 @@ namespace Mesruiyet.Core
             // Trees and scrub on whatever is left, purely for silhouette.
         }
 
+        /// <summary>
+        /// Road tiles inside a rectangle. This is a district's road capacity, and the reason
+        /// laying a road is worth doing: a quarter that grew without streets jams.
+        /// </summary>
+        public int RoadTilesIn(RectInt bounds)
+        {
+            int n = 0;
+            for (int y = bounds.yMin; y < bounds.yMax; y++)
+            for (int x = bounds.xMin; x < bounds.xMax; x++)
+                if (At(x, y) == TileKind.Yol) n++;
+            return n;
+        }
+
+        /// <summary>
+        /// The road neighbours of a tile, written into <paramref name="into"/>. Four entries at
+        /// most; returns how many. This is the whole road graph — no adjacency list to keep in
+        /// sync, because the grid already is one.
+        /// </summary>
+        public int RoadNeighbours(int x, int y, Vector2Int[] into)
+        {
+            int n = 0;
+            if (At(x + 1, y) == TileKind.Yol) into[n++] = new Vector2Int(x + 1, y);
+            if (At(x - 1, y) == TileKind.Yol) into[n++] = new Vector2Int(x - 1, y);
+            if (At(x, y + 1) == TileKind.Yol) into[n++] = new Vector2Int(x, y + 1);
+            if (At(x, y - 1) == TileKind.Yol) into[n++] = new Vector2Int(x, y - 1);
+            return n;
+        }
+
+        /// <summary>Every road tile on the map, for spawning traffic.</summary>
+        public System.Collections.Generic.List<Vector2Int> AllRoadTiles()
+        {
+            var list = new System.Collections.Generic.List<Vector2Int>(512);
+            for (int y = 0; y < Height; y++)
+            for (int x = 0; x < Width; x++)
+                if (Tiles[Index(x, y)] == TileKind.Yol) list.Add(new Vector2Int(x, y));
+            return list;
+        }
+
         /// <summary>Deterministic 0..1 hash for a tile, for scatter that must not change per frame.</summary>
         public static float Hash(int x, int y, int salt = 0)
         {
@@ -196,5 +234,6 @@ namespace Mesruiyet.Core
         }
     }
 }
+
 
 

@@ -37,6 +37,11 @@ namespace Mesruiyet.Core
         /// <summary>Passed to a local strongman. Its production and its tiles are no longer yours.</summary>
         public bool Lost;
 
+        /// <summary>Road tiles inside the district — its traffic capacity.</summary>
+        public int RoadTiles;
+        /// <summary>Traffic demand over road capacity. Above 1 the streets are jammed.</summary>
+        public float Congestion;
+
         public string Name => Def.Name;
         public DistrictId Id => Def.Id;
     }
@@ -378,6 +383,7 @@ namespace Mesruiyet.Core
         }
     }
 }
+
 
 
 

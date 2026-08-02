@@ -220,6 +220,16 @@ namespace Mesruiyet.World
             _grid.Occupant[CityGrid.Index(x, y)] = _state.Buildings.Count;
             _state.Buildings.Add(placed);
 
+            // A road is terrain, not a box on a plot. Laying one has to change the tile itself
+            // or the road graph never grows, the traffic never clears, and the cheapest thing
+            // in the hotbar does nothing at all.
+            bool road = def.Id == "yol";
+            if (road)
+            {
+                _grid.Tiles[CityGrid.Index(x, y)] = TileKind.Yol;
+                CityRenderer.Instance.RebuildGround();
+            }
+
             TurnResolver.Instance.ApplyPlacement(placed);
             CityRenderer.Instance.Rebuild();
 
@@ -239,6 +249,7 @@ namespace Mesruiyet.World
         }
     }
 }
+
 
 
 

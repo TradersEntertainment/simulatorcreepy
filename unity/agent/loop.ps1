@@ -790,6 +790,76 @@ switch ($Scenario) {
         $state = $taxed
     }
 
+    # Traffic. The design asks that a jam be a symptom of an unserviced district rather than a
+    # separate stat, so the test is whether laying roads actually fixes one.
+    "trafik" {
+        function Field([string] $json, [string] $key) {
+            if ($json -match "`"$key`":(-?[\d.]+)") { return [double]$Matches[1] }
+            return [double]::NaN
+        }
+        function District([string] $json, [string] $name, [string] $key) {
+            if ($json -match "`"name`":`"$name`"[^}]*?`"$key`":(-?[\d.]+)") { return [double]$Matches[1] }
+            return [double]::NaN
+        }
+        $ok = $true
+        function Check([bool] $pass, [string] $label) {
+            if ($pass) { Write-Host "  ✔ $label" -ForegroundColor Green }
+            else { Write-Host "  ✘ $label" -ForegroundColor Red; $script:ok = $false }
+        }
+
+        $t = Get-Turn
+        Send-Cmd '{"cmd":"endturn","n":2}' | Out-Null
+        Wait-Turn ($t + 2) 40 | Out-Null
+        Start-Sleep -Milliseconds 900
+        Shot "01-trafik.png"
+
+        $before = Send-Cmd '{"cmd":"state"}'
+        Write-Host "`n[loop] TRAFİK:" -ForegroundColor Cyan
+        foreach ($d in @("LİMAN","SANAYİ","TEPE")) {
+            Write-Host ("  {0,-11} yol {1,3:N0} · sıkışıklık {2:N2}" -f `
+                        $d, (District $before $d "roadTiles"), (District $before $d "congestion"))
+        }
+        Check ((District $before "LİMAN" "roadTiles") -gt 0) "mahalleler yol karolarını sayıyor"
+
+        # Crowd the docks: houses without streets is exactly the unserviced case.
+        Write-Host "`n[loop] LİMAN'a yol açmadan konut ekleniyor..." -ForegroundColor Cyan
+        foreach ($xy in @(@(7,7),@(8,7),@(9,7),@(10,7),@(7,9),@(8,9),@(9,9),@(10,9))) {
+            Build-At "konut" $xy[0] $xy[1] | Out-Null
+        }
+        $t = Get-Turn
+        Send-Cmd '{"cmd":"endturn","n":3}' | Out-Null
+        Wait-Turn ($t + 3) 60 | Out-Null
+        $crowded = Send-Cmd '{"cmd":"state"}'
+        Shot "02-sikisiklik.png"
+        Write-Host ("  LİMAN sıkışıklık {0:N2} -> {1:N2}" -f `
+                    (District $before "LİMAN" "congestion"), (District $crowded "LİMAN" "congestion"))
+        Check ((District $crowded "LİMAN" "congestion") -gt (District $before "LİMAN" "congestion")) `
+              "yolsuz büyüme sokakları tıkadı"
+
+        # Now lay the streets the quarter needed and watch it clear.
+        Write-Host "`n[loop] yol açılıyor..." -ForegroundColor Cyan
+        # A row between the two blocks of houses, and a column beside them. Tiles the houses
+        # already sit on are refused, which is correct and not worth fighting.
+        foreach ($x in 6..11) { Build-At "yol" $x 8  | Out-Null }
+        foreach ($y in 9..11) { Build-At "yol" 6 $y  | Out-Null }
+        foreach ($x in 6..11) { Build-At "yol" $x 11 | Out-Null }
+        $t = Get-Turn
+        Send-Cmd '{"cmd":"endturn","n":2}' | Out-Null
+        Wait-Turn ($t + 2) 60 | Out-Null
+        $paved = Send-Cmd '{"cmd":"state"}'
+        Shot "03-yol-acildi.png"
+        Write-Host ("  LİMAN yol {0:N0} -> {1:N0} · sıkışıklık {2:N2} -> {3:N2}" -f `
+                    (District $crowded "LİMAN" "roadTiles"), (District $paved "LİMAN" "roadTiles"), `
+                    (District $crowded "LİMAN" "congestion"), (District $paved "LİMAN" "congestion"))
+        Check ((District $paved "LİMAN" "roadTiles") -gt (District $crowded "LİMAN" "roadTiles")) `
+              "yol karoları arttı"
+        Check ((District $paved "LİMAN" "congestion") -lt (District $crowded "LİMAN" "congestion")) `
+              "yol açmak tıkanıklığı çözdü"
+
+        if (-not $ok) { $chainBroken = $true }
+        $state = $paved
+    }
+
     "turns40" {
         $t = Get-Turn
         Send-Cmd '{"cmd":"endturn","n":40}' | Out-Null
@@ -832,6 +902,10 @@ if ($chainBroken) {
 }
 
 Write-Host "`n[loop] temiz. Görüntüler: agent\shots\" -ForegroundColor Green
+
+
+
+
 
 
 

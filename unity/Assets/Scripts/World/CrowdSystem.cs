@@ -48,6 +48,12 @@ namespace Mesruiyet.World
         public byte Mood;
         public byte Bucket;
         public float Phase;
+
+        // Cars only: the road tile they are on, the one they are driving to, and how long they
+        // are held at a junction. Pedestrians ignore all three.
+        public int TileX, TileY;
+        public int NextX, NextY;
+        public float Wait;
     }
 
     [BurstCompile]
@@ -70,6 +76,7 @@ namespace Mesruiyet.World
         {
             var a = Agents[i];
             if (a.District < 0 || a.District >= Moods.Length) return;
+            if (a.Kind == 1) return;                    // cars follow the road graph, not this
             var mood = Moods[a.District];
 
             // Standing still is a behaviour, not an absence of one: idle clusters are how
@@ -142,6 +149,8 @@ namespace Mesruiyet.World
         Matrix4x4[] _puffMatrices = new Matrix4x4[0];
         Mesh _puffMesh;
         Material _smokeMat;
+
+        System.Collections.Generic.List<Vector2Int> _roads;
 
         JobHandle _handle;
         uint _frame;
@@ -316,6 +325,7 @@ namespace Mesruiyet.World
         public void Repopulate()
         {
             RescanStacks();
+            if (_roads == null || _roads.Count == 0) _roads = _grid.AllRoadTiles();
 
             int wanted = Mathf.Clamp(_state.Population / 3, 40, MaxAgents);
             uint seed = 0x9E3779B9u;
@@ -330,7 +340,7 @@ namespace Mesruiyet.World
                 Vector3 world = CityGrid.World(Mathf.RoundToInt(x), Mathf.RoundToInt(y));
 
                 bool car = i % 5 == 0;
-                _agents[i] = new CrowdAgent
+                var agent = new CrowdAgent
                 {
                     Pos = new float3(world.x, car ? 0.05f : 0f, world.z),
                     Target = new float3(world.x, 0, world.z),
@@ -340,6 +350,28 @@ namespace Mesruiyet.World
                     Bucket = (byte)(Rand(ref seed) * BucketHex.Length),
                     Phase = Rand(ref seed) * 10f,
                 };
+
+                // A car has to start on a road, or it has no graph to drive. Prefer a road in
+                // its own district, so the traffic a quarter generates is the traffic it gets.
+                if (car && _roads.Count > 0)
+                {
+                    Vector2Int tile = _roads[Mathf.FloorToInt(Rand(ref seed) * _roads.Count) % _roads.Count];
+                    for (int attempt = 0; attempt < 12; attempt++)
+                    {
+                        var candidate = _roads[Mathf.FloorToInt(Rand(ref seed) * _roads.Count) % _roads.Count];
+                        if (bounds.Contains(candidate)) { tile = candidate; break; }
+                    }
+
+                    var at = CityGrid.World(tile.x, tile.y, 0.05f);
+                    agent.Pos = new float3(at.x, 0.05f, at.z);
+                    agent.TileX = tile.x; agent.TileY = tile.y;
+
+                    int n = _grid.RoadNeighbours(tile.x, tile.y, _neighbours);
+                    var next = n > 0 ? _neighbours[Mathf.FloorToInt(Rand(ref seed) * n) % n] : tile;
+                    agent.NextX = next.x; agent.NextY = next.y;
+                }
+
+                _agents[i] = agent;
             }
             _live = wanted;
         }
@@ -408,6 +440,97 @@ namespace Mesruiyet.World
             }
         }
 
+        // ---------------------------------------------------------------- traffic
+        //
+        // Cars drive the road graph one tile at a time: straight on where they can, a turn
+        // where they must, never an immediate reversal unless the street is a dead end. They
+        // pause at junctions and they queue behind each other, so a district with more traffic
+        // than street jams visibly — which is exactly what the simulation says is happening.
+
+        readonly Vector2Int[] _neighbours = new Vector2Int[4];
+        int[] _occupancy;
+
+        void DriveCars(float dt)
+        {
+            if (_occupancy == null) _occupancy = new int[CityGrid.Width * CityGrid.Height];
+            System.Array.Clear(_occupancy, 0, _occupancy.Length);
+
+            for (int i = 0; i < _live; i++)
+            {
+                var a = _agents[i];
+                if (a.Kind != 1) continue;
+                if (CityGrid.InBounds(a.NextX, a.NextY)) _occupancy[CityGrid.Index(a.NextX, a.NextY)]++;
+            }
+
+            uint seed = _frame * 2654435761u + 17u;
+
+            for (int i = 0; i < _live; i++)
+            {
+                var a = _agents[i];
+                if (a.Kind != 1) continue;
+
+                if (a.Wait > 0f)
+                {
+                    a.Wait -= dt;
+                    _agents[i] = a;
+                    continue;
+                }
+
+                var from = CityGrid.World(a.TileX, a.TileY, 0.05f);
+                var to = CityGrid.World(a.NextX, a.NextY, 0.05f);
+
+                // Queue: a car whose target tile already holds others crawls instead of
+                // driving. Enough of them on one street and the street stops.
+                int ahead = CityGrid.InBounds(a.NextX, a.NextY)
+                    ? _occupancy[CityGrid.Index(a.NextX, a.NextY)] : 1;
+                float speed = a.Speed / Mathf.Max(1f, ahead * 0.8f);
+
+                float3 delta = new float3(to.x, to.y, to.z) - a.Pos;
+                float distance = math.length(delta);
+
+                if (distance < 0.6f)
+                {
+                    // Arrived. Pick the next tile, preferring to carry straight on.
+                    int dx = a.NextX - a.TileX, dy = a.NextY - a.TileY;
+                    a.TileX = a.NextX; a.TileY = a.NextY;
+
+                    int n = _grid.RoadNeighbours(a.TileX, a.TileY, _neighbours);
+                    if (n == 0) { _agents[i] = a; continue; }
+
+                    int straightX = a.TileX + dx, straightY = a.TileY + dy;
+                    int chosen = -1;
+                    for (int k = 0; k < n; k++)
+                        if (_neighbours[k].x == straightX && _neighbours[k].y == straightY) chosen = k;
+
+                    // A junction is a decision and a pause; a straight run is neither.
+                    bool junction = n >= 3;
+                    if (junction || chosen < 0)
+                    {
+                        int tries = 0;
+                        do
+                        {
+                            chosen = Mathf.FloorToInt(Rand(ref seed) * n) % n;
+                            tries++;
+                        }
+                        while (tries < 6 && n > 1 &&
+                               _neighbours[chosen].x == a.TileX - dx && _neighbours[chosen].y == a.TileY - dy);
+
+                        if (junction) a.Wait = 0.35f + Rand(ref seed) * 0.5f;
+                    }
+
+                    a.NextX = _neighbours[chosen].x;
+                    a.NextY = _neighbours[chosen].y;
+                }
+                else
+                {
+                    a.Pos += delta / distance * speed * dt;
+                }
+
+                a.Phase += dt;
+                _agents[i] = a;
+            }
+        }
+
         // ---------------------------------------------------------------- frame
 
         void Update()
@@ -427,6 +550,7 @@ namespace Mesruiyet.World
             _handle = job.Schedule(_live, 64);
             _handle.Complete();
 
+            DriveCars(Time.deltaTime);
             Draw();
             DrawSmoke();
         }
@@ -517,6 +641,9 @@ namespace Mesruiyet.World
         }
     }
 }
+
+
+
 
 
 

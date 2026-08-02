@@ -86,7 +86,9 @@ namespace Mesruiyet.Agent
                 Num(sb, "grievance", d.Grievance); sb.Append(',');
                 Num(sb, "population", d.Population); sb.Append(',');
                 Num(sb, "housing", d.Housing); sb.Append(',');
-                Num(sb, "angryStreak", d.AngryStreak);
+                Num(sb, "angryStreak", d.AngryStreak); sb.Append(',');
+                Num(sb, "roadTiles", d.RoadTiles); sb.Append(',');
+                Num(sb, "congestion", d.Congestion);
                 sb.Append('}');
             }
             sb.Append("],");
@@ -480,6 +482,7 @@ namespace Mesruiyet.Agent
     }
 }
 #endif
+
 
 
 

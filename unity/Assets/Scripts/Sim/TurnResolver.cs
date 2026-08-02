@@ -58,6 +58,9 @@ namespace Mesruiyet.Sim
             var g = _state;
             g.Turn++;
 
+            // Traffic before staffing: a jammed district cannot get its people to work, and
+            // Staff() is where that is felt.
+            Traffic();
             Staff();
             SurveyChains();
             TickChains();
@@ -120,6 +123,12 @@ namespace Mesruiyet.Sim
             // starves the city, and the ledger will call it a food crisis.
             pool -= g.Conscripts;
 
+            // And a jammed city loses hands to the streets: people who cannot reach the mill
+            // are not at the mill, whatever the housing register says.
+            float jam = 0;
+            foreach (var d in g.Districts) jam += Mathf.Max(0f, d.Congestion - 1f);
+            pool -= Mathf.RoundToInt(pool * Mathf.Clamp01(jam * 0.08f));
+
             g.LabourPool = Mathf.Max(0, pool);
 
             int used = 0;
@@ -139,6 +148,36 @@ namespace Mesruiyet.Sim
                 }
             }
             g.LabourUsed = used;
+        }
+
+        /// <summary>
+        /// Traffic, as a ratio rather than a stat: what the district asks of its streets over
+        /// what its streets can carry. A quarter that grew without roads jams, and the jam is
+        /// the symptom — it is why laying a road is worth doing, and why an unserviced district
+        /// looks unserviced from three hundred metres up.
+        /// </summary>
+        void Traffic()
+        {
+            var g = _state;
+            var grid = CityGrid.Current;
+            if (grid == null) return;
+
+            foreach (var d in g.Districts)
+            {
+                d.RoadTiles = grid.RoadTilesIn(d.Def.Bounds);
+
+                int workplaces = 0;
+                foreach (var b in g.Buildings)
+                    if (b.District == d.Id && b.Staffed && b.Def.Workers > 0) workplaces++;
+
+                // A workplace costs about three and a half tiles of street to serve. The founding
+                // city sits around 0.8 — comfortable, but one factory away from a jam. That is the
+                // point: the player should feel the streets tighten as the district fills, not
+                // discover traffic as a separate stat forty turns in.
+                float demand = d.Population * 0.09f + workplaces * 7f;
+                float capacity = Mathf.Max(1f, d.RoadTiles * 2.0f);
+                d.Congestion = demand / capacity;
+            }
         }
 
         float[] Produce()
@@ -266,6 +305,11 @@ namespace Mesruiyet.Sim
                 g.Ledger[(int)Res.Isgucu].Add($"{unstaffed} yapı işçisiz duruyor");
             if (g.Conscripts > 0)
                 g.Ledger[(int)Res.Isgucu].Add($"askere alınan {g.Conscripts} kişi havuzdan düştü");
+
+            foreach (var d in g.Districts)
+                if (d.Congestion > 1f)
+                    g.Ledger[(int)Res.Isgucu].Add(
+                        $"{d.Name} sokakları tıkalı ({d.RoadTiles} yol karosu yetmiyor)");
         }
 
         string[] StageSummary(Chain c)
@@ -375,6 +419,7 @@ namespace Mesruiyet.Sim
                 target += Mathf.Max(0f, 50f - g.Saglik) * 0.10f;
                 target += Mathf.Max(0f, 50f - g.Guvenlik) * 0.08f;
                 target += Mathf.Max(0f, g.TaxRate - 0.25f) * 130f;
+                target += Mathf.Max(0f, d.Congestion - 1f) * 22f;
                 // A curfew does not fix anything; it makes the street quiet for a few turns.
                 target -= g.EffectMagnitude(DecreeEffect.CalmStreets);
                 target -= LocalAmenity(d) * 0.55f;                  // parks, temples, clinics
@@ -593,6 +638,9 @@ namespace Mesruiyet.Sim
             var g = _state;
             int pop = g.Population;
 
+            // Traffic first here too, so laying a road shows in the numbers the same instant
+            // rather than next turn — the player has to be able to see the fix work.
+            Traffic();
             Staff();
             SurveyChains();
 
@@ -635,6 +683,8 @@ namespace Mesruiyet.Sim
         }
     }
 }
+
+
 
 
 

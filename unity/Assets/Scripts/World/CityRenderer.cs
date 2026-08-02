@@ -92,6 +92,15 @@ namespace Mesruiyet.World
 
         // ---------------------------------------------------------------- ground
 
+        GameObject _groundObject;
+
+        /// <summary>Re-bake the terrain. Called when a road is laid and the graph grows.</summary>
+        public void RebuildGround()
+        {
+            if (_groundObject != null) Destroy(_groundObject);
+            BuildGround();
+        }
+
         void BuildGround()
         {
             _builder.Clear();
@@ -147,6 +156,7 @@ namespace Mesruiyet.World
             }
 
             var go = new GameObject("Ground");
+            _groundObject = go;
             go.transform.SetParent(transform, false);
             _groundMesh = _builder.ToMesh("Ground");
             go.AddComponent<MeshFilter>().sharedMesh = _groundMesh;
@@ -156,9 +166,10 @@ namespace Mesruiyet.World
             r.receiveShadows = true;
 
             // A flat collider so mouse picking has something to hit; the mesh itself is not
-            // needed for physics and a plane is far cheaper to raycast.
+            // needed for physics and a plane is far cheaper to raycast. Parented to the ground
+            // object so a rebuild does not leave a stack of colliders behind.
             var plane = new GameObject("GroundCollider");
-            plane.transform.SetParent(transform, false);
+            plane.transform.SetParent(go.transform, false);
             var box = plane.AddComponent<BoxCollider>();
             box.size = new Vector3(w, 0.1f, h);
             box.center = Vector3.zero;
@@ -438,6 +449,7 @@ namespace Mesruiyet.World
         }
     }
 }
+
 
 
 
