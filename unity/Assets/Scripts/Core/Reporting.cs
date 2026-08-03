@@ -18,16 +18,25 @@ namespace Mesruiyet.Core
     {
         static GameState G => GameState.Current;
 
+        /// <summary>
+        /// Where the ministries' numbers come from. Single player never changes this; co-op
+        /// swaps in human and bot sources per seat. COOP.md §1: nothing outside Reporting is
+        /// allowed to know this field exists, and the interface never reads GameState.
+        /// </summary>
+        public static IReportSource Source = new FormulaSource();
+
         /// <summary>Which minister owns a resource line.</summary>
         public static Domain DomainOf(Res r) => Ministers.DomainOf(r);
 
         /// <summary>
-        /// The single funnel every minister report passes through. In co-op this same value
-        /// will arrive from a human minister's submitted report instead of from a formula, and
-        /// nothing downstream needs to know the difference.
+        /// The single funnel every minister report passes through. The bias is recovered by
+        /// probing the source with one unit of truth: reported-per-unit minus one IS the
+        /// distortion, whoever produced it — for the formula source this reproduces
+        /// Distortion.Bias exactly, and for a submitted human report it measures the human
+        /// the same way the accountability session will.
         /// </summary>
         public static float BiasFor(Domain domain)
-            => Distortion.Bias(G.Cabinet?.Of(domain), G);
+            => Source.Report(domain, ReportLine.Genel, 1f) - 1f;
 
         /// <summary>
         /// Apply a minister's bias. <paramref name="flatteringSign"/> is +1 when a bigger number
