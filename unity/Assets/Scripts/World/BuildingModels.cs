@@ -64,8 +64,22 @@ namespace Mesruiyet.World
             if (_loadTried) return;
             _loadTried = true;
 
-            await LoadOne("konut");
-            await LoadOne("tapinak");
+            // The delivery contract from ASSETS.md: every .glb in the folder is named after
+            // the building id it replaces. Drop a file in, it stands in the city — no code.
+            string dir = System.IO.Path.Combine(Application.streamingAssetsPath, "Models", "buildings");
+            if (System.IO.Directory.Exists(dir))
+            {
+                foreach (var file in System.IO.Directory.GetFiles(dir, "*.glb"))
+                {
+                    string id = System.IO.Path.GetFileNameWithoutExtension(file).ToLowerInvariant();
+                    if (Buildings.Get(id) == null)
+                    {
+                        Debug.LogWarning($"[BuildingModels] '{id}' diye bir yapı yok, atlandı: {file}");
+                        continue;
+                    }
+                    await LoadOne(id);
+                }
+            }
 
             // The city was baked with procedural stand-ins before the files finished loading.
             // Rebake once: the covered forms drop out of the bake and the instances go in.

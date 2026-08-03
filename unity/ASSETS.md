@@ -55,6 +55,23 @@ Ajan her gelen modeli ölçecek ve raporlayacak:
 6. **Ölçek normalize:** kare 4 m. `KONUT` bir kareye, `KIŞLA` iki kareye oturacak. Çarpan tek
    bir sabitte tutulacak, model başına elle ayarlanmayacak.
 
+## Dosya adları — teslimat sözleşmesi
+
+Üreteçten inen her `.glb`, oyundaki yapı kimliğiyle adlandırılır ve tek klasörde teslim
+edilir; ajan gerisini (boru hattı + `StreamingAssets/Models/buildings/` + doğrulama)
+kendisi yapar. Kimlikler:
+
+`konut · toplukonut · tarla · degirmen · firin · ambar · tayinlama · ocak · islik · depo ·
+dokuma · santral · kuyu · sukemeri · aritma · pazar · borsa · klinik · hastane · okul ·
+kutuphane · hamam · tapinak · matbaa · park · anit · karakol · kontrol · kisla · tersane`
+
+Eşleme tuzakları: T. KONUT → `toplukonut`, TAYIN → `tayinlama`, İŞLİK → `islik`,
+KEMER → `sukemeri`, DOKUMA → `dokuma`. Türkçe karakter yok, hepsi küçük harf.
+
+Çalışma anı tarafı hazır: `World/BuildingModels.cs` bu klasördeki her dosyayı kimliğiyle
+yükler, sınırlarını ölçüp kareye oturtur ve prosedürel formu devre dışı bırakır — model
+başına kod değişikliği gerekmez.
+
 ## Üreteç prompt'unda düzeltilecek üç şey
 
 İlk denemede üreteç şunları ıskaladı, prompt'lar buna göre güncellenecek:
