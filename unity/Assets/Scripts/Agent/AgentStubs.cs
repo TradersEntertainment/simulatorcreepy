@@ -166,6 +166,20 @@ namespace Mesruiyet.Agent
             Str(sb, "pendingEvent", g.PendingEvent != null ? g.PendingEvent.Id : ""); sb.Append(',');
             Str(sb, "lastEvent", g.LastEventOutcome); sb.Append(',');
 
+            // The skinned-character budget, as numbers: how many real models are up, against the
+            // hard cap the frame rate depends on, plus the one scale constant and whether their
+            // feet are actually on the ground.
+            var skins = World.CrowdSkins.Instance;
+            sb.Append("\"iskelet\":{");
+            Bool(sb, "hazir", skins != null && skins.Ready); sb.Append(',');
+            Num(sb, "aktif", skins != null ? skins.ActiveSkins : 0); sb.Append(',');
+            Num(sb, "tavan", World.CrowdSkins.SkinnedCap); sb.Append(',');
+            Num(sb, "asker", skins != null ? skins.SoldierCount : 0); sb.Append(',');
+            Num(sb, "olcek", skins != null ? skins.Scale : 0f); sb.Append(',');
+            Num(sb, "enKotuMinY", skins != null ? skins.WorstMinY : 0f); sb.Append(',');
+            Str(sb, "shader", skins != null ? skins.FirstShaderName : "");
+            sb.Append("},");
+
             // Does every building rest on the ground? Measured, not judged: the renderer records
             // the lowest vertex each building contributed and compares it to the tile it stands
             // on. Anything above the floor is a part standing on air.
@@ -302,11 +316,11 @@ namespace Mesruiyet.Agent
         static string Key(int r) => Naming.ResourceNames[r]
             .Replace("İ", "I").Replace("ş", "s").Replace("ç", "c").Replace("ü", "u").ToLowerInvariant();
 
-        static void Num(StringBuilder sb, string key, float v)
+        internal static void Num(StringBuilder sb, string key, float v)
             => sb.Append('"').Append(key).Append("\":")
                  .Append(v.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
 
-        static void Str(StringBuilder sb, string key, string v)
+        internal static void Str(StringBuilder sb, string key, string v)
             => sb.Append('"').Append(key).Append("\":\"").Append(v.Replace("\"", "'")).Append('"');
 
         static void Bool(StringBuilder sb, string key, bool v)
@@ -421,6 +435,113 @@ namespace Mesruiyet.Agent
             state.Threat = Mathf.Clamp(value, 0, 100);
             message = $"tehdit {state.Threat:0}";
             return true;
+        }
+
+        /// <summary>
+        /// Measure, don't judge. Three probes, one per visual claim that has burned us:
+        /// `bina` — world bounds of the first 20 buildings plus the worst lift over all of them;
+        /// `araba` — position, drawn forward, road direction and their dot for the first 20 cars,
+        /// plus the worst dot over all of them; `yaya` — drawn lowest point of the first 20
+        /// pedestrians plus the worst over all. The aggregates are the pass conditions; the
+        /// samples are what a human reads when an aggregate fails.
+        /// </summary>
+        // The JSON helpers live on AgentState; these shims keep the probe code readable.
+        static void Num(StringBuilder sb, string key, float v) => AgentState.Num(sb, key, v);
+        static void Str(StringBuilder sb, string key, string v) => AgentState.Str(sb, key, v);
+
+        public static string Probe(string id)
+        {
+            var sb = new StringBuilder(4096);
+            sb.Append('{');
+
+            switch (id)
+            {
+                case "bina":
+                {
+                    var cr = World.CityRenderer.Instance;
+                    if (cr == null) return "{\"hata\":\"renderer yok\"}";
+
+                    float worst = 0f; string worstId = "";
+                    foreach (var p in cr.Probes)
+                    {
+                        float lift = p.Min.y - p.FloorY;
+                        if (Mathf.Abs(lift) > Mathf.Abs(worst)) { worst = lift; worstId = p.Id; }
+                    }
+                    Num(sb, "toplam", cr.Probes.Count); sb.Append(',');
+                    Num(sb, "enKotuMinY", worst); sb.Append(',');
+                    Str(sb, "enKotuYapi", worstId); sb.Append(',');
+
+                    sb.Append("\"binalar\":[");
+                    int count = Mathf.Min(20, cr.Probes.Count);
+                    for (int i = 0; i < count; i++)
+                    {
+                        var p = cr.Probes[i];
+                        if (i > 0) sb.Append(',');
+                        sb.Append('{');
+                        Str(sb, "id", p.Id); sb.Append(',');
+                        Num(sb, "minY", p.Min.y - p.FloorY); sb.Append(',');
+                        Num(sb, "maxY", p.Max.y - p.FloorY); sb.Append(',');
+                        sb.Append($"\"min\":[{p.Min.x:0.00},{p.Min.y:0.00},{p.Min.z:0.00}],");
+                        sb.Append($"\"max\":[{p.Max.x:0.00},{p.Max.y:0.00},{p.Max.z:0.00}]");
+                        sb.Append('}');
+                    }
+                    sb.Append(']');
+                    break;
+                }
+
+                case "araba":
+                {
+                    var crowd = Object.FindFirstObjectByType<CrowdSystem>();
+                    if (crowd == null) return "{\"hata\":\"kalabalık yok\"}";
+
+                    var cars = new CrowdSystem.CarProbe[20];
+                    int n = crowd.ProbeCars(cars, out float worstDot);
+                    Num(sb, "enKotuDot", worstDot); sb.Append(',');
+                    sb.Append("\"arabalar\":[");
+                    for (int i = 0; i < n; i++)
+                    {
+                        var c = cars[i];
+                        if (i > 0) sb.Append(',');
+                        sb.Append('{');
+                        sb.Append($"\"poz\":[{c.Pos.x:0.00},{c.Pos.y:0.00},{c.Pos.z:0.00}],");
+                        sb.Append($"\"ileri\":[{c.Forward.x:0.00},{c.Forward.z:0.00}],");
+                        sb.Append($"\"yol\":[{c.RoadDir.x:0.00},{c.RoadDir.z:0.00}],");
+                        Num(sb, "dot", c.Dot);
+                        sb.Append('}');
+                    }
+                    sb.Append(']');
+                    break;
+                }
+
+                case "yaya":
+                {
+                    var crowd = Object.FindFirstObjectByType<CrowdSystem>();
+                    if (crowd == null) return "{\"hata\":\"kalabalık yok\"}";
+
+                    var peds = new CrowdSystem.PedProbe[20];
+                    int n = crowd.ProbePedestrians(peds, out float worstMinY);
+                    Num(sb, "enKotuMinY", worstMinY); sb.Append(',');
+                    sb.Append("\"yayalar\":[");
+                    for (int i = 0; i < n; i++)
+                    {
+                        var p = peds[i];
+                        if (i > 0) sb.Append(',');
+                        sb.Append('{');
+                        sb.Append($"\"poz\":[{p.Pos.x:0.00},{p.Pos.y:0.00},{p.Pos.z:0.00}],");
+                        Num(sb, "minY", p.MinY); sb.Append(',');
+                        Num(sb, "hiz", p.Speed);
+                        sb.Append('}');
+                    }
+                    sb.Append(']');
+                    break;
+                }
+
+                default:
+                    return "{\"hata\":\"bilinmeyen probe: bina, araba veya yaya olmalı\"}";
+            }
+
+            sb.Append('}');
+            return sb.ToString();
         }
 
         /// <summary>

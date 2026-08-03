@@ -169,6 +169,20 @@ namespace Mesruiyet.World
 
         public int LiveAgents => _live;
 
+        /// <summary>
+        /// Agents currently represented by a skinned model instead of the instanced boxes.
+        /// CrowdSkins claims the ones nearest the camera; the draw loop skips them so nobody is
+        /// on screen twice. The simulation neither knows nor cares which representation runs.
+        /// </summary>
+        readonly bool[] _skinClaims = new bool[MaxAgents];
+
+        public void SetSkinClaim(int index, bool claimed)
+        {
+            if (index >= 0 && index < _skinClaims.Length) _skinClaims[index] = claimed;
+        }
+
+        public CrowdAgent AgentAt(int index) => _agents[index];
+
         public void Init(GameState state, CityGrid grid, Material template)
         {
             _state = state;
@@ -248,42 +262,48 @@ namespace Mesruiyet.World
             var lamp = new Color(1f, 0.92f, 0.72f, 0f);     // alpha 0 → self-lit headlights
             var tail = new Color(1f, 0.36f, 0.28f, 0f);
 
+            // Every vehicle is built with its NOSE ALONG +Z, because the draw loop orients with
+            // LookRotation and LookRotation turns +Z towards the direction of travel. The first
+            // versions were long along X, so every car on the map drove sideways — and the probe
+            // now reads the nose off the mesh's own longest axis, so this convention is enforced
+            // by measurement, not by this comment.
+
             // A bonnet, a cabin set back on it, and a boot: three stacked blocks instead of one,
             // which is all it takes for a box to read as a car from above.
-            b.AddBox(new Vector3(0, 0.20f, 0), new Vector3(1.85f, 0.42f, 0.92f), white);
-            b.AddBox(new Vector3(0.62f, 0.14f, 0), new Vector3(0.62f, 0.20f, 0.86f), white);   // bonnet
-            b.AddBox(new Vector3(-0.72f, 0.16f, 0), new Vector3(0.42f, 0.24f, 0.86f), white);  // boot
-            b.AddBox(new Vector3(-0.08f, 0.62f, 0), new Vector3(0.92f, 0.34f, 0.80f), white);  // cabin
+            b.AddBox(new Vector3(0, 0.20f, 0), new Vector3(0.92f, 0.42f, 1.85f), white);
+            b.AddBox(new Vector3(0, 0.14f, 0.62f), new Vector3(0.86f, 0.20f, 0.62f), white);   // bonnet
+            b.AddBox(new Vector3(0, 0.16f, -0.72f), new Vector3(0.86f, 0.24f, 0.42f), white);  // boot
+            b.AddBox(new Vector3(0, 0.62f, -0.08f), new Vector3(0.80f, 0.34f, 0.92f), white);  // cabin
             // Glass on both flanks and the windscreen, so it catches the light like a car.
-            b.AddBox(new Vector3(-0.08f, 0.70f, 0.41f), new Vector3(0.80f, 0.22f, 0.04f), glass);
-            b.AddBox(new Vector3(-0.08f, 0.70f, -0.41f), new Vector3(0.80f, 0.22f, 0.04f), glass);
-            b.AddBox(new Vector3(0.39f, 0.70f, 0), new Vector3(0.06f, 0.22f, 0.72f), glass);
+            b.AddBox(new Vector3(0.41f, 0.70f, -0.08f), new Vector3(0.04f, 0.22f, 0.80f), glass);
+            b.AddBox(new Vector3(-0.41f, 0.70f, -0.08f), new Vector3(0.04f, 0.22f, 0.80f), glass);
+            b.AddBox(new Vector3(0, 0.70f, 0.39f), new Vector3(0.72f, 0.22f, 0.06f), glass);
             // Lights. Tiny, and the whole reason a night street reads as traffic.
-            foreach (float dz in new[] { -0.28f, 0.28f })
+            foreach (float dx in new[] { -0.28f, 0.28f })
             {
-                b.AddBox(new Vector3(0.93f, 0.26f, dz), new Vector3(0.10f, 0.14f, 0.20f), lamp);
-                b.AddBox(new Vector3(-0.93f, 0.26f, dz), new Vector3(0.08f, 0.12f, 0.18f), tail);
+                b.AddBox(new Vector3(dx, 0.26f, 0.93f), new Vector3(0.20f, 0.14f, 0.10f), lamp);
+                b.AddBox(new Vector3(dx, 0.26f, -0.93f), new Vector3(0.18f, 0.12f, 0.08f), tail);
             }
-            foreach (float dx in new[] { -0.58f, 0.62f })
-            foreach (float dz in new[] { -0.46f, 0.46f })
-                b.AddBox(new Vector3(dx, 0, dz), new Vector3(0.34f, 0.30f, 0.16f), tyre);
+            foreach (float dz in new[] { -0.58f, 0.62f })
+            foreach (float dx in new[] { -0.46f, 0.46f })
+                b.AddBox(new Vector3(dx, 0, dz), new Vector3(0.16f, 0.30f, 0.34f), tyre);
             var saloon = b.ToMesh("Car");
 
             // ---- a van: same nose, a tall box behind it, and a load door at the back.
             b.Clear();
-            b.AddBox(new Vector3(0.55f, 0.20f, 0), new Vector3(0.95f, 0.44f, 0.92f), white);
-            b.AddBox(new Vector3(0.62f, 0.64f, 0), new Vector3(0.72f, 0.42f, 0.84f), white);
-            b.AddBox(new Vector3(0.95f, 0.72f, 0), new Vector3(0.06f, 0.26f, 0.7f), glass);
-            b.AddBox(new Vector3(-0.42f, 0.20f, 0), new Vector3(1.5f, 1.05f, 0.96f), white);
-            b.AddBox(new Vector3(-1.16f, 0.36f, 0), new Vector3(0.05f, 0.62f, 0.78f), MeshBuilder.Shade(white, 0.7f));
-            foreach (float dz in new[] { -0.28f, 0.28f })
+            b.AddBox(new Vector3(0, 0.20f, 0.55f), new Vector3(0.92f, 0.44f, 0.95f), white);
+            b.AddBox(new Vector3(0, 0.64f, 0.62f), new Vector3(0.84f, 0.42f, 0.72f), white);
+            b.AddBox(new Vector3(0, 0.72f, 0.95f), new Vector3(0.7f, 0.26f, 0.06f), glass);
+            b.AddBox(new Vector3(0, 0.20f, -0.42f), new Vector3(0.96f, 1.05f, 1.5f), white);
+            b.AddBox(new Vector3(0, 0.36f, -1.16f), new Vector3(0.78f, 0.62f, 0.05f), MeshBuilder.Shade(white, 0.7f));
+            foreach (float dx in new[] { -0.28f, 0.28f })
             {
-                b.AddBox(new Vector3(1.03f, 0.26f, dz), new Vector3(0.09f, 0.14f, 0.20f), lamp);
-                b.AddBox(new Vector3(-1.18f, 0.26f, dz), new Vector3(0.07f, 0.12f, 0.18f), tail);
+                b.AddBox(new Vector3(dx, 0.26f, 1.03f), new Vector3(0.20f, 0.14f, 0.09f), lamp);
+                b.AddBox(new Vector3(dx, 0.26f, -1.18f), new Vector3(0.18f, 0.12f, 0.07f), tail);
             }
-            foreach (float dx in new[] { -0.72f, 0.72f })
-            foreach (float dz in new[] { -0.47f, 0.47f })
-                b.AddBox(new Vector3(dx, 0, dz), new Vector3(0.36f, 0.32f, 0.17f), tyre);
+            foreach (float dz in new[] { -0.72f, 0.72f })
+            foreach (float dx in new[] { -0.47f, 0.47f })
+                b.AddBox(new Vector3(dx, 0, dz), new Vector3(0.17f, 0.32f, 0.36f), tyre);
             var van = b.ToMesh("Van");
 
             // ---- a horse cart: two big wheels, an open bed, a pole and a horse in front. Slow,
@@ -291,15 +311,15 @@ namespace Mesruiyet.World
             b.Clear();
             var timber = new Color(0.55f, 0.42f, 0.30f);
             var horse = new Color(0.42f, 0.31f, 0.24f);
-            b.AddBox(new Vector3(-0.35f, 0.42f, 0), new Vector3(1.35f, 0.16f, 0.86f), timber);
-            foreach (float dz in new[] { -0.44f, 0.44f })
-                b.AddBox(new Vector3(-0.35f, 0.58f, dz), new Vector3(1.35f, 0.34f, 0.08f), MeshBuilder.Shade(timber, 1.1f));
-            b.AddBox(new Vector3(-0.98f, 0.58f, 0), new Vector3(0.08f, 0.34f, 0.86f), MeshBuilder.Shade(timber, 0.9f));
-            foreach (float dz in new[] { -0.47f, 0.47f })
-                b.AddBox(new Vector3(-0.35f, 0, dz), new Vector3(0.62f, 0.62f, 0.12f), tyre);
-            b.AddBox(new Vector3(0.42f, 0.48f, 0), new Vector3(0.85f, 0.08f, 0.10f), MeshBuilder.Shade(timber, 0.8f));
-            b.AddBox(new Vector3(1.0f, 0, 0), new Vector3(0.85f, 0.95f, 0.45f), horse);
-            b.AddBox(new Vector3(1.42f, 0.95f, 0), new Vector3(0.30f, 0.34f, 0.32f), horse);
+            b.AddBox(new Vector3(0, 0.42f, -0.35f), new Vector3(0.86f, 0.16f, 1.35f), timber);
+            foreach (float dx in new[] { -0.44f, 0.44f })
+                b.AddBox(new Vector3(dx, 0.58f, -0.35f), new Vector3(0.08f, 0.34f, 1.35f), MeshBuilder.Shade(timber, 1.1f));
+            b.AddBox(new Vector3(0, 0.58f, -0.98f), new Vector3(0.86f, 0.34f, 0.08f), MeshBuilder.Shade(timber, 0.9f));
+            foreach (float dx in new[] { -0.47f, 0.47f })
+                b.AddBox(new Vector3(dx, 0, -0.35f), new Vector3(0.12f, 0.62f, 0.62f), tyre);
+            b.AddBox(new Vector3(0, 0.48f, 0.42f), new Vector3(0.10f, 0.08f, 0.85f), MeshBuilder.Shade(timber, 0.8f));
+            b.AddBox(new Vector3(0, 0, 1.0f), new Vector3(0.45f, 0.95f, 0.85f), horse);
+            b.AddBox(new Vector3(0, 0.95f, 1.42f), new Vector3(0.32f, 0.34f, 0.30f), horse);
             var cart = b.ToMesh("Cart");
 
             _carMeshes = new[] { saloon, van, cart };
@@ -342,7 +362,11 @@ namespace Mesruiyet.World
         /// <summary>Re-find the chimneys. Called whenever the city changes, so a new works smokes.</summary>
         void RescanStacks()
         {
-            // Six puffs per chimney, staggered up the column.
+            // Three puffs per chimney, small and low. The first version ran six per stack up to
+            // 25 units in the air at sizes past 3, and from a 40° camera those projected right
+            // across the map as soft warm-grey banks — measured off a screenshot as brown-grey
+            // overlays on the grass, and read by everyone who looked as "muddy smears". Smoke
+            // must read as a plume you can trace to its chimney, not as weather.
             var stacks = new System.Collections.Generic.List<Vector3>();
             foreach (var bld in _state.Buildings)
             {
@@ -351,17 +375,17 @@ namespace Mesruiyet.World
                 stacks.Add(new Vector3(at.x + 1.3f, bld.Def.Storeys * 3.1f + 5.5f, at.z - 1.2f));
             }
 
-            _puffs = new Puff[stacks.Count * 6];
+            _puffs = new Puff[stacks.Count * 3];
             _puffMatrices = new Matrix4x4[_puffs.Length];
             uint seed = 0x51ED2701u;
             for (int i = 0; i < _puffs.Length; i++)
             {
                 _puffs[i] = new Puff
                 {
-                    Base = stacks[i / 6],
-                    Height = Rand(ref seed) * 14f,
-                    Speed = 1.4f + Rand(ref seed) * 1.1f,
-                    Size = 1.1f + Rand(ref seed) * 1.3f,
+                    Base = stacks[i / 3],
+                    Height = Rand(ref seed) * 7f,
+                    Speed = 1.0f + Rand(ref seed) * 0.8f,
+                    Size = 0.55f + Rand(ref seed) * 0.6f,
                 };
             }
         }
@@ -380,12 +404,12 @@ namespace Mesruiyet.World
             {
                 var puff = _puffs[i];
                 puff.Height += puff.Speed * Time.deltaTime;
-                if (puff.Height > 16f) puff.Height = 0f;
+                if (puff.Height > 8f) puff.Height = 0f;
                 _puffs[i] = puff;
 
-                float t = puff.Height / 16f;
-                float size = puff.Size * (0.5f + t * 1.9f);
-                var pos = puff.Base + new Vector3(t * 3.5f, puff.Height, t * 2.2f);
+                float t = puff.Height / 8f;
+                float size = puff.Size * (0.6f + t * 0.9f);
+                var pos = puff.Base + new Vector3(t * 1.6f, puff.Height, t * 0.9f);
                 _puffMatrices[i] = Matrix4x4.TRS(pos, Quaternion.Euler(0, t * 90f, 0), Vector3.one * size);
             }
 
@@ -692,16 +716,20 @@ namespace Mesruiyet.World
             {
                 var a = _agents[i];
                 if (a.Pos.y < -1f) continue;
+                if (a.Kind == 0 && _skinClaims[i]) continue;   // drawn as a skinned model instead
 
-                // A walking figure bobs; a standing one does not. It is two lines of code and
-                // it is the difference between a crowd and a scatter of boxes.
-                float bob = a.Mood == 0 && a.Kind == 0 ? Mathf.Abs(Mathf.Sin(a.Phase * 3f)) * 0.18f : 0f;
-                var pos = new Vector3(a.Pos.x, a.Pos.y + bob, a.Pos.z);
+                // A walking figure sways; a standing one does not. This used to be a vertical
+                // bob, which lifted every walker up to 18 cm off the street — feet in the air,
+                // measured by the probe. A slight roll around the walk axis reads as the same
+                // life without ever breaking contact with the ground.
+                var pos = new Vector3(a.Pos.x, a.Pos.y, a.Pos.z);
 
                 float3 face = a.Target - a.Pos;
                 Quaternion rot = math.lengthsq(face) > 0.01f
                     ? Quaternion.LookRotation(new Vector3(face.x, 0, face.z))
                     : Quaternion.identity;
+                if (a.Kind == 0 && a.Mood == 0)
+                    rot *= Quaternion.Euler(0, 0, Mathf.Sin(a.Phase * 6f) * 4f);
 
                 int bucket = a.Bucket % _batches.Length;
                 var trs = Matrix4x4.TRS(pos, rot, Vector3.one);
@@ -752,6 +780,96 @@ namespace Mesruiyet.World
                 };
                 Graphics.RenderMeshInstanced(rp, _bannerMesh, 0, _banners, _bannerCount);
             }
+        }
+
+        /// <summary>One car, as the probe measures it: where it is, where it points, where the road goes.</summary>
+        public struct CarProbe
+        {
+            public Vector3 Pos;
+            /// <summary>The facing the draw loop actually uses, flattened to the ground plane.</summary>
+            public Vector3 Forward;
+            /// <summary>Direction of the road segment it is driving, from its tile to its next.</summary>
+            public Vector3 RoadDir;
+            /// <summary>Forward · RoadDir. 1 means it points where it is going.</summary>
+            public float Dot;
+        }
+
+        /// <summary>One pedestrian: position, the drawn lowest point, and speed.</summary>
+        public struct PedProbe
+        {
+            public Vector3 Pos;
+            /// <summary>World y of the figure's lowest vertex as it is drawn this frame.</summary>
+            public float MinY;
+            public float Speed;
+        }
+
+        /// <summary>
+        /// Measure the cars. Fills up to <paramref name="into"/>.Length entries, returns the count
+        /// and the worst (lowest) dot across ALL cars — the pass condition is about every car,
+        /// not the sample the report prints.
+        /// </summary>
+        public int ProbeCars(CarProbe[] into, out float worstDot)
+        {
+            int n = 0;
+            worstDot = 1f;
+            for (int i = 0; i < _live; i++)
+            {
+                var a = _agents[i];
+                if (a.Kind != 1 || a.Pos.y < -1f) continue;
+
+                // The rotation, exactly as the draw loop builds it...
+                float3 face = a.Target - a.Pos;
+                var aim = new Vector3(face.x, 0, face.z);
+                aim = aim.sqrMagnitude > 0.0001f ? aim.normalized : Vector3.forward;
+                var rot = Quaternion.LookRotation(aim);
+
+                // ...applied to the NOSE OF THE MESH, not to the rotation's own forward. The
+                // first version of this probe measured LookRotation's input and reported dot 1.0
+                // while every car on screen slid sideways: the meshes were built long along X and
+                // the rotation turns +Z. The nose is wherever the mesh is longest, so the probe
+                // reads that off the mesh itself and cannot agree with a wrong axis again.
+                var mesh = _carMeshes != null ? _carMeshes[i % CarKinds] : null;
+                Vector3 noseLocal = mesh != null && mesh.bounds.extents.x > mesh.bounds.extents.z
+                    ? Vector3.right : Vector3.forward;
+                var fwd = rot * noseLocal;
+
+                var road = new Vector3(a.NextX - a.TileX, 0, a.NextY - a.TileY);
+                road = road.sqrMagnitude > 0.0001f ? road.normalized : fwd;
+
+                float dot = Vector3.Dot(fwd, road);
+                if (dot < worstDot) worstDot = dot;
+
+                if (n < into.Length)
+                    into[n] = new CarProbe { Pos = a.Pos, Forward = fwd, RoadDir = road, Dot = dot };
+                n++;
+            }
+            return Mathf.Min(n, into.Length);
+        }
+
+        /// <summary>
+        /// Measure the pedestrians: the drawn lowest point of each figure, bob included, because
+        /// the claim under test is about what is on screen rather than about the data.
+        /// </summary>
+        public int ProbePedestrians(PedProbe[] into, out float worstMinY)
+        {
+            float meshMinY = _personMesh != null ? _personMesh.bounds.min.y : 0f;
+            int n = 0;
+            worstMinY = 0f;
+            for (int i = 0; i < _live; i++)
+            {
+                var a = _agents[i];
+                if (a.Kind != 0 || a.Pos.y < -1f) continue;
+
+                // The draw applies no vertical offset any more — the sway is a roll, which tilts
+                // the figure without lifting it. So the drawn lowest point is just this.
+                float minY = a.Pos.y + meshMinY;
+                if (Mathf.Abs(minY) > Mathf.Abs(worstMinY)) worstMinY = minY;
+
+                if (n < into.Length)
+                    into[n] = new PedProbe { Pos = a.Pos, MinY = minY, Speed = a.Speed };
+                n++;
+            }
+            return Mathf.Min(n, into.Length);
         }
 
         /// <summary>

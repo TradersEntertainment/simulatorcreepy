@@ -25,11 +25,26 @@ namespace Mesruiyet.World
         /// is supposed to stand on something that reaches the ground, and the only way to keep
         /// that true as the table grows is to measure it rather than to look at it.
         /// </summary>
-        public float LowestY { get; private set; } = float.MaxValue;
+        public float LowestY => _min.y;
 
-        public void MarkFloor() => LowestY = float.MaxValue;
+        /// <summary>Full world-space bounds of everything written since the last mark.</summary>
+        public Vector3 MinSince => _min;
+        public Vector3 MaxSince => _max;
 
-        void Note(Vector3 v) { if (v.y < LowestY) LowestY = v.y; }
+        Vector3 _min = Vector3.positiveInfinity;
+        Vector3 _max = Vector3.negativeInfinity;
+
+        public void MarkFloor()
+        {
+            _min = Vector3.positiveInfinity;
+            _max = Vector3.negativeInfinity;
+        }
+
+        void Note(Vector3 v)
+        {
+            _min = Vector3.Min(_min, v);
+            _max = Vector3.Max(_max, v);
+        }
 
         public void Clear()
         {

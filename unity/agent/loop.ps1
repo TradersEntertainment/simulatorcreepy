@@ -938,6 +938,79 @@ switch ($Scenario) {
     # Does the deck actually deal a varied game? A card table can look full on paper and still
     # hand out the same four crises all run, because the conditions that gate the interesting
     # cards are the conditions that stay true. Only a full term shows it.
+    # The pass conditions, measured. (a) every building's bounds.min.y within 0 ± 0.02 of its
+    # floor; (b) every car's drawn forward · road direction > 0.99; (c) every pedestrian's drawn
+    # lowest point within 0 ± 0.02. These are aggregates over ALL entities — the printed samples
+    # are for reading, the aggregate is what passes or fails.
+    "probe" {
+        Write-Host "`n[loop] PROBE:" -ForegroundColor Cyan
+
+        function Field([string] $json, [string] $key) {
+            if ($json -match "`"$key`":(-?[\d.]+)") { return [double]$Matches[1] }
+            return [double]::NaN
+        }
+        $ok = $true
+        function Check([bool] $pass, [string] $label) {
+            if ($pass) { Write-Host "  ✔ $label" -ForegroundColor Green }
+            else { Write-Host "  ✘ $label" -ForegroundColor Red; $script:ok = $false }
+        }
+
+        # Let the city actually run so the cars have driven and the crowd has moved.
+        $t = Get-Turn
+        Send-Cmd '{"cmd":"endturn","n":2}' | Out-Null
+        Wait-Turn ($t + 2) 60 | Out-Null
+        Start-Sleep -Seconds 6
+
+        $bina = Send-Cmd '{"cmd":"probe","id":"bina"}'
+        $araba = Send-Cmd '{"cmd":"probe","id":"araba"}'
+        $yaya = Send-Cmd '{"cmd":"probe","id":"yaya"}'
+
+        $binaKotu = Field $bina "enKotuMinY"
+        $arabaKotu = Field $araba "enKotuDot"
+        $yayaKotu = Field $yaya "enKotuMinY"
+        $binaKim = ""; if ($bina -match '"enKotuYapi":"([^"]*)"') { $binaKim = $Matches[1] }
+
+        Write-Host ("  bina : {0} yapı · en kötü min.y {1:N3} ({2})" -f (Field $bina "toplam"), $binaKotu, $binaKim)
+        Write-Host ("  araba: en kötü dot {0:N3}" -f $arabaKotu)
+        Write-Host ("  yaya : en kötü min.y {0:N3}" -f $yayaKotu)
+
+        Check ([math]::Abs($binaKotu) -le 0.02) "her binanın bounds.min.y 0 ± 0.02"
+        Check ($arabaKotu -gt 0.99) "her aracın forward · yol dot > 0.99"
+        Check ([math]::Abs($yayaKotu) -le 0.02) "her yayanın min.y 0 ± 0.02"
+
+        # The skinned characters: wait for the async glTF load, then hold it to its budget.
+        $deadline = (Get-Date).AddSeconds(20)
+        $sk = Send-Cmd '{"cmd":"state"}'
+        while ((Get-Date) -lt $deadline -and $sk -notmatch '"hazir":true') {
+            Start-Sleep -Milliseconds 800
+            $sk = Send-Cmd '{"cmd":"state"}'
+        }
+        $aktif = Field $sk "aktif"; $tavan = Field $sk "tavan"
+        $iskKotu = 0.0
+        if ($sk -match '"iskelet":\{[^}]*"enKotuMinY":(-?[\d.]+)') { $iskKotu = [double]$Matches[1] }
+        Write-Host ("  iskelet: hazır {0} · aktif {1:N0}/{2:N0} · asker {3:N0} · ölçek {4:N3} · en kötü min.y {5:N3}" -f `
+                    ($sk -match '"hazir":true'), $aktif, $tavan, (Field $sk "asker"), (Field $sk "olcek"), $iskKotu)
+        Check ($sk -match '"hazir":true') "glTF modelleri yüklendi"
+        Check ($aktif -gt 0) "kamera yakınındakiler gerçek modelle çiziliyor"
+        Check ($aktif -le $tavan) "iskeletli sayısı tavanın altında"
+        Check ([math]::Abs($iskKotu) -le 0.05) "modellerin ayakları yerde (± 0.05)"
+
+        # The sample rows, so a failure is diagnosable without another run.
+        Write-Host "`n  --- bina örnekleri ---" -ForegroundColor DarkGray
+        Write-Host "  $bina"
+        Write-Host "`n  --- araba örnekleri ---" -ForegroundColor DarkGray
+        Write-Host "  $araba"
+        Write-Host "`n  --- yaya örnekleri ---" -ForegroundColor DarkGray
+        Write-Host "  $yaya"
+
+        foreach ($i in 1..5) { Send-Cmd '{"cmd":"press","key":"zoomin"}' | Out-Null }
+        Start-Sleep -Milliseconds 900
+        Shot "probe-yakin.png"
+
+        $state = Send-Cmd '{"cmd":"state"}'
+        if (-not $ok) { $chainBroken = $true }
+    }
+
     # Every building has its own silhouette, and every part of every one of them stands on
     # something that reaches the ground. The second half is measured rather than looked at: the
     # renderer records each building's lowest vertex against the tile it stands on.
@@ -1056,6 +1129,11 @@ switch ($Scenario) {
         Send-Cmd '{"cmd":"endturn","n":1}' | Out-Null
         Wait-Turn ($t + 1) 40 | Out-Null
         Start-Sleep -Milliseconds 800
+
+        # At the zoom where the artefact is visible — a diagnostic at the wrong framing spends
+        # a build cycle answering a different question.
+        foreach ($i in 1..5) { Send-Cmd '{"cmd":"press","key":"zoomin"}' | Out-Null }
+        Start-Sleep -Milliseconds 900
 
         Shot "golge-01-acik.png"
         Send-Cmd '{"cmd":"shadows","n":0}' | Out-Null

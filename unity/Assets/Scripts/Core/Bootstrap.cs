@@ -90,6 +90,11 @@ namespace Mesruiyet.Core
             var audio = gameObject.AddComponent<AudioBus>();
             audio.Bind(state);
 
+            // Skinned characters for whoever is nearest the camera; the instanced crowd for
+            // everyone else. Loads its models asynchronously and degrades to nothing if it cannot.
+            var skins = world.AddComponent<CrowdSkins>();
+            skins.Init(state, crowd);
+
             var hud = BuildHud(state);
 
             // The agent plays through the same UI a human does — no private back door.
@@ -166,22 +171,22 @@ namespace Mesruiyet.Core
             {
                 case 0:  // ilkbahar — clean and high-ish
                     _sun.color = UiKit.Hex("#FFE8C4"); _sun.intensity = 1.30f;
-                    elevation = 42f; azimuth = -128f;
+                    elevation = 50f; azimuth = -128f;
                     sky = UiKit.Hex("#44536E"); ground = UiKit.Hex("#141A24");
                     break;
                 case 1:  // yaz — highest sun, shortest shadows, palest shade
                     _sun.color = UiKit.Hex("#FFF0CE"); _sun.intensity = 1.48f;
-                    elevation = 54f; azimuth = -120f;
+                    elevation = 58f; azimuth = -120f;
                     sky = UiKit.Hex("#4C5E7C"); ground = UiKit.Hex("#171E29");
                     break;
                 case 2:  // sonbahar — low and gold, the long-shadow season
                     _sun.color = UiKit.Hex("#FFC983"); _sun.intensity = 1.24f;
-                    elevation = 27f; azimuth = -138f;
+                    elevation = 44f; azimuth = -138f;
                     sky = UiKit.Hex("#54483F"); ground = UiKit.Hex("#1C1712");
                     break;
                 default: // kış — lowest and coldest; the city leans on its own lit windows
                     _sun.color = UiKit.Hex("#CFE0F4"); _sun.intensity = 0.92f;
-                    elevation = 21f; azimuth = -146f;
+                    elevation = 40f; azimuth = -146f;
                     sky = UiKit.Hex("#38465F"); ground = UiKit.Hex("#0E1219");
                     break;
             }
@@ -224,9 +229,14 @@ namespace Mesruiyet.Core
 
             var profile = ScriptableObject.CreateInstance<UnityEngine.Rendering.VolumeProfile>();
 
+            // 0.42 was the "muddy smears". At gameplay zoom the grass reaches the screen
+            // corners, and a vignette that strong reads not as framing but as irregular dark
+            // masses lying on the map — chased for a whole day as shadows, smoke and cascade
+            // boundaries before a pixel scan pinned it to the screen's corners. Kept, but as a
+            // whisper: the dark apron around the city already does the framing job.
             var vignette = profile.Add<UnityEngine.Rendering.Universal.Vignette>(true);
-            vignette.intensity.Override(0.42f);
-            vignette.smoothness.Override(0.55f);
+            vignette.intensity.Override(0.18f);
+            vignette.smoothness.Override(0.75f);
             vignette.color.Override(UiKit.Hex("#06090E"));
 
             var bloom = profile.Add<UnityEngine.Rendering.Universal.Bloom>(true);
@@ -255,7 +265,7 @@ namespace Mesruiyet.Core
             light.color = UiKit.Hex("#FFE2B8");
             light.intensity = 1.35f;
             light.shadows = LightShadows.Soft;
-            light.shadowStrength = 0.88f;
+            light.shadowStrength = 0.5f;
 
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
             RenderSettings.ambientSkyColor = UiKit.Hex("#3E4B63");
@@ -273,8 +283,22 @@ namespace Mesruiyet.Core
             if (UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline
                 is UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset urp)
             {
-                urp.shadowDistance = 480f;
-                urp.shadowCascadeCount = 4;
+                // The camera sits 260 units back, so the ground plane lives at roughly 260–420
+                // of camera depth and the distance has to reach past it — but 480 spread over
+                // four cascades put the city in a coarse far cascade, and the muddy dark smears
+                // all over the screenshots were tree shadows at a fraction of the resolution
+                // they needed. Two cascades split at 60% puts everything the player sees in the
+                // sharp near half, and the shadowmap itself is raised to 4096.
+                // ONE cascade. With two, the split fell across the middle of the map — the near
+                // half drew crisp tree shadows and the far half drew the same shadows as soft
+                // dark masses, which is exactly the "sharp here, muddy there" gradient in the
+                // screenshots. One cascade at 4096 over 460 units is ~0.22 units per texel,
+                // sharp everywhere, and there is no boundary to fall across.
+                urp.shadowDistance = 460f;
+                urp.shadowCascadeCount = 1;
+                var res = typeof(UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset)
+                    .GetProperty("mainLightShadowmapResolution");
+                if (res != null && res.CanWrite) res.SetValue(urp, 4096);
             }
         }
 

@@ -31,6 +31,9 @@ namespace Mesruiyet.World
 
         public Camera Cam => _cam;
 
+        /// <summary>Where the player is looking, for anything that budgets detail by distance.</summary>
+        public Vector3 Focus => _focus;
+
         public void Init(Camera cam)
         {
             Instance = this;

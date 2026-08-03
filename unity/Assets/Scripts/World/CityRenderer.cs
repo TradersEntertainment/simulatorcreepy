@@ -23,10 +23,11 @@ namespace Mesruiyet.World
 
         readonly MeshBuilder _builder = new MeshBuilder();
 
-        // Terrain palette, straight off the reference mockup.
-        static readonly Color ColWater = Hex("#2F4F63");
-        static readonly Color ColGrass = Hex("#6F8F5C");
-        static readonly Color ColFertile = Hex("#87984F");
+        // Terrain palette, straight off the reference mockup — which is noticeably more
+        // saturated than the first pass was. Washed olive read as fog, not as grass.
+        static readonly Color ColWater = Hex("#3E6E82");
+        static readonly Color ColGrass = Hex("#69A054");
+        static readonly Color ColFertile = Hex("#8FA648");
         static readonly Color ColHill = Hex("#6C6858");
         static readonly Color ColMarsh = Hex("#4B5A4A");
         static readonly Color ColRoad = Hex("#41454E");
@@ -132,8 +133,11 @@ namespace Mesruiyet.World
                     c = Color.Lerp(ColRoadRough, ColRoad, paving);
                 }
 
-                // A little per-tile variation keeps the grass from reading as a bedsheet.
-                float v = 0.93f + 0.14f * CityGrid.Hash(x, y, 7);
+                // A little per-tile variation keeps the grass from reading as a bedsheet, and a
+                // faint checker on the open land is the reference's signature texture.
+                float v = 0.95f + 0.10f * CityGrid.Hash(x, y, 7);
+                if ((t == TileKind.Cayir || t == TileKind.Verimli || t == TileKind.Su) && ((x + y) & 1) == 0)
+                    v *= 0.955f;
                 c = MeshBuilder.Shade(c, v);
 
                 float level = t == TileKind.Su ? -0.55f : 0f;
@@ -276,6 +280,7 @@ namespace Mesruiyet.World
             _floating = 0;
             _worstLift = 0f;
             _worstLiftId = "";
+            _probes.Clear();
 
             for (int i = 0; i < _state.Buildings.Count; i++)
             {
@@ -357,6 +362,15 @@ namespace Mesruiyet.World
                 float lift = _builder.LowestY - ground.y;
                 if (lift > _worstLift) { _worstLift = lift; _worstLiftId = def.Id; }
                 if (lift > 0.01f) _floating++;
+
+                _probes.Add(new BuildingProbe
+                {
+                    Id = def.Id,
+                    Tile = b.Tile,
+                    Min = _builder.MinSince,
+                    Max = _builder.MaxSince,
+                    FloorY = ground.y,
+                });
             }
 
             _builder.Into(_buildingMesh);
@@ -474,12 +488,49 @@ namespace Mesruiyet.World
         float _worstLift;
         string _worstLiftId = "";
 
+        /// <summary>One building as the probe reports it: what it is, and where its box really is.</summary>
+        public struct BuildingProbe
+        {
+            public string Id;
+            public Vector2Int Tile;
+            public Vector3 Min, Max;
+            /// <summary>World y of the tile it stands on — the floor its Min.y is judged against.</summary>
+            public float FloorY;
+        }
+
+        readonly System.Collections.Generic.List<BuildingProbe> _probes =
+            new System.Collections.Generic.List<BuildingProbe>(64);
+
+        /// <summary>World-space bounds of every building, recorded at bake time.</summary>
+        public System.Collections.Generic.IReadOnlyList<BuildingProbe> Probes => _probes;
+
         /// <summary>Buildings whose lowest corner is off the ground. Should always be zero.</summary>
         public int FloatingBuildings => _floating;
         public float WorstLift => _worstLift;
         public string WorstLiftId => _worstLiftId;
 
         Color Shade(Shape g, float k) => MeshBuilder.Shade(g.Tint, k);
+
+        /// <summary>
+        /// A foundation plinth: a skirt slightly wider than the body, darker than it. The single
+        /// biggest "is it standing on the ground?" cue there is — buildings without one read as
+        /// placed, buildings with one read as built.
+        /// </summary>
+        void AddPlinth(Shape g, float w, float d)
+        {
+            _builder.AddBox(g.Ground, new Vector3(w + 0.4f, 0.3f, d + 0.4f), Shade(g, 0.6f));
+        }
+
+        /// <summary>
+        /// Floor lines across the walls, one per storey. The reference buildings are striped
+        /// with them, and they are most of what separates "a building" from "a tall box".
+        /// </summary>
+        void AddFloorBands(Shape g, float w, float d, float storeyHeight, int storeys)
+        {
+            for (int f = 1; f < storeys; f++)
+                _builder.AddBox(g.Ground + Vector3.up * (f * storeyHeight - 0.09f),
+                                new Vector3(w + 0.08f, 0.18f, d + 0.08f), Shade(g, 0.78f));
+        }
 
         /// <summary>A slab: road, field, park. The only form with no height at all.</summary>
         void FormDuz(Shape g, BuildingDef def)
@@ -497,21 +548,34 @@ namespace Mesruiyet.World
             }
         }
 
-        /// <summary>A house: pitched roof, chimney, door. Unchanged in spirit, now one of many.</summary>
+        /// <summary>A house: plinth, banded walls, pitched roof, chimney, door.</summary>
         void FormEv(Shape g)
         {
+            AddPlinth(g, g.W, g.D);
             _builder.AddBox(g.Ground, new Vector3(g.W, g.H, g.D), g.Tint);
+            AddFloorBands(g, g.W, g.D, g.H / Mathf.Max(1, g.Storeys), g.Storeys);
             AddWindows(g.Ground, g.W, g.D, g.H, g.Storeys, g.Tile, g.Dead);
             AddCottageTop(g.Ground, g.W, g.D, g.H, g.Tint, g.Tile, g.Dead);
             AddDoor(g.Ground, g.W, g.D, g.Tile, g.Dead);
         }
 
-        /// <summary>Dense housing and the exchange: a flat top with things on it.</summary>
+        /// <summary>Dense housing and the exchange: banded walls, a parapet, a coloured roof.</summary>
         void FormBlok(Shape g)
         {
+            AddPlinth(g, g.W, g.D);
             _builder.AddBox(g.Ground, new Vector3(g.W, g.H, g.D), g.Tint);
+            AddFloorBands(g, g.W, g.D, g.H / Mathf.Max(1, g.Storeys), g.Storeys);
             AddWindows(g.Ground, g.W, g.D, g.H, g.Storeys, g.Tile, g.Dead);
-            AddRoofClutter(g.Ground, g.W, g.D, g.H, g.Tint, g.Tile);
+
+            // A coloured roof slab inside a parapet lip — the reference's rooftops are one of
+            // its most recognisable features from the air.
+            Color roof = RoofTiles[Mathf.FloorToInt(g.Hash * RoofTiles.Length) % RoofTiles.Length];
+            if (g.Dead) roof = Color.Lerp(roof, ColShuttered, 0.38f);
+            _builder.AddBox(g.Ground + Vector3.up * g.H, new Vector3(g.W + 0.14f, 0.22f, g.D + 0.14f), Shade(g, 0.72f));
+            _builder.AddBox(g.Ground + Vector3.up * (g.H + 0.22f), new Vector3(g.W - 0.3f, 0.06f, g.D - 0.3f),
+                            MeshBuilder.Shade(roof, 0.9f));
+
+            AddRoofClutter(g.Ground, g.W, g.D, g.H + 0.22f, g.Tint, g.Tile);
             AddDoor(g.Ground, g.W, g.D, g.Tile, g.Dead);
         }
 
@@ -522,7 +586,9 @@ namespace Mesruiyet.World
         void FormSalon(Shape g)
         {
             float h = g.H * 0.8f;
+            AddPlinth(g, g.W, g.D * 0.86f);
             _builder.AddBox(g.Ground, new Vector3(g.W, h, g.D * 0.86f), g.Tint);
+            AddFloorBands(g, g.W, g.D * 0.86f, h / Mathf.Max(1, g.Storeys), g.Storeys);
             AddWindows(g.Ground, g.W, g.D * 0.86f, h, Mathf.Max(1, g.Storeys), g.Tile, g.Dead);
             _builder.AddGable(g.Ground + Vector3.up * h, g.W, g.D * 0.86f, 0.9f,
                               Shade(g, 0.7f), g.W >= g.D);
@@ -546,6 +612,7 @@ namespace Mesruiyet.World
         void FormAtolye(Shape g)
         {
             float h = g.H * 0.66f;
+            AddPlinth(g, g.W * 1.05f, g.D);
             _builder.AddBox(g.Ground, new Vector3(g.W * 1.05f, h, g.D), Shade(g, 0.95f));
 
             // Saw-tooth: three short slopes, each standing on the roof deck below it.
@@ -570,6 +637,7 @@ namespace Mesruiyet.World
         void FormOcak(Shape g)
         {
             float h = g.H * 0.62f;
+            AddPlinth(g, g.W * 0.9f, g.D * 0.9f);
             _builder.AddBox(g.Ground, new Vector3(g.W * 0.9f, h, g.D * 0.9f), g.Tint);
             _builder.AddPyramid(g.Ground + Vector3.up * h, g.W * 0.45f, 1.6f, Shade(g, 0.78f));
 
@@ -584,6 +652,7 @@ namespace Mesruiyet.World
         void FormAmbar(Shape g)
         {
             float h = g.H * 0.72f;
+            AddPlinth(g, g.W * 0.86f, g.D);
             _builder.AddBox(g.Ground, new Vector3(g.W * 0.86f, h, g.D), g.Tint);
             _builder.AddGable(g.Ground + Vector3.up * h, g.W * 0.86f, g.D, 1.5f, Shade(g, 0.72f), false);
 
@@ -601,6 +670,7 @@ namespace Mesruiyet.World
         void FormDegirmen(Shape g)
         {
             float h = g.H * 1.15f;
+            AddPlinth(g, g.W * 0.8f, g.D * 0.8f);
             _builder.AddBox(g.Ground, new Vector3(g.W * 0.8f, h * 0.55f, g.D * 0.8f), g.Tint);
             _builder.AddBox(g.Ground + Vector3.up * (h * 0.55f),
                             new Vector3(g.W * 0.62f, h * 0.45f, g.D * 0.62f), Shade(g, 1.04f));
@@ -641,6 +711,7 @@ namespace Mesruiyet.World
         void FormBaca(Shape g)
         {
             float h = g.H * 0.7f;
+            AddPlinth(g, g.W, g.D * 0.9f);
             _builder.AddBox(g.Ground, new Vector3(g.W, h, g.D * 0.9f), g.Tint);
             AddRoofClutter(g.Ground, g.W, g.D * 0.9f, h, g.Tint, g.Tile);
 
@@ -679,6 +750,7 @@ namespace Mesruiyet.World
         void FormKarakol(Shape g)
         {
             float h = g.H * 0.75f;
+            AddPlinth(g, g.W * 0.85f, g.D * 0.85f);
             _builder.AddBox(g.Ground, new Vector3(g.W * 0.85f, h, g.D * 0.85f), g.Tint);
             AddWindows(g.Ground, g.W * 0.85f, g.D * 0.85f, h, Mathf.Max(1, g.Storeys), g.Tile, g.Dead);
             _builder.AddGable(g.Ground + Vector3.up * h, g.W * 0.85f, g.D * 0.85f, 0.8f, Shade(g, 0.7f), g.W >= g.D);
@@ -889,7 +961,10 @@ namespace Mesruiyet.World
 
                 if (t == TileKind.Cayir || t == TileKind.Verimli)
                 {
-                    if (r < 0.22f)
+                    // 0.22 buried the city in forest, and under a low autumn sun that many
+                    // canopies melt into one muddy shadow mass across the map. The reference
+                    // city is sparse: trees punctuate blocks, they do not carpet them.
+                    if (r < 0.10f)
                         AddTree(CityGrid.World(x, y) + new Vector3((r - 0.11f) * 6f, 0, (CityGrid.Hash(x, y, 4) - 0.5f) * 3f),
                                 0.85f + r);
                 }

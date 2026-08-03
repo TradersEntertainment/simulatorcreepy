@@ -204,6 +204,10 @@ namespace Mesruiyet.Agent
                     }
                     return Err($"bilinmeyen tuş '{c.id}'");
 
+                case "probe":
+                    // {"cmd":"probe","id":"bina|araba|yaya"} — measurements, not opinions.
+                    return Ok(AgentInput.Probe(c.id));
+
                 case "overlay":
                     // Diagnostic: which visible elements are big enough to be covering the map.
                     // Wrapped, not pasted raw — the report is multi-line text, not JSON.

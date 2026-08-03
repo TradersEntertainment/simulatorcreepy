@@ -100,6 +100,24 @@ namespace Mesruiyet.EditorTools
             mat.shader = shader;
             mat.enableInstancing = true;
             EditorUtility.SetDirty(mat);
+
+            // A URP/Lit material in Resources, for the glTF characters. The characters' own
+            // materials use glTFast's shader graphs, which the build strips because nothing in a
+            // scene references them; swapping onto this material at load time sidesteps the
+            // whole problem, and shipping it in Resources is what keeps URP/Lit itself aboard.
+            var lit = Shader.Find("Universal Render Pipeline/Lit");
+            if (lit != null)
+            {
+                const string unitPath = "Assets/Resources/UnitLit.mat";
+                var unit = AssetDatabase.LoadAssetAtPath<Material>(unitPath);
+                if (unit == null)
+                {
+                    unit = new Material(lit);
+                    AssetDatabase.CreateAsset(unit, unitPath);
+                }
+                unit.shader = lit;
+                EditorUtility.SetDirty(unit);
+            }
         }
 
         // ---------------------------------------------------------------- the one scene
