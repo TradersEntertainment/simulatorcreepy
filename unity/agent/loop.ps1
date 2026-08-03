@@ -915,6 +915,95 @@ switch ($Scenario) {
     # Does the deck actually deal a varied game? A card table can look full on paper and still
     # hand out the same four crises all run, because the conditions that gate the interesting
     # cards are the conditions that stay true. Only a full term shows it.
+    # The uncertainty system. A minister who shades a figure a little should state it precisely;
+    # one who shades it a lot should give a range whose ends actually differ. The failure this
+    # catches is a range printed as "~1911–1911" — a widget that looks broken rather than unsure.
+    "belirsizlik" {
+        Write-Host "`n[loop] BELİRSİZLİK:" -ForegroundColor Cyan
+
+        function Field([string] $json, [string] $key) {
+            if ($json -match "`"$key`":(-?[\d.]+)") { return [double]$Matches[1] }
+            return [double]::NaN
+        }
+        $ok = $true
+        function Check([bool] $pass, [string] $label) {
+            if ($pass) { Write-Host "  ✔ $label" -ForegroundColor Green }
+            else { Write-Host "  ✘ $label" -ForegroundColor Red; $script:ok = $false }
+        }
+        function Report([string] $json, [string] $tag) {
+            Write-Host ("  {0,-22} alt {1,8:N0} · üst {2,8:N0} · yayılım {3,6:N1} · aralıklı {4}" -f `
+                        $tag, (Field $json "paraAlt"), (Field $json "paraUst"),
+                        (Field $json "paraYayilim"), ($json -match '"paraAralikli":true'))
+        }
+
+        # ---- 1. an honest minister: no range, no badge, at all.
+        Send-Cmd '{"cmd":"appoint","id":"maliye","n":0}' | Out-Null
+        Start-Sleep -Milliseconds 500
+        $honest = Send-Cmd '{"cmd":"state"}'
+        Report $honest "uzman bakan"
+        Check ((Field $honest "paraYayilim") -lt 0.001) "dürüst bakanda gürültü sıfır"
+        Check ($honest -notmatch '"paraAralikli":true') "gürültü sıfırken aralık gösterilmiyor"
+
+        # ---- 2. a loyalist: a range, and its two ends must genuinely differ.
+        Send-Cmd '{"cmd":"appoint","id":"maliye","n":1}' | Out-Null
+        Start-Sleep -Milliseconds 500
+        $loyal = Send-Cmd '{"cmd":"state"}'
+        Report $loyal "sadık bakan"
+        $low  = Field $loyal "paraAlt"
+        $high = Field $loyal "paraUst"
+
+        Check ($loyal -match '"paraAralikli":true') "sadık bakanda aralık gösteriliyor"
+        Check ((Field $loyal "paraYayilim") -gt 0) "gürültü sıfırdan büyük"
+        Check ([math]::Round($high) -gt [math]::Round($low)) "aralığın iki ucu gerçekten farklı"
+
+        Shot "belirsizlik.png"
+        $state = $loyal
+        if (-not $ok) { $chainBroken = $true }
+    }
+
+    # A dark, hard-edged wedge was reported over the map. It is either something the sun is doing
+    # or something in the scene, and a single screenshot cannot tell those apart — so take two,
+    # identical but for the shadows.
+    "golge" {
+        Write-Host "`n[loop] GÖLGE TEŞHİSİ:" -ForegroundColor Cyan
+
+        $t = Get-Turn
+        Send-Cmd '{"cmd":"endturn","n":1}' | Out-Null
+        Wait-Turn ($t + 1) 40 | Out-Null
+        Start-Sleep -Milliseconds 800
+
+        Shot "golge-01-acik.png"
+        Send-Cmd '{"cmd":"shadows","n":0}' | Out-Null
+        Start-Sleep -Milliseconds 800
+        Shot "golge-02-kapali.png"
+
+        # Second question, and it separates the two remaining suspects on its own: rotate the
+        # map ninety degrees. Anything in world space turns with it; anything in screen space —
+        # a UI panel, a post-processing effect — stays exactly where it was.
+        Send-Cmd '{"cmd":"press","key":"q"}' | Out-Null
+        Start-Sleep -Milliseconds 1200
+        Shot "golge-03-donuk.png"
+        Send-Cmd '{"cmd":"press","key":"e"}' | Out-Null
+
+        # Third question: with the interface gone as well. Anything still there is in the render.
+        Send-Cmd '{"cmd":"ui","n":0}' | Out-Null
+        Start-Sleep -Milliseconds 800
+        Shot "golge-04-arayuzsuz.png"
+        Send-Cmd '{"cmd":"ui","n":1}' | Out-Null
+        Send-Cmd '{"cmd":"shadows","n":1}' | Out-Null
+
+        Write-Host "  dört kare: açık / gölgesiz / döndürülmüş / arayüzsüz" -ForegroundColor DarkGray
+
+        Write-Host "`n[loop] HARİTAYI ÖRTEN ARAYÜZ ÖĞELERİ:" -ForegroundColor Cyan
+        $overlay = Send-Cmd '{"cmd":"overlay"}'
+        if ($overlay -match '"v":"(.*)"\}\}$') {
+            ($Matches[1] -replace '\\n', "`n") -split "`n" | ForEach-Object { if ($_) { Write-Host "  $_" } }
+        } else {
+            Write-Host "  $overlay"
+        }
+        $state = Send-Cmd '{"cmd":"state"}'
+    }
+
     # The menus. The game used to boot straight into a running city with no way to pause, restart
     # or leave; this walks the whole surface a player touches before and around a term.
     "menus" {

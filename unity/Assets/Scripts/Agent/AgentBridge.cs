@@ -204,6 +204,20 @@ namespace Mesruiyet.Agent
                     }
                     return Err($"bilinmeyen tuş '{c.id}'");
 
+                case "overlay":
+                    // Diagnostic: which visible elements are big enough to be covering the map.
+                    // Wrapped, not pasted raw — the report is multi-line text, not JSON.
+                    return Ok(JsonUtility.ToJson(new Wrap { v = AgentInput.UiOverlay() }));
+
+                case "ui":
+                    // Diagnostic: {"cmd":"ui","n":0} takes the whole interface off screen.
+                    return AgentInput.ShowUi(c.n != 0, out string uiWhy) ? Ok() : Err(uiWhy);
+
+                case "shadows":
+                    // Diagnostic: {"cmd":"shadows","n":0} kills the sun's shadows. If an
+                    // artefact survives that, it is geometry, not shadowing.
+                    return AgentInput.Shadows(c.n != 0, out string shadowWhy) ? Ok() : Err(shadowWhy);
+
                 case "mute":
                     // {"cmd":"mute","n":1} silences, n == 0 restores. Same switch the M key throws.
                     if (AudioBus.Instance == null) return Err("ses yok");

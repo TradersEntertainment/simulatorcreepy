@@ -97,6 +97,14 @@ namespace Mesruiyet.Core
         /// <summary>Half-width of the displayed range when the figure is too noisy to state.</summary>
         public readonly float Spread;
 
+        /// <summary>
+        /// Is there actually a range to show? `Reliable` is false for any shaded figure, including
+        /// one shaded too little to warrant a range — keying the display off it printed "~1911–1911"
+        /// with a question mark beside it, which reads as a broken widget rather than as doubt.
+        /// A range is worth drawing only when its two ends would differ once rounded.
+        /// </summary>
+        public bool Ranged => Spread >= 0.5f;
+
         public Reported(float value, bool reliable = true, float spread = 0f)
         {
             Value = value;

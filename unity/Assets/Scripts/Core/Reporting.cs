@@ -47,7 +47,10 @@ namespace Mesruiyet.Core
             if (Mathf.Abs(bias) < Distortion.NoiseThreshold)
                 return new Reported(shown, false);
 
-            float spread = Mathf.Abs(shown) * Mathf.Abs(bias) * 0.7f;
+            // Floored at a whole unit. A proportional spread on a small figure comes out under
+            // half a unit, and both ends of the range then round to the same number — a range
+            // that says nothing is worse than no range.
+            float spread = Mathf.Max(Mathf.Abs(shown) * Mathf.Abs(bias) * 0.7f, 1f);
             return new Reported(shown, false, spread);
         }
 
@@ -124,7 +127,7 @@ namespace Mesruiyet.Core
 
             return Mathf.Abs(bias) < Distortion.NoiseThreshold
                 ? new Reported(shown, false)
-                : new Reported(shown, false, shown * Mathf.Abs(bias) * 0.5f);
+                : new Reported(shown, false, Mathf.Max(shown * Mathf.Abs(bias) * 0.5f, 1f));
         }
 
         // ---------------------------------------------------------------- politics

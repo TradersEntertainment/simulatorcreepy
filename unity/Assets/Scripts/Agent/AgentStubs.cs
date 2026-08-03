@@ -271,7 +271,15 @@ namespace Mesruiyet.Agent
                 if (v > loudest) loudest = v;
             }
             Num(sb, "enYuksekHosnutsuzluk", loudest); sb.Append(',');
-            Bool(sb, "yiyecekReliable", Reporting.Stock(Res.Yiyecek).Reliable);
+            Bool(sb, "yiyecekReliable", Reporting.Stock(Res.Yiyecek).Reliable); sb.Append(',');
+
+            // The uncertainty system, as numbers. A range whose two ends are equal is the bug
+            // this exists to catch, and it cannot be seen in a screenshot of a four-digit figure.
+            var money = Reporting.Stock(Res.Para);
+            Num(sb, "paraAlt", money.Ranged ? money.Value - money.Spread : money.Value); sb.Append(',');
+            Num(sb, "paraUst", money.Ranged ? money.Value + money.Spread : money.Value); sb.Append(',');
+            Num(sb, "paraYayilim", money.Spread); sb.Append(',');
+            Bool(sb, "paraAralikli", money.Ranged);
             sb.Append('}');
 
             sb.Append('}');
@@ -399,6 +407,67 @@ namespace Mesruiyet.Agent
             if (state == null) { message = "state not bound"; return false; }
             state.Threat = Mathf.Clamp(value, 0, 100);
             message = $"tehdit {state.Threat:0}";
+            return true;
+        }
+
+        /// <summary>
+        /// Walk the visual tree and report every visible element large enough to be the thing
+        /// darkening the map. Staring at a screenshot cannot tell you which element is on top of
+        /// the city; the layout tree can, and it knows its own bounds.
+        /// </summary>
+        public static string UiOverlay()
+        {
+            var hud = UI.Hud.Instance;
+            if (hud == null || hud.Root == null) return "arayüz yok";
+
+            var sb = new StringBuilder();
+            float screen = Screen.width * (float)Screen.height;
+            Walk(hud.Root, 0);
+            return sb.Length == 0 ? "(ekranın %10'undan büyük görünür öğe yok)" : sb.ToString();
+
+            void Walk(VisualElement e, int depth)
+            {
+                if (e.resolvedStyle.display == DisplayStyle.None) return;
+
+                var r = e.worldBound;
+                float area = r.width * r.height;
+                var bg = e.resolvedStyle.backgroundColor;
+
+                if (area > screen * 0.10f && bg.a > 0.01f)
+                    sb.Append(new string(' ', depth * 2))
+                      .Append(string.IsNullOrEmpty(e.name) ? e.GetType().Name : e.name)
+                      .Append("  ").Append($"{r.x:0},{r.y:0} {r.width:0}x{r.height:0}")
+                      .Append($"  alpha {bg.a:0.00}")
+                      .Append('\n');
+
+                foreach (var child in e.Children()) Walk(child, depth + 1);
+            }
+        }
+
+        /// <summary>
+        /// Hide or show the whole UI layer. Diagnostic: an artefact that survives both the
+        /// shadows being off and the interface being gone is in the render, not on top of it.
+        /// </summary>
+        public static bool ShowUi(bool on, out string message)
+        {
+            var hud = UI.Hud.Instance;
+            if (hud == null || hud.Root == null) { message = "arayüz yok"; return false; }
+            hud.Root.style.display = on ? DisplayStyle.Flex : DisplayStyle.None;
+            message = on ? "arayüz açık" : "arayüz gizli";
+            return true;
+        }
+
+        /// <summary>
+        /// Turn the sun's shadows on or off. Purely diagnostic: a dark artefact on the ground is
+        /// either something the light is doing or something in the scene, and there is no way to
+        /// tell those apart from a screenshot without removing one of them.
+        /// </summary>
+        public static bool Shadows(bool on, out string message)
+        {
+            var sun = Object.FindFirstObjectByType<Light>();
+            if (sun == null) { message = "ışık yok"; return false; }
+            sun.shadows = on ? LightShadows.Soft : LightShadows.None;
+            message = on ? "gölgeler açık" : "gölgeler kapalı";
             return true;
         }
 

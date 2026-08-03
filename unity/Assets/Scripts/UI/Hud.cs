@@ -49,6 +49,9 @@ namespace Mesruiyet.UI
         /// <summary>Nothing in the world should respond while a menu is up.</summary>
         public bool MenuOpen => _menu != null;
 
+        /// <summary>The whole UI layer, so a diagnostic can take it off screen entirely.</summary>
+        public VisualElement Root => _root;
+
         /// <summary>
         /// Which panel is actually on screen. Derived from the panel rather than from AtTitle
         /// and Paused, because those two describe where the player will return to, not what
@@ -2434,19 +2437,22 @@ namespace Mesruiyet.UI
                     float idle = pool.Value - used.Value;
                     _resFlow[r].text = idle > 0.5f ? $"boşta {idle:0}" : "tam istihdam";
                     _resFlow[r].style.color = idle > 0.5f ? UiKit.Amber : UiKit.Green;
-                    _resWarn[r].style.display = used.Reliable ? DisplayStyle.None : DisplayStyle.Flex;
+                    // The badge marks a figure fogged enough to be worth doubting, which is the
+                    // same test the range uses. Keyed on Reliable it appeared beside numbers that
+                    // were shaded by a percent and stated precisely — noise with no signal.
+                    _resWarn[r].style.display = used.Ranged ? DisplayStyle.Flex : DisplayStyle.None;
                     continue;
                 }
 
                 var stock = Reporting.Stock((Res)r);
                 var flow = Reporting.Flow((Res)r);
 
-                _resValue[r].text = stock.Reliable
-                    ? stock.Value.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)
-                    : $"~{stock.Value - stock.Spread:0}–{stock.Value + stock.Spread:0}";
+                _resValue[r].text = stock.Ranged
+                    ? $"~{stock.Value - stock.Spread:0}–{stock.Value + stock.Spread:0}"
+                    : stock.Value.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
                 _resFlow[r].text = UiKit.Signed(flow.Value);
                 _resFlow[r].style.color = UiKit.FlowColour(flow.Value);
-                _resWarn[r].style.display = stock.Reliable ? DisplayStyle.None : DisplayStyle.Flex;
+                _resWarn[r].style.display = stock.Ranged ? DisplayStyle.Flex : DisplayStyle.None;
             }
 
             var buffer = Reporting.Buffer();

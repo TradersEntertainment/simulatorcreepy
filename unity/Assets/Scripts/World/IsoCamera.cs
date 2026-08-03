@@ -15,7 +15,9 @@ namespace Mesruiyet.World
 
         const float Pitch = 40f;
         const float PanSpeed = 46f;
-        const float MinSize = 18f;
+        // 18 stopped the wheel about four tiles short of a doorstep, which made "does this wall
+        // meet the ground?" impossible to answer by looking. There is nothing to hide down there.
+        const float MinSize = 8f;
         const float MaxSize = 120f;
         /// <summary>Frames the whole 48×32 delta with the rail and dock clear of the map.</summary>
         const float DefaultSize = 68f;
