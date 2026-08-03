@@ -1663,6 +1663,22 @@ switch ($Scenario) {
         Start-Sleep -Milliseconds 700
         Shot "model-04-toplukonut.png"
 
+        # The food chain in the player's own models: fields, the bakery, and a granary
+        # placed beside a rationing depot.
+        Send-Cmd '{"cmd":"focus","x":8,"y":4}' | Out-Null
+        Start-Sleep -Milliseconds 700
+        Shot "model-05-tarlalar.png"
+        Send-Cmd '{"cmd":"focus","x":20,"y":15}' | Out-Null
+        Start-Sleep -Milliseconds 700
+        Shot "model-06-firin.png"
+        Send-Cmd '{"cmd":"grant","n":500}' | Out-Null
+        Send-Cmd '{"cmd":"build","id":"ambar","x":22,"y":16}' | Out-Null
+        Send-Cmd '{"cmd":"build","id":"tayinlama","x":24,"y":16}' | Out-Null
+        Start-Sleep -Milliseconds 800
+        Send-Cmd '{"cmd":"focus","x":23,"y":16}' | Out-Null
+        Start-Sleep -Milliseconds 700
+        Shot "model-07-ambar-tayin.png"
+
         $state = Send-Cmd '{"cmd":"state"}'
         if (-not $ok) { $chainBroken = $true }
     }
