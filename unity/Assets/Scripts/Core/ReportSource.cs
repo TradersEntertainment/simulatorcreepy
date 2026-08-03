@@ -8,6 +8,8 @@
 // and no implementation ever reads what it should not: a source is handed the true value of
 // one line of one domain, and answers with what that ministry claims.
 
+using UnityEngine;
+
 namespace Mesruiyet.Core
 {
     /// <summary>
@@ -70,6 +72,86 @@ namespace Mesruiyet.Core
         }
 
         /// <summary>The formula never keeps the governor waiting.</summary>
+        public bool HasSubmitted(Domain domain) => true;
+    }
+
+    /// <summary>
+    /// The formula with a person on top. A bot seat reports like the character holding it:
+    /// the profile comes from MinisterDef, so sacking Rıza Efendi really does change what
+    /// the granary numbers do. All shaping is deterministic — the same turn asked twice
+    /// reports the same figure, which is what makes it testable and replayable.
+    /// </summary>
+    public sealed class BotSource : IReportSource
+    {
+        public float Report(Domain domain, ReportLine line, float trueValue)
+        {
+            var g = GameState.Current;
+            var m = g?.Cabinet?.Of(domain);
+            if (m == null) return trueValue;
+
+            float bias = Distortion.Bias(m, g);
+            if (line == ReportLine.Hosnutsuzluk) bias = -bias;
+
+            switch (m.Def.Profile)
+            {
+                case BotProfile.Sisirici:
+                    // Half again as comfortable, in whichever direction comfort lies.
+                    return trueValue * (1f + bias * 1.5f);
+
+                case BotProfile.Saklayici:
+                {
+                    // The signature move: the product and stage lines are quoted as if the
+                    // chain were flowing — a share of the (genuinely healthy) total — so the
+                    // blockage never reaches the governor's desk. Totals get the plain shine.
+                    if (line == ReportLine.Urun || line == ReportLine.ZincirAsama)
+                    {
+                        var chain = domain == Domain.Tarim ? g.FoodChain : g.MaterialChain;
+                        if (chain != null)
+                        {
+                            float flowing = chain.Total / Mathf.Max(1, chain.Stages.Length);
+                            return Mathf.Max(trueValue * (1f + bias),
+                                             flowing * (1f + bias * 0.5f));
+                        }
+                    }
+                    return trueValue * (1f + bias);
+                }
+
+                case BotProfile.Alarmci:
+                {
+                    // Panic runs the other way: comfort shrinks, danger grows, and the two
+                    // extra battalions are always short. Even an honest alarmist alarms.
+                    float alarm = Mathf.Max(0.12f, Mathf.Abs(bias) * 0.8f);
+                    if (line == ReportLine.Hosnutsuzluk) return trueValue * (1f + alarm);
+                    if (line == ReportLine.OrduSadakati) return trueValue * (1f - alarm);
+                    return trueValue * (1f - alarm * 0.5f);
+                }
+
+                case BotProfile.Beceriksiz:
+                {
+                    // No agenda, wrong anyway: a stable ±7% wobble seeded by turn, desk and
+                    // line. Below the noise threshold, so NO range warns the governor — the
+                    // clean-looking wrong number is the whole personality.
+                    int h = (g.Turn * 73856093) ^ ((int)domain * 19349663) ^ ((int)line * 83492791);
+                    float wobble = (((h & 1023) / 1023f) - 0.5f) * 0.14f;
+                    return trueValue * (1f + bias + wobble);
+                }
+
+                case BotProfile.Yalaka:
+                {
+                    // Magnificent, everything, always. The floor is the point: transparency
+                    // laws that tame the formula do not tame flattery.
+                    float shine = Mathf.Max(Mathf.Abs(bias), 0.25f) * 1.3f;
+                    return line == ReportLine.Hosnutsuzluk
+                        ? trueValue * (1f - shine)
+                        : trueValue * (1f + shine);
+                }
+
+                default:
+                    return trueValue * (1f + bias);
+            }
+        }
+
+        /// <summary>Bots file on time, with a cosmetic delay handled by the phase clock later.</summary>
         public bool HasSubmitted(Domain domain) => true;
     }
 }

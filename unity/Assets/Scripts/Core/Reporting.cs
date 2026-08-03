@@ -39,36 +39,49 @@ namespace Mesruiyet.Core
             => Source.Report(domain, ReportLine.Genel, 1f) - 1f;
 
         /// <summary>
-        /// Apply a minister's bias. <paramref name="flatteringSign"/> is +1 when a bigger number
-        /// is the comfortable one — money, food, materials — and −1 when a smaller one is, as
-        /// with grievance. A loyalist always leans towards comfortable.
+        /// Swap the whole cabinet between formula and personality. A test affordance until
+        /// co-op assigns sources per seat — and the one sanctioned way to touch Source from
+        /// outside, so the bridge does not need to know the field exists.
         /// </summary>
-        static Reported Distort(float trueValue, Domain domain, int flatteringSign = 1)
-        {
-            float bias = BiasFor(domain) * flatteringSign;
-            if (Mathf.Abs(bias) < 0.0001f) return new Reported(trueValue);
+        public static void UseBots(bool on)
+            => Source = on ? (IReportSource)new BotSource() : new FormulaSource();
 
-            float shown = trueValue * (1f + bias);
+        public static string SourceName => Source is BotSource ? "bot" : "formul";
+
+        /// <summary>
+        /// Ask the source what this desk claims for this line, and dress the claim the way the
+        /// ledger expects. The range machinery keys off the desk's overall lean rather than the
+        /// individual claim: with the formula source the two are the same number (so behaviour
+        /// is unchanged), and with a clumsy bot they deliberately are not — an honest-looking
+        /// figure that happens to be wrong is that personality's whole point.
+        /// </summary>
+        static Reported Distort(float trueValue, Domain domain, ReportLine line)
+        {
+            float lean = BiasFor(domain);
+            float shown = Source.Report(domain, line, trueValue);
+
+            if (Mathf.Abs(lean) < 0.0001f && Mathf.Abs(shown - trueValue) < 0.0001f)
+                return new Reported(trueValue);
 
             // Past a certain amount of noise the ministry stops pretending to a precise figure
             // and reports a range instead. The player can see they are being fogged; they just
             // cannot see which way.
-            if (Mathf.Abs(bias) < Distortion.NoiseThreshold)
+            if (Mathf.Abs(lean) < Distortion.NoiseThreshold)
                 return new Reported(shown, false);
 
             // Floored at a whole unit. A proportional spread on a small figure comes out under
             // half a unit, and both ends of the range then round to the same number — a range
             // that says nothing is worse than no range.
-            float spread = Mathf.Max(Mathf.Abs(shown) * Mathf.Abs(bias) * 0.7f, 1f);
+            float spread = Mathf.Max(Mathf.Abs(shown) * Mathf.Abs(lean) * 0.7f, 1f);
             return new Reported(shown, false, spread);
         }
 
         // ---------------------------------------------------------------- the ledger
-        public static Reported Stock(Res r) => Distort(G.Stock[(int)r], DomainOf(r));
-        public static Reported Flow(Res r) => Distort(G.Flow[(int)r], DomainOf(r));
+        public static Reported Stock(Res r) => Distort(G.Stock[(int)r], DomainOf(r), ReportLine.Stok);
+        public static Reported Flow(Res r) => Distort(G.Flow[(int)r], DomainOf(r), ReportLine.Akis);
 
-        public static Reported Labour() => Distort(G.LabourUsed, Domain.Halk);
-        public static Reported LabourPool() => Distort(G.LabourPool, Domain.Halk);
+        public static Reported Labour() => Distort(G.LabourUsed, Domain.Halk, ReportLine.Isgucu);
+        public static Reported LabourPool() => Distort(G.LabourPool, Domain.Halk, ReportLine.IsgucuHavuzu);
 
         // ---------------------------------------------------------------- supply chains
         //
@@ -83,11 +96,11 @@ namespace Mesruiyet.Core
         public static Reported Product(string chainId)
         {
             var chain = G.GetChain(chainId);
-            return Distort(chain.Final.Stock, chain.Def.Domain);
+            return Distort(chain.Final.Stock, chain.Def.Domain, ReportLine.Urun);
         }
 
         public static Reported StageStock(Chain chain, int index)
-            => Distort(chain.Stages[index].Stock, chain.Def.Domain);
+            => Distort(chain.Stages[index].Stock, chain.Def.Domain, ReportLine.ZincirAsama);
 
         /// <summary>
         /// Where the chain is stuck, in words — or nothing at all, because a loyalist simply
@@ -104,8 +117,9 @@ namespace Mesruiyet.Core
         public static System.Collections.Generic.List<string> Explain(Res r) => G.Ledger[(int)r];
 
         // ---------------------------------------------------------------- the city
-        public static Reported Grievance(DistrictId id) => Distort(G.District(id).Grievance, Domain.Halk, -1);
-        public static Reported Population() => Distort(G.Population, Domain.Halk);
+        public static Reported Grievance(DistrictId id)
+            => Distort(G.District(id).Grievance, Domain.Halk, ReportLine.Hosnutsuzluk);
+        public static Reported Population() => Distort(G.Population, Domain.Halk, ReportLine.Nufus);
 
         /// <summary>
         /// TAMPON — how many turns of shock the city can absorb, and the single most dangerous
@@ -127,7 +141,10 @@ namespace Mesruiyet.Core
             float bias = BiasFor(Domain.Tarim);
             if (Mathf.Abs(bias) < 0.0001f) return new Reported(G.BufferTurns);
 
-            float claimedFood = G.Stock[(int)Res.Yiyecek] * (1f + bias);
+            // The claimed granary comes from the source, so a bot's shaping reaches the one
+            // number the governor plans around. For the formula this is stock × (1 + bias),
+            // exactly as before.
+            float claimedFood = Source.Report(Domain.Tarim, ReportLine.Stok, G.Stock[(int)Res.Yiyecek]);
             float demand = G.Population * 0.12f;
             float claimed = demand <= 0.01f ? 9f : Mathf.Clamp(claimedFood / demand, 0f, 9f);
 
@@ -154,7 +171,8 @@ namespace Mesruiyet.Core
         public static Mood FactionMood(Faction f)
         {
             float loyalty = G.FactionLoyalty[(int)f];
-            if (f == Faction.Ordu) loyalty *= 1f + BiasFor(Domain.Guvenlik);
+            if (f == Faction.Ordu)
+                loyalty = Source.Report(Domain.Guvenlik, ReportLine.OrduSadakati, loyalty);
 
             if (loyalty >= 65) return Mood.Hosnut;
             if (loyalty >= 45) return Mood.Temkinli;
@@ -167,7 +185,8 @@ namespace Mesruiyet.Core
         public static float FactionBar(Faction f)
         {
             float loyalty = G.FactionLoyalty[(int)f];
-            if (f == Faction.Ordu) loyalty *= 1f + BiasFor(Domain.Guvenlik);
+            if (f == Faction.Ordu)
+                loyalty = Source.Report(Domain.Guvenlik, ReportLine.OrduSadakati, loyalty);
             return Mathf.Clamp01(loyalty / 100f);
         }
 

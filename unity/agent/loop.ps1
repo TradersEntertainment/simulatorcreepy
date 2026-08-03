@@ -1346,6 +1346,94 @@ switch ($Scenario) {
         if (-not $ok) { $chainBroken = $true }
     }
 
+    # The bot cabinet: each of the five personalities has a measurable signature, and the
+    # switch back to the formula must restore the baseline exactly. This is co-op slice 2 —
+    # still one player, still no network, but the ministers now have character.
+    "bot" {
+        Write-Host "`n[loop] BOT KABİNESİ:" -ForegroundColor Cyan
+
+        $ok = $true
+        function Check([bool] $pass, [string] $label) {
+            if ($pass) { Write-Host "  ✔ $label" -ForegroundColor Green }
+            else { Write-Host "  ✘ $label" -ForegroundColor Red; $script:ok = $false }
+        }
+        function Lean([string] $json, [string] $domain) {
+            if ($json -match "`"domain`":`"$domain`"[^}]*`"egilim`":(-?[\d.]+)") { return [double]$Matches[1] }
+            return [double]::NaN
+        }
+        function Rep([string] $json, [string] $key) {
+            if ($json -match "`"reported`":\{[^}]*`"$key`":(-?[\d.]+)") { return [double]$Matches[1] }
+            return [double]::NaN
+        }
+        function Field([string] $json, [string] $key) {
+            if ($json -match "`"$key`":(-?[\d.]+)") { return [double]$Matches[1] }
+            return [double]::NaN
+        }
+
+        $t = Get-Turn
+        Send-Cmd '{"cmd":"endturn","n":2}' | Out-Null
+        Wait-Turn ($t + 2) 40 | Out-Null
+
+        $base = Send-Cmd '{"cmd":"state"}'
+        Check ($base -match '"kaynak":"formul"') "varsayılan kaynak formül"
+        $baseMaliye = Lean $base "MALİYE"
+
+        Send-Cmd '{"cmd":"kaynak","id":"bot"}' | Out-Null
+        Start-Sleep -Milliseconds 300
+        $bot = Send-Cmd '{"cmd":"state"}'
+        Check ($bot -match '"kaynak":"bot"') "bot kabinesi devrede"
+
+        # ŞİŞİRİCİ (Nazif, MALİYE): the lean grows half again.
+        $m = Lean $bot "MALİYE"
+        Write-Host ("  MALİYE eğilim {0:N3} → {1:N3}" -f $baseMaliye, $m)
+        Check ($m -gt $baseMaliye * 1.3) "ŞİŞİRİCİ şişiriyor"
+
+        # ALARMCI (Kadri, GÜVENLİK): the lean flips negative — everything is direr.
+        $gv = Lean $bot "GÜVENLİK"
+        Write-Host ("  GÜVENLİK eğilim {0:N3}" -f $gv)
+        Check ($gv -lt 0) "ALARMCI karartıyor"
+
+        # YALAKA (Cevat, HALK): flattery has a floor no transparency law reaches.
+        $h = Lean $bot "HALK"
+        Write-Host ("  HALK eğilim {0:N3}" -f $h)
+        Check ($h -ge 0.30) "YALAKA parlatıyor"
+
+        # DÜRÜST AMA BECERİKSİZ (Müzeyyen, TARIM): wrong number, clean look — no range.
+        $trueFood = Field $bot "yiyecek"
+        $repFood = Rep $bot "yiyecek"
+        Write-Host ("  TARIM gerçek {0:N1} · rapor {1:N1}" -f $trueFood, $repFood)
+        Check ([math]::Abs($repFood - $trueFood) -ge 1) "BECERİKSİZ yanlış sayı veriyor"
+        Check ($bot -match '"yiyecekAralikli":false') "BECERİKSİZ'in yanlışı temiz görünüyor (rozet yok)"
+
+        # SAKLAYICI (Rıza, TARIM'a atanır): stop the mill, drain the bakery, and watch the
+        # claimed bread stay fat while the true bread empties.
+        Send-Cmd '{"cmd":"appoint","id":"tarim","n":1}' | Out-Null
+        Send-Cmd '{"cmd":"block","id":"degirmen","n":1}' | Out-Null
+        $t = Get-Turn
+        Send-Cmd '{"cmd":"endturn","n":4}' | Out-Null
+        Wait-Turn ($t + 4) 60 | Out-Null
+        $hidden = Send-Cmd '{"cmd":"state"}'
+        $trueBread = Field $hidden "bread"
+        $repBread = Rep $hidden "ekmek"
+        Write-Host ("  SAKLAYICI: gerçek ekmek {0:N1} · bildirilen {1:N1}" -f $trueBread, $repBread)
+        Check ($trueBread -lt 30) "değirmen durunca fırın gerçekten boşalıyor"
+        Check ($repBread -gt ($trueBread + 25)) "SAKLAYICI tıkanıklığı toplamın arkasına saklıyor"
+        Send-Cmd '{"cmd":"block","id":"degirmen","n":0}' | Out-Null
+        Shot "bot-01-saklayici.png"
+
+        # And back: the formula baseline must return exactly.
+        Send-Cmd '{"cmd":"kaynak","id":"formul"}' | Out-Null
+        Start-Sleep -Milliseconds 300
+        $back = Send-Cmd '{"cmd":"state"}'
+        Check ($back -match '"kaynak":"formul"') "formüle dönülebiliyor"
+        $mb = Lean $back "MALİYE"
+        Write-Host ("  MALİYE eğilim (dönüş) {0:N3}" -f $mb)
+        Check (([math]::Abs($mb - $baseMaliye) -lt 0.1) -and ($mb -lt $m)) "dönüşte eğilim formül tabanına indi"
+
+        $state = Send-Cmd '{"cmd":"state"}'
+        if (-not $ok) { $chainBroken = $true }
+    }
+
     # Audio ships with no files: every clip is synthesized at startup. An unattended run cannot
     # listen, so the bus reports itself — how many clips exist, and whether the two ambient
     # voices actually track the city. A drone wired to nothing sounds exactly like a drone.

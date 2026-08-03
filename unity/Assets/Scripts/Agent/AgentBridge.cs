@@ -164,6 +164,12 @@ namespace Mesruiyet.Agent
                     AgentInput.Focus(c.x, c.y);
                     return Ok();
 
+                case "kaynak":
+                    // {"cmd":"kaynak","id":"bot"|"formul"} — swap the report source, so a
+                    // scenario can measure each bot personality against the formula baseline.
+                    Reporting.UseBots(c.id == "bot");
+                    return Ok(Reporting.SourceName);
+
                 case "build":
                     // Placement is the whole first slice, so the agent has to be able to do it.
                     return AgentInput.Build(c.id, c.x, c.y, out string why) ? Ok() : Err(why);

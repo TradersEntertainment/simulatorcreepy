@@ -122,6 +122,10 @@ namespace Mesruiyet.Agent
                 Str(sb, "name", m.Name); sb.Append(',');
                 Bool(sb, "loyalist", m.Loyalist); sb.Append(',');
                 Num(sb, "bias", Distortion.Bias(m, g)); sb.Append(',');
+                // The lean the reports ACTUALLY carry right now — equal to bias under the
+                // formula, shaped by personality under a bot source. Tests key off this.
+                Num(sb, "egilim", Reporting.BiasFor((Domain)i)); sb.Append(',');
+                Str(sb, "profil", m.Def.Profile.ToString().ToLowerInvariant()); sb.Append(',');
                 Str(sb, "telegram", m.Telegram);
                 sb.Append('}');
             }
@@ -313,6 +317,10 @@ namespace Mesruiyet.Agent
             Num(sb, "bufferTurns", Reporting.Buffer().Value); sb.Append(',');
             Num(sb, "para", Reporting.Stock(Res.Para).Value); sb.Append(',');
             Num(sb, "malzeme", Reporting.Stock(Res.Malzeme).Value); sb.Append(',');
+            // Claimed bread next to true bread (top-level "bread"): the pair that catches a
+            // SAKLAYICI hiding a stopped mill behind a healthy granary total.
+            Num(sb, "ekmek", Reporting.Product("yiyecek").Value); sb.Append(',');
+            Str(sb, "kaynak", Reporting.SourceName); sb.Append(',');
             Str(sb, "yiyecekTeshis", Reporting.Diagnosis("yiyecek")); sb.Append(',');
 
             // The loudest district as the governor is told it, which is what decides whether a
@@ -325,6 +333,9 @@ namespace Mesruiyet.Agent
             }
             Num(sb, "enYuksekHosnutsuzluk", loudest); sb.Append(',');
             Bool(sb, "yiyecekReliable", Reporting.Stock(Res.Yiyecek).Reliable); sb.Append(',');
+            // Whether the granary figure carries the range badge the PLAYER sees. A clumsy
+            // bot's wrong-but-clean number is exactly this being false while the value is off.
+            Bool(sb, "yiyecekAralikli", Reporting.Stock(Res.Yiyecek).Ranged); sb.Append(',');
 
             // The uncertainty system, as numbers. A range whose two ends are equal is the bug
             // this exists to catch, and it cannot be seen in a screenshot of a four-digit figure.
