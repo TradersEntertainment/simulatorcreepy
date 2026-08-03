@@ -137,25 +137,90 @@ Kavgayı komedi için oynatın, son ekranı buz gibi bırakın.
 
 ## 7. Ağ
 
-**Godot'un `WebSocketMultiplayerPeer`'ini unutun** — o eski dokümandan kalma. Unity'de:
+**Godot'un `WebSocketMultiplayerPeer`'ini unutun** — o eski dokümandan kalma.
 
-- **Taşıma:** düz WebSocket. Masaüstünde `System.Net.WebSockets.ClientWebSocket`.
-  **WebGL'de bu sınıf çalışmaz** — tarayıcıda ham soket yok. WebGL için `.jslib` eklentisiyle
-  tarayıcının kendi `WebSocket` nesnesini saran ince bir katman yazın ve arkasına aynı arayüzü
-  koyun. Bu, WebGL'de insanları en çok yakan tuzaktır; baştan halledin.
-- **Netcode for GameObjects kullanmayın.** Sıra tabanlı, tur başına birkaç yüz bayt trafiği olan
-  gizli bilgili bir oyun için ağır ve ters bir araç.
-- **Yetki host istemcide.** Vali'nin istemcisi `GameState`'i tutar. Sunucu **aptal bir röledir**:
-  Cloudflare Worker + lobi başına bir Durable Object, WebSocket Hibernation ile. Oyun kurallarını
-  TypeScript'e taşımayın — kurallar tek dilde kalsın.
+Sunucu tarafını sıfırdan tasarlamıyoruz: aynı hesapta çalışan **FETİH** projesinde
+(`github.com/TradersEntertainment/gfbgamereal`, `server/` klasörü) bu iş bir kere çözülmüş ve
+canlıda duruyor. Oradan **altyapıyı** alıyoruz, yetki modelini değil. Dosyaları okuyun:
+`server/wrangler.jsonc`, `server/worker.js`, `server/liveroom.js`, `server/DEPLOY.md`,
+`.github/workflows/deploy-worker.yml`.
+
+### Neyi aynen alıyoruz
+
+- **Lobi kodu → Durable Object örneği.** `env.LIVE_ROOM.idFromName(KOD)` ile aynı koda bağlanan
+  herkes aynı örneğe düşer. Bizde binding adı `LOBBY` olsun, yol `/lobby/<KOD>`.
+- **`new_sqlite_classes` — bu kritik.** FETİH'in `wrangler.jsonc`'undaki not ücretsiz plan
+  sorusunun cevabı: Durable Object ücretsiz planda **SQLite destekli sınıf** ister.
+  ```jsonc
+  { "migrations": [ { "tag": "v1", "new_sqlite_classes": ["Lobby"] } ] }
+  ```
+  `new_classes` yazarsanız ücretsiz planda deploy reddedilir. Daha önce "kotayı panelden
+  doğrula" demiştim; cevap buymuş.
+- **Origin allowlist.** `worker.js` yalnızca bilinen origin'lerden gelen upgrade'i kabul ediyor,
+  gerisine 403. Aynısını yapın; bizim listemiz Pages alan adı + `localhost`.
+- **Kalıcılık.** `state.blockConcurrencyWhile()` içinde son anlık görüntüyü `storage`'dan yükleyin,
+  değişince `storage.put()`. FETİH'te bu, ana oyuncunun bilgisayarı kapansa bile odanın yaşamasını
+  sağlıyor. Bizde karşılığı şu: **host çökerse maç kaybolmaz**, başka bir istemci host olup son
+  anlık görüntüden devam eder. Röle olmamıza rağmen bu değerli, ucuz, ve alın.
+- **Zamanlayıcı: gerçek zamanlı tick YOK.** FETİH `nextAlarmAt(room)` ile bir sonraki mutlak
+  son tarihi hesaplayıp `state.storage.setAlarm(at)` kuruyor; alarm çalınca fazı ilerletiyor.
+  Bizim 90 saniyelik bakan fazımız için birebir doğru desen. **Ayrıca zorunlu:** host susarsa
+  faz sonsuza kadar açık kalmasın diye son tarihi sunucu uygular, host değil.
+
+### Neyi almıyoruz, ve neden
+
+FETİH'te oyun mantığının tamamı JavaScript'e taşınmış (`liveroom-core.js`, 65 KB) çünkü o oyun
+rekabetçi ve gerçek zamanlı — sunucu hakem olmak zorunda. **MEŞRUİYET co-op'u işbirlikçi.**
+Kuralları ikinci kez C#'tan JS'e çevirmenin bedeli, kazandıracağı şeyden büyük. Bu yüzden:
+
+- **Yetki host istemcide.** Vali'nin istemcisi `GameState`'i tutar ve turu çözer.
+- **Durable Object aptal bir röledir** artı bir son-tarih saati artı bir yedek. Oyun kuralı bilmez.
+- Arena moduna gelince bu karar yeniden tartışılır — orada rekabet var. `ARENA-PLAN.md` §9'a bakın.
+
+### Yine de FETİH'in en iyi fikrini alın: üç katman
+
+`liveroom-core.js` (platform bağımsız) → `liveroom.js` (DO adaptörü) → `tools/dev/live-server.mjs`
+(aynı çekirdeği kullanan yerel Node sunucusu). Bu ayrım sayesinde ağ mantığı **deploy etmeden**
+test edilebiliyor. Bizde aynısı:
+
+- `web/lobby-core.js` — koltuk listesi, faz saati, mesaj yönlendirme. Platform bağımsız.
+- `web/lobby-do.js` — Durable Object adaptörü, WebSocket sahipliği.
+- `web/dev-server.mjs` — aynı çekirdeği çalıştıran yerel Node sunucusu. **Geliştirme boyunca
+  Cloudflare'e hiç dokunmadan altı koltuklu lobi test edilir.**
+
+### Hibernation — bir düzeltme
+
+FETİH `server.accept()` kullanıyor, yani DO bellekte kalıyor ve süre faturalanıyor. Sıra tabanlı
+oyunumuzda fazlar arası uzun boşluklar var, o yüzden **Hibernation API tercih edilir**:
+`state.acceptWebSocket(server)` + `webSocketMessage()` / `webSocketClose()` metotları.
+Dikkat: hibernation'da `this.conns` gibi bellekteki Map'ler hayatta kalmaz —
+`state.getWebSockets()` ile listelenir, koltuk numarası `serializeAttachment()` ile sokete iliştirilir.
+Bu farkı atlarsanız oyuncular sessizce düşer. Hibernation zorlarsa FETİH'in `accept()` deseni
+çalışan bir geri çekilme noktasıdır.
+
+### Unity tarafı
+
+- **Taşıma:** masaüstünde `System.Net.WebSockets.ClientWebSocket`. **WebGL'de bu sınıf çalışmaz** —
+  tarayıcıda ham soket yok. `.jslib` eklentisiyle tarayıcının `WebSocket` nesnesini saran ince bir
+  katman yazın, arkasına aynı C# arayüzünü koyun. WebGL'de en çok vakit yakan tuzak budur.
+- **Netcode for GameObjects kullanmayın.** Tur başına birkaç yüz bayt taşıyan, gizli bilgili,
+  sıra tabanlı bir oyun için ağır ve ters bir araç.
 - **Rol görünümü bir güvenlik sınırıdır.** `RoleView.For(seat)` mesajı kurarken filtreler; arayüzde
-  gizlemek yeterli değildir, herkes hata ayıklayıcıyı açabilir. Testte doğrulayın: bir bakan
-  istemcisine giden sözlükte kendi alanı dışında hiçbir anahtar bulunmasın.
+  gizlemek yetmez, herkes hata ayıklayıcıyı açabilir. Testte doğrulayın: bir bakan istemcisine
+  giden sözlükte kendi alanı dışında hiçbir anahtar bulunmasın.
 - **Yeniden bağlanma** lobi koduyla aynı koltuğa. Kopan oyuncunun yerini o tur bot alır, bağlanınca
   koltuğu geri verir. Maç asla durmaz.
 - **Dosyalar:** `Assets/Scripts/Net/` altında `NetManager.cs`, `RoleView.cs`,
   `CoopTurnController.cs`, `Transport/DesktopSocket.cs`, `Transport/WebSocket.jslib`.
-  Röle `web/worker.ts` + `web/wrangler.toml`.
+
+### Deploy — elle uğraşmayın
+
+FETİH'te deploy tek seferlik kurulumdan sonra kendiliğinden oluyor; aynısını kurun.
+`.github/workflows/deploy-worker.yml` dosyasını örnek alın: yalnızca `actions/checkout` ve
+`actions/setup-node` kullanıyor, üçüncü taraf action yok, sonra `npx --yes wrangler@4 deploy`.
+Gereken iki depo secret'ı: `CLOUDFLARE_API_TOKEN` ve `CLOUDFLARE_ACCOUNT_ID` — ikisinin nasıl
+alınacağı `server/DEPLOY.md`'de adım adım yazıyor, kullanıcı o adımları bir kere yapmış.
+`web/**` altına push edilince Worker kendiliğinden güncellensin.
 
 ---
 
@@ -183,7 +248,8 @@ Bu senaryo yeşil geçmeden co-op bitmiş sayılmaz.
 2. `BotSource` + beş kişilik profili. Hâlâ tek oyunculu, hâlâ ağsız, ama artık bakanlar karakterli.
 3. Bakan ekranı (GERÇEK / RAPOR iki sütun) ve `HumanSource`, **yerel hot-seat olarak**. Ağ yok.
 4. Gizli hedefler ve telgraf sistemi.
-5. Ağ: Durable Object rölesi, masaüstü taşıma, altı gerçek koltuk.
+5. Ağ: önce `web/dev-server.mjs` (yerel Node, Cloudflare yok) ile altı koltuk; çalışınca
+   aynı çekirdeği Durable Object'e tak. Masaüstü taşıma.
 6. WebGL taşıma katmanı ve dağıtım.
 7. Hesap verme oturumunun co-op sürümü.
 
