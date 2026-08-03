@@ -192,8 +192,18 @@ namespace Mesruiyet.Agent
             var bm = World.BuildingModels.Instance;
             sb.Append("\"modeller\":{");
             Num(sb, "yuklu", bm != null ? bm.LoadedCount : 0); sb.Append(',');
-            sb.Append("\"konut\":").Append(bm != null && bm.Covers("konut") ? "true" : "false").Append(',');
-            sb.Append("\"tapinak\":").Append(bm != null && bm.Covers("tapinak") ? "true" : "false").Append(',');
+            sb.Append("\"kapsanan\":[");
+            if (bm != null)
+            {
+                bool firstCov = true;
+                foreach (var id in bm.CoveredIds)
+                {
+                    if (!firstCov) sb.Append(',');
+                    firstCov = false;
+                    sb.Append('"').Append(id).Append('"');
+                }
+            }
+            sb.Append("],");
             Num(sb, "enKotuMinY", bm != null ? bm.WorstMinY : 0f); sb.Append(',');
             Str(sb, "shader", bm != null ? bm.FirstShaderName : "");
             sb.Append("},");

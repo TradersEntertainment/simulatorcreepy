@@ -40,6 +40,7 @@ namespace Mesruiyet.World
         public bool Covers(string id) => _templates.ContainsKey(id);
 
         public int LoadedCount => _templates.Count;
+        public IEnumerable<string> CoveredIds => _templates.Keys;
         public string FirstShaderName
         {
             get

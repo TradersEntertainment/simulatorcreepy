@@ -1615,16 +1615,20 @@ switch ($Scenario) {
             return ""
         }
 
-        # Loading is async; give it up to 20 s like the crowd skins get.
+        # Loading is async; give it up to 20 s like the crowd skins get. The bar scales with
+        # delivery: every glb in the folder must load, however many there are.
+        $expected = (Get-ChildItem (Join-Path $PSScriptRoot "..\Assets\StreamingAssets\Models\buildings") -Filter *.glb).Count
         $loaded = $false
         foreach ($i in 1..20) {
             $s = Send-Cmd '{"cmd":"state"}'
-            if ($s -match '"modeller":\{"yuklu":2') { $loaded = $true; break }
+            if ($s -match "`"modeller`":\{`"yuklu`":$expected") { $loaded = $true; break }
             Start-Sleep -Seconds 1
         }
-        Check $loaded "iki model de yüklendi"
-        Check ($s -match '"konut":true') "konut modeli devrede"
-        Check ($s -match '"tapinak":true') "tapınak modeli devrede"
+        Check $loaded "klasördeki $expected modelin hepsi yüklendi"
+        Check ($s -match '"kapsanan":\[[^\]]*"konut"') "konut modeli devrede"
+        Check ($s -match '"kapsanan":\[[^\]]*"tapinak"') "tapınak modeli devrede"
+        Check ($s -match '"kapsanan":\[[^\]]*"toplukonut"') "toplu konut modeli devrede"
+        Check ($s -match '"kapsanan":\[[^\]]*"degirmen"') "değirmen modeli devrede"
 
         $shader = Model $s "shader"
         Write-Host ("  shader: {0}" -f $shader)
@@ -1648,6 +1652,16 @@ switch ($Scenario) {
         Send-Cmd '{"cmd":"focus","x":28,"y":16}' | Out-Null
         Start-Sleep -Milliseconds 700
         Shot "model-02-konutlar.png"
+
+        # The mill by the fields, and a freshly-placed apartment block.
+        Send-Cmd '{"cmd":"focus","x":13,"y":8}' | Out-Null
+        Start-Sleep -Milliseconds 700
+        Shot "model-03-degirmen.png"
+        Send-Cmd '{"cmd":"build","id":"toplukonut","x":26,"y":15}' | Out-Null
+        Start-Sleep -Milliseconds 800
+        Send-Cmd '{"cmd":"focus","x":26,"y":15}' | Out-Null
+        Start-Sleep -Milliseconds 700
+        Shot "model-04-toplukonut.png"
 
         $state = Send-Cmd '{"cmd":"state"}'
         if (-not $ok) { $chainBroken = $true }
