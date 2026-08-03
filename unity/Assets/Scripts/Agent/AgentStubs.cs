@@ -229,7 +229,10 @@ namespace Mesruiyet.Agent
                 Num(sb, "walking", walking); sb.Append(',');
                 Num(sb, "idle", idle); sb.Append(',');
                 Num(sb, "marching", marching); sb.Append(',');
-                Num(sb, "hidden", hidden);
+                Num(sb, "hidden", hidden); sb.Append(',');
+                // A car that cut a corner ends up on grass, so this is the diagonal-driving bug
+                // expressed as a number rather than as something to squint at.
+                Num(sb, "yoldisi", crowd.CarsOffRoad());
                 sb.Append("},");
             }
 

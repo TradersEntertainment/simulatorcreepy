@@ -132,12 +132,24 @@ namespace Mesruiyet.World
         NativeArray<DistrictMood> _moods;
         int _live;
 
-        Mesh _personMesh, _carMesh, _bannerMesh;
+        Mesh _personMesh, _bannerMesh;
+
+        /// <summary>
+        /// Three vehicles rather than one. A street where every car is the same object reads as a
+        /// conveyor belt; a saloon, a van and a horse cart read as a city that has more than one
+        /// kind of errand. Which one an agent is comes from its own hash, so it never changes.
+        /// </summary>
+        Mesh[] _carMeshes;
+        const int CarKinds = 3;
         Material[] _bucketMats;
         Material _bannerMat;
 
-        Matrix4x4[][] _batches, _carBatches;
-        int[] _batchCount, _carBatchCount;
+        Matrix4x4[][] _batches;
+        int[] _batchCount;
+        // Cars are batched by [vehicle kind][colour bucket]: one draw call each, so three
+        // silhouettes cost three times a handful rather than anything that shows up in a frame.
+        Matrix4x4[][][] _carBatches;
+        int[][] _carBatchCount;
         Matrix4x4[] _banners;
         int _bannerCount;
 
@@ -169,20 +181,27 @@ namespace Mesruiyet.World
             BuildMaterials(template);
 
             _batches = new Matrix4x4[BucketHex.Length][];
-            _carBatches = new Matrix4x4[BucketHex.Length][];
+            _carBatches = new Matrix4x4[CarKinds][][];
+            _carBatchCount = new int[CarKinds][];
+            for (int k = 0; k < CarKinds; k++)
+            {
+                _carBatches[k] = new Matrix4x4[BucketHex.Length][];
+                _carBatchCount[k] = new int[BucketHex.Length];
+                for (int i = 0; i < BucketHex.Length; i++) _carBatches[k][i] = new Matrix4x4[MaxAgents];
+            }
             _batchCount = new int[BucketHex.Length];
-            _carBatchCount = new int[BucketHex.Length];
+
             for (int i = 0; i < _batches.Length; i++)
             {
                 _batches[i] = new Matrix4x4[MaxAgents];
-                _carBatches[i] = new Matrix4x4[MaxAgents];
+
             }
             _banners = new Matrix4x4[MaxAgents];
 
             BuildSmoke(template);
             Repopulate();
 
-            Debug.Log($"[Crowd] kişi {_personMesh.vertexCount}v · araba {_carMesh.vertexCount}v · " +
+            Debug.Log($"[Crowd] kişi {_personMesh.vertexCount}v · araba {_carMeshes[0].vertexCount}v · " +
                       $"pankart {_bannerMesh.vertexCount}v · shader {template.shader.name} · " +
                       $"instancing {_bucketMats[0].enableInstancing} · ajan {_live}");
         }
@@ -248,7 +267,42 @@ namespace Mesruiyet.World
             foreach (float dx in new[] { -0.58f, 0.62f })
             foreach (float dz in new[] { -0.46f, 0.46f })
                 b.AddBox(new Vector3(dx, 0, dz), new Vector3(0.34f, 0.30f, 0.16f), tyre);
-            _carMesh = b.ToMesh("Car");
+            var saloon = b.ToMesh("Car");
+
+            // ---- a van: same nose, a tall box behind it, and a load door at the back.
+            b.Clear();
+            b.AddBox(new Vector3(0.55f, 0.20f, 0), new Vector3(0.95f, 0.44f, 0.92f), white);
+            b.AddBox(new Vector3(0.62f, 0.64f, 0), new Vector3(0.72f, 0.42f, 0.84f), white);
+            b.AddBox(new Vector3(0.95f, 0.72f, 0), new Vector3(0.06f, 0.26f, 0.7f), glass);
+            b.AddBox(new Vector3(-0.42f, 0.20f, 0), new Vector3(1.5f, 1.05f, 0.96f), white);
+            b.AddBox(new Vector3(-1.16f, 0.36f, 0), new Vector3(0.05f, 0.62f, 0.78f), MeshBuilder.Shade(white, 0.7f));
+            foreach (float dz in new[] { -0.28f, 0.28f })
+            {
+                b.AddBox(new Vector3(1.03f, 0.26f, dz), new Vector3(0.09f, 0.14f, 0.20f), lamp);
+                b.AddBox(new Vector3(-1.18f, 0.26f, dz), new Vector3(0.07f, 0.12f, 0.18f), tail);
+            }
+            foreach (float dx in new[] { -0.72f, 0.72f })
+            foreach (float dz in new[] { -0.47f, 0.47f })
+                b.AddBox(new Vector3(dx, 0, dz), new Vector3(0.36f, 0.32f, 0.17f), tyre);
+            var van = b.ToMesh("Van");
+
+            // ---- a horse cart: two big wheels, an open bed, a pole and a horse in front. Slow,
+            // and the reason the delta reads as a place with more than one century in it.
+            b.Clear();
+            var timber = new Color(0.55f, 0.42f, 0.30f);
+            var horse = new Color(0.42f, 0.31f, 0.24f);
+            b.AddBox(new Vector3(-0.35f, 0.42f, 0), new Vector3(1.35f, 0.16f, 0.86f), timber);
+            foreach (float dz in new[] { -0.44f, 0.44f })
+                b.AddBox(new Vector3(-0.35f, 0.58f, dz), new Vector3(1.35f, 0.34f, 0.08f), MeshBuilder.Shade(timber, 1.1f));
+            b.AddBox(new Vector3(-0.98f, 0.58f, 0), new Vector3(0.08f, 0.34f, 0.86f), MeshBuilder.Shade(timber, 0.9f));
+            foreach (float dz in new[] { -0.47f, 0.47f })
+                b.AddBox(new Vector3(-0.35f, 0, dz), new Vector3(0.62f, 0.62f, 0.12f), tyre);
+            b.AddBox(new Vector3(0.42f, 0.48f, 0), new Vector3(0.85f, 0.08f, 0.10f), MeshBuilder.Shade(timber, 0.8f));
+            b.AddBox(new Vector3(1.0f, 0, 0), new Vector3(0.85f, 0.95f, 0.45f), horse);
+            b.AddBox(new Vector3(1.42f, 0.95f, 0), new Vector3(0.30f, 0.34f, 0.32f), horse);
+            var cart = b.ToMesh("Cart");
+
+            _carMeshes = new[] { saloon, van, cart };
 
             // A banner on a pole. Only marching crowds carry them, so seeing one at all is
             // the signal — you never have to read the number to know a quarter has had enough.
@@ -412,6 +466,10 @@ namespace Mesruiyet.World
                     int n = _grid.RoadNeighbours(tile.x, tile.y, _neighbours);
                     var next = n > 0 ? _neighbours[Mathf.FloorToInt(Rand(ref seed) * n) % n] : tile;
                     agent.NextX = next.x; agent.NextY = next.y;
+
+                    // Facing, on the first frame as on every other one.
+                    var aim = CityGrid.World(next.x, next.y, 0.05f);
+                    agent.Target = new float3(aim.x, aim.y, aim.z);
                 }
 
                 _agents[i] = agent;
@@ -533,7 +591,15 @@ namespace Mesruiyet.World
 
                 if (distance < 0.6f)
                 {
-                    // Arrived. Pick the next tile, preferring to carry straight on.
+                    // Arrived. Snap to the centre of the tile before choosing the next one.
+                    //
+                    // Without this the car turned from wherever it happened to be when it came
+                    // within 0.6 of the target — still short of the junction — so a right angle
+                    // was driven as a diagonal cut across the corner, and the error carried into
+                    // the next leg and the next. Roads are four-connected, so a leg that starts
+                    // at a tile centre is always exactly along one axis.
+                    a.Pos = new float3(to.x, to.y, to.z);
+
                     int dx = a.NextX - a.TileX, dy = a.NextY - a.TileY;
                     a.TileX = a.NextX; a.TileY = a.NextY;
 
@@ -563,6 +629,13 @@ namespace Mesruiyet.World
 
                     a.NextX = _neighbours[chosen].x;
                     a.NextY = _neighbours[chosen].y;
+
+                    // Face where it is actually going. The draw loop takes its rotation from
+                    // Target, and Target is only ever written by the Burst job — which skips
+                    // cars. So every car pointed at a wander destination it was not driving to,
+                    // and slid down the street crabwise.
+                    var aim = CityGrid.World(a.NextX, a.NextY, 0.05f);
+                    a.Target = new float3(aim.x, aim.y, aim.z);
                 }
                 else
                 {
@@ -610,7 +683,9 @@ namespace Mesruiyet.World
                 stride = size > 90f ? 4 : size > 68f ? 2 : 1;
             }
 
-            for (int i = 0; i < _batchCount.Length; i++) { _batchCount[i] = 0; _carBatchCount[i] = 0; }
+            for (int i = 0; i < _batchCount.Length; i++) _batchCount[i] = 0;
+            for (int k = 0; k < CarKinds; k++)
+                for (int i = 0; i < _carBatchCount[k].Length; i++) _carBatchCount[k][i] = 0;
             _bannerCount = 0;
 
             for (int i = 0; i < _live; i += stride)
@@ -630,7 +705,14 @@ namespace Mesruiyet.World
 
                 int bucket = a.Bucket % _batches.Length;
                 var trs = Matrix4x4.TRS(pos, rot, Vector3.one);
-                if (a.Kind == 1) _carBatches[bucket][_carBatchCount[bucket]++] = trs;
+                if (a.Kind == 1)
+                {
+                    // Which vehicle. From the agent's index, which does not change while it
+                    // lives — Phase was the obvious choice and the wrong one, because DriveCars
+                    // advances it every frame and the van kept turning into a cart.
+                    int kind = i % CarKinds;
+                    _carBatches[kind][bucket][_carBatchCount[kind][bucket]++] = trs;
+                }
                 else _batches[bucket][_batchCount[bucket]++] = trs;
 
                 if (a.Mood == 2 && a.Kind == 0 && (i & 3) == 0 && _bannerCount < _banners.Length)
@@ -641,7 +723,9 @@ namespace Mesruiyet.World
             // city costs about a dozen draw calls however many of them there are.
             for (int b = 0; b < _batches.Length; b++)
             {
-                if (_batchCount[b] == 0 && _carBatchCount[b] == 0) continue;
+                bool anyCar = false;
+                for (int k = 0; k < CarKinds; k++) if (_carBatchCount[k][b] > 0) anyCar = true;
+                if (_batchCount[b] == 0 && !anyCar) continue;
 
                 var rp = new RenderParams(_bucketMats[b])
                 {
@@ -652,8 +736,9 @@ namespace Mesruiyet.World
 
                 if (_batchCount[b] > 0)
                     Graphics.RenderMeshInstanced(rp, _personMesh, 0, _batches[b], _batchCount[b]);
-                if (_carBatchCount[b] > 0)
-                    Graphics.RenderMeshInstanced(rp, _carMesh, 0, _carBatches[b], _carBatchCount[b]);
+                for (int k = 0; k < CarKinds; k++)
+                    if (_carBatchCount[k][b] > 0)
+                        Graphics.RenderMeshInstanced(rp, _carMeshes[k], 0, _carBatches[k][b], _carBatchCount[k][b]);
             }
 
 
@@ -667,6 +752,24 @@ namespace Mesruiyet.World
                 };
                 Graphics.RenderMeshInstanced(rp, _bannerMesh, 0, _banners, _bannerCount);
             }
+        }
+
+        /// <summary>
+        /// Cars standing on something that is not a road. Should always be zero: they are driven
+        /// tile to tile along a four-connected graph. Any other answer means one of them left the
+        /// carriageway — which is what cutting a corner diagonally looks like, measured.
+        /// </summary>
+        public int CarsOffRoad()
+        {
+            int off = 0;
+            for (int i = 0; i < _live; i++)
+            {
+                var a = _agents[i];
+                if (a.Kind != 1 || a.Pos.y < -1f) continue;
+                if (!CityGrid.Tile(new Vector3(a.Pos.x, 0, a.Pos.z), out var tile)) { off++; continue; }
+                if (_grid.At(tile.x, tile.y) != TileKind.Yol) off++;
+            }
+            return off;
         }
 
         /// <summary>How the crowd reads right now, for the agent loop to assert against.</summary>

@@ -900,6 +900,29 @@ switch ($Scenario) {
         Check ((District $paved "LİMAN" "congestion") -lt (District $crowded "LİMAN" "congestion")) `
               "yol açmak tıkanıklığı çözdü"
 
+        # Let them drive for a while, then ask where they are. A car that turns before reaching
+        # the junction cuts the corner diagonally and ends up on the grass, and the error carries
+        # into every leg after it — so after twelve seconds of driving, none of them should be
+        # off the carriageway.
+        Write-Host "`n[loop] arabalar on iki saniye sürüyor..." -ForegroundColor Cyan
+        Start-Sleep -Seconds 12
+        $driven = Send-Cmd '{"cmd":"state"}'
+        $off = 0
+        if ($driven -match '"yoldisi":(\d+)') { $off = [int]$Matches[1] }
+        Write-Host ("  yol dışında kalan araç: {0}" -f $off)
+        Check ($off -eq 0) "arabalar yolda kalıyor, köşe kesmiyor"
+
+        # The charter opens on turn five and this scenario runs past it, so clear it or the
+        # picture is a picture of a modal.
+        if ($driven -match '"charterPending":true') {
+            Send-Cmd '{"cmd":"clause","id":"herkese_ekmek"}'   | Out-Null
+            Send-Cmd '{"cmd":"clause","id":"soz_serbest"}'     | Out-Null
+            Send-Cmd '{"cmd":"clause","id":"meclis_ustundur"}' | Out-Null
+        }
+        foreach ($i in 1..2) { Send-Cmd '{"cmd":"press","key":"zoomin"}' | Out-Null }
+        Start-Sleep -Milliseconds 900
+        Shot "04-araclar.png"
+
         if (-not $ok) { $chainBroken = $true }
         $state = $paved
     }
