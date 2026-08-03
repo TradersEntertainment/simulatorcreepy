@@ -212,12 +212,24 @@ namespace Mesruiyet.UI
 #endif
         }
 
-        /// <summary>ESC pauses, and backs out of a settings panel opened from a menu.</summary>
+        /// <summary>
+        /// ESC backs out of whatever is innermost: a settings panel first, then an armed
+        /// building, then the game itself. Cancelling a misplaced build is the commoner press by
+        /// far, so it comes before pausing — and it must never do both, which it did while
+        /// Placement was listening for the same key on the same frame.
+        /// </summary>
         public void OnEscape()
         {
             if (_menu != null && _menu.name == "panel_settings") { if (AtTitle) OpenTitle(); else OpenPause(); return; }
             if (AtTitle) return;
-            if (Paused) Resume(); else OpenPause();
+            if (Paused) { Resume(); return; }
+
+            if (Placement.Instance != null && Placement.Instance.Selected != null)
+            {
+                Placement.Instance.Disarm();
+                return;
+            }
+            OpenPause();
         }
 
         // ================================================================ top strip

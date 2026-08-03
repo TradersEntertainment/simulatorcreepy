@@ -105,8 +105,10 @@ namespace Mesruiyet.World
 
             if (mouse.rightButton.wasPressedThisFrame) Disarm();
 
-            var keyboard = Keyboard.current;
-            if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame) Disarm();
+            // ESC is deliberately *not* read here. Since the pause menu arrived, two components
+            // were listening for it on the same frame in undefined order, so one press both
+            // cancelled the build and opened the menu. The HUD owns the key and calls Disarm
+            // itself when something is armed; one owner, one outcome.
         }
 
         void UpdateHover(Vector2 screen)
