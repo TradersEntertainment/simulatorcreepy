@@ -1531,6 +1531,9 @@ if ($chainBroken) {
 }
 
 Write-Host "`n[loop] temiz. Görüntüler: agent\shots\" -ForegroundColor Green
+# An explicit success code: without it $LASTEXITCODE keeps whatever the last native command
+# returned (robocopy says 1 for "files copied"), and a suite loop reads a clean run as failed.
+exit 0
 
 
 
