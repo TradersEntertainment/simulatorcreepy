@@ -34,6 +34,7 @@ namespace Mesruiyet.EditorTools
 
             EnsurePanelSettings();
             EnsureCityMaterial();
+            EnsureGltfShaders();
             EnsureBootScene(force);
             EnsurePlayerSettings();
 
@@ -118,6 +119,46 @@ namespace Mesruiyet.EditorTools
                 unit.shader = lit;
                 EditorUtility.SetDirty(unit);
             }
+        }
+
+        /// <summary>
+        /// Keep glTFast's shaders in the build. The external building models arrive with real
+        /// textures, and those survive a player build only if the shaders their materials use
+        /// are in Always Included Shaders — nothing in a scene references them, so Unity would
+        /// otherwise strip the lot and the models would land with empty material slots.
+        /// </summary>
+        static void EnsureGltfShaders()
+        {
+            string[] wanted =
+            {
+                "Shader Graphs/glTF-pbrMetallicRoughness",
+                "Shader Graphs/glTF-unlit",
+                "glTF/PbrMetallicRoughness",
+                "glTF/Unlit",
+            };
+
+            var settings = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(
+                "ProjectSettings/GraphicsSettings.asset");
+            if (settings == null) return;
+            var so = new SerializedObject(settings);
+            var list = so.FindProperty("m_AlwaysIncludedShaders");
+            if (list == null) return;
+
+            foreach (var name in wanted)
+            {
+                var shader = Shader.Find(name);
+                if (shader == null) continue;
+
+                bool present = false;
+                for (int i = 0; i < list.arraySize; i++)
+                    if (list.GetArrayElementAtIndex(i).objectReferenceValue == shader) { present = true; break; }
+                if (present) continue;
+
+                list.InsertArrayElementAtIndex(list.arraySize);
+                list.GetArrayElementAtIndex(list.arraySize - 1).objectReferenceValue = shader;
+                Debug.Log($"[ProjectSetup] Always Included Shaders += {name}");
+            }
+            so.ApplyModifiedPropertiesWithoutUndo();
         }
 
         // ---------------------------------------------------------------- the one scene

@@ -187,6 +187,17 @@ namespace Mesruiyet.Agent
             // Does every building rest on the ground? Measured, not judged: the renderer records
             // the lowest vertex each building contributed and compares it to the tile it stands
             // on. Anything above the floor is a part standing on air.
+            // The external building models: loaded count, whether each is standing in, the
+            // shader that actually renders them, and the worst measured ground clearance.
+            var bm = World.BuildingModels.Instance;
+            sb.Append("\"modeller\":{");
+            Num(sb, "yuklu", bm != null ? bm.LoadedCount : 0); sb.Append(',');
+            sb.Append("\"konut\":").Append(bm != null && bm.Covers("konut") ? "true" : "false").Append(',');
+            sb.Append("\"tapinak\":").Append(bm != null && bm.Covers("tapinak") ? "true" : "false").Append(',');
+            Num(sb, "enKotuMinY", bm != null ? bm.WorstMinY : 0f); sb.Append(',');
+            Str(sb, "shader", bm != null ? bm.FirstShaderName : "");
+            sb.Append("},");
+
             var cr = World.CityRenderer.Instance;
             sb.Append("\"zemin\":{");
             Num(sb, "havada", cr != null ? cr.FloatingBuildings : 0); sb.Append(',');

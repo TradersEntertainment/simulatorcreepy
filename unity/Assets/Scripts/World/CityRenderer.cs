@@ -245,6 +245,9 @@ namespace Mesruiyet.World
 
         // ---------------------------------------------------------------- buildings
 
+        /// <summary>Bumps on every rebake, so model instances know when to re-sync.</summary>
+        public int RebuildVersion { get; private set; }
+
         /// <summary>Re-bake the building and prop meshes. Called once at start and on every placement.</summary>
         public void Rebuild()
         {
@@ -257,6 +260,7 @@ namespace Mesruiyet.World
             // the quarter is — so it has to be re-baked when the quarter changes, not only when
             // somebody lays a road.
             RebuildGround();
+            RebuildVersion++;
         }
 
         /// <summary>
@@ -291,6 +295,19 @@ namespace Mesruiyet.World
                 Vector3 ground = CityGrid.World(b.Tile.x, b.Tile.y);
                 float hash = CityGrid.Hash(b.Tile.x, b.Tile.y, 11);
                 float hash2 = CityGrid.Hash(b.Tile.x, b.Tile.y, 23);
+
+                // A building backed by a real external model contributes no procedural
+                // geometry — the instance stands on the tile instead. Its probe entry still
+                // exists, measured from the model's own bounds, so the ground bar holds.
+                if (BuildingModels.Instance != null && BuildingModels.Instance.Covers(def.Id))
+                {
+                    BuildingModels.Instance.ProbeBounds(def.Id, ground, out var mMin, out var mMax);
+                    _probes.Add(new BuildingProbe
+                    {
+                        Id = def.Id, Tile = b.Tile, Min = mMin, Max = mMax, FloorY = ground.y,
+                    });
+                    continue;
+                }
 
                 // Everything a building contributes is measured against the ground it stands on,
                 // so "does every part of this rest on something" stops being a matter of opinion.

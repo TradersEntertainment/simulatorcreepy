@@ -95,6 +95,11 @@ namespace Mesruiyet.Core
             var skins = world.AddComponent<CrowdSkins>();
             skins.Init(state, crowd);
 
+            // The player's own 3D: real models for konut and tapınak, loaded from
+            // StreamingAssets, replacing their procedural forms the moment they are ready.
+            var models = world.AddComponent<BuildingModels>();
+            models.Init(state);
+
             var hud = BuildHud(state);
 
             // The agent plays through the same UI a human does — no private back door.

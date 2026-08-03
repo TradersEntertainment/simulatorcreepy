@@ -1599,6 +1599,60 @@ switch ($Scenario) {
         if (-not $ok) { $chainBroken = $true }
     }
 
+    # The player's own 3D models: konut.glb and tapinak.glb from StreamingAssets must load,
+    # replace their procedural forms, stand exactly on the ground, and keep their textures
+    # (a real shader, not a stripped one). Close-up frames are taken for the eye check.
+    "modeller" {
+        Write-Host "`n[loop] DIŞ MODELLER:" -ForegroundColor Cyan
+
+        $ok = $true
+        function Check([bool] $pass, [string] $label) {
+            if ($pass) { Write-Host "  ✔ $label" -ForegroundColor Green }
+            else { Write-Host "  ✘ $label" -ForegroundColor Red; $script:ok = $false }
+        }
+        function Model([string] $json, [string] $key) {
+            if ($json -match "`"modeller`":\{[^}]*`"$key`":(-?[\d.]+|true|false|`"[^`"]*`")") { return $Matches[1] }
+            return ""
+        }
+
+        # Loading is async; give it up to 20 s like the crowd skins get.
+        $loaded = $false
+        foreach ($i in 1..20) {
+            $s = Send-Cmd '{"cmd":"state"}'
+            if ($s -match '"modeller":\{"yuklu":2') { $loaded = $true; break }
+            Start-Sleep -Seconds 1
+        }
+        Check $loaded "iki model de yüklendi"
+        Check ($s -match '"konut":true') "konut modeli devrede"
+        Check ($s -match '"tapinak":true') "tapınak modeli devrede"
+
+        $shader = Model $s "shader"
+        Write-Host ("  shader: {0}" -f $shader)
+        Check ($shader -ne '""' -and $shader.Length -gt 2) "modeller gerçek bir shader ile çiziliyor"
+
+        $minY = [double](Model $s "enKotuMinY")
+        Write-Host ("  en kötü zemin sapması: {0:N3}" -f $minY)
+        Check ([math]::Abs($minY) -le 0.05) "modellerin tabanı yerde (± 0.05)"
+
+        # The probe bar still holds for the whole city, models included.
+        Check ($s -match '"zemin":\{"havada":0') "hiçbir yapı havada değil"
+
+        # A temple placed fresh, then both photographed up close — the eye check.
+        Send-Cmd '{"cmd":"build","id":"tapinak","x":24,"y":14}' | Out-Null
+        Start-Sleep -Milliseconds 800
+        Send-Cmd '{"cmd":"focus","x":24,"y":14}' | Out-Null
+        foreach ($i in 1..7) { Send-Cmd '{"cmd":"press","key":"zoomin"}' | Out-Null }
+        Start-Sleep -Milliseconds 900
+        Shot "model-01-tapinak.png"
+
+        Send-Cmd '{"cmd":"focus","x":28,"y":16}' | Out-Null
+        Start-Sleep -Milliseconds 700
+        Shot "model-02-konutlar.png"
+
+        $state = Send-Cmd '{"cmd":"state"}'
+        if (-not $ok) { $chainBroken = $true }
+    }
+
     # Audio ships with no files: every clip is synthesized at startup. An unattended run cannot
     # listen, so the bus reports itself — how many clips exist, and whether the two ambient
     # voices actually track the city. A drone wired to nothing sounds exactly like a drone.
