@@ -121,9 +121,20 @@ namespace Mesruiyet.Core
             bool PlaceExactly(string id, int x, int y)
             {
                 var def = Buildings.Get(id);
-                if (def == null || !IsFree(x, y)) return false;
-                if (def.Requires.HasValue && At(x, y) != def.Requires.Value) return false;
-                if (def.Adjacent.HasValue && !NextTo(x, y, def.Adjacent.Value)) return false;
+                if (def == null) return false;
+
+                // The founding pass honours footprints too: a 2×2 barracks claims all four
+                // tiles or goes elsewhere, same as a player build would.
+                bool anyAdjacent = false;
+                for (int dy = 0; dy < def.Size.y; dy++)
+                for (int dx = 0; dx < def.Size.x; dx++)
+                {
+                    int tx = x + dx, ty = y + dy;
+                    if (!IsFree(tx, ty)) return false;
+                    if (def.Requires.HasValue && At(tx, ty) != def.Requires.Value) return false;
+                    if (def.Adjacent.HasValue && NextTo(tx, ty, def.Adjacent.Value)) anyAdjacent = true;
+                }
+                if (def.Adjacent.HasValue && !anyAdjacent) return false;
 
                 var district = Districts.At(x, y);
                 if (district == null) return false;
@@ -135,7 +146,9 @@ namespace Mesruiyet.Core
                     District = district.Id,
                     BuiltOnTurn = 0,
                 };
-                Occupant[Index(x, y)] = state.Buildings.Count;
+                for (int dy = 0; dy < def.Size.y; dy++)
+                for (int dx = 0; dx < def.Size.x; dx++)
+                    Occupant[Index(x + dx, y + dy)] = state.Buildings.Count;
                 state.Buildings.Add(b);
                 return true;
             }

@@ -219,7 +219,7 @@ namespace Mesruiyet.Core
                 CostMoney = 160, CostMaterial = 55, Upkeep = 8, Workers = 22,
                 Output = Out(enerji: 48),
                 Pollution = 9,
-                Tint = C("#77808C"), Storeys = 3,
+                Tint = C("#77808C"), Storeys = 3, Size = new Vector2Int(2, 2),
                 Base = new PoliticalEffect { Grievance = 3, Tag = "KİRLETİR · KURULDUĞU MAHALLE ÖDER" },
                 ByDistrict = new Dictionary<DistrictId, PoliticalEffect>
                 {
@@ -356,7 +356,7 @@ namespace Mesruiyet.Core
                 Id = "kisla", Form = Form.Karakol, Name = "Kışla", Category = "ordu", Glyph = "▮",
                 CostMoney = 150, CostMaterial = 50, Upkeep = 9, Workers = 24,
                 Security = 8,
-                Tint = C("#6E7A6A"), Storeys = 2,
+                Tint = C("#6E7A6A"), Storeys = 2, Size = new Vector2Int(2, 2),
                 Base = new PoliticalEffect
                 {
                     Order = 5, Ordu = 8, Aydin = -3,
@@ -459,7 +459,7 @@ namespace Mesruiyet.Core
                 Id = "pazar", Form = Form.Pazar, Name = "Pazar Yeri", Short = "PAZAR", Category = "sanayi", Glyph = "⌸",
                 CostMoney = 80, CostMaterial = 18, Upkeep = 3, Workers = 12,
                 Output = Out(para: 16),
-                Tint = C("#C2A15E"), Storeys = 1,
+                Tint = C("#C2A15E"), Storeys = 1, Size = new Vector2Int(2, 1),
                 Base = new PoliticalEffect
                 {
                     Economy = 3, Tuccar = 5, Grievance = -4,

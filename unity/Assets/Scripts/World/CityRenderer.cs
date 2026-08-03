@@ -292,7 +292,11 @@ namespace Mesruiyet.World
                 var def = b.Def;
                 var district = Districts.Get(b.District);
 
-                Vector3 ground = CityGrid.World(b.Tile.x, b.Tile.y);
+                // A multi-tile building is centred on its whole footprint, not on its anchor
+                // tile — a 2×2 plant sits in the middle of its four tiles.
+                Vector3 ground = CityGrid.World(b.Tile.x, b.Tile.y)
+                               + new Vector3((def.Size.x - 1) * CityGrid.TileSize * 0.5f, 0,
+                                             (def.Size.y - 1) * CityGrid.TileSize * 0.5f);
                 float hash = CityGrid.Hash(b.Tile.x, b.Tile.y, 11);
                 float hash2 = CityGrid.Hash(b.Tile.x, b.Tile.y, 23);
 
@@ -332,8 +336,8 @@ namespace Mesruiyet.World
                 float vary = residential ? 0.24f : 0.2f;
                 float storeyHeight = residential ? 2.6f : 3.1f;
 
-                float footprint = CityGrid.TileSize * (spread + vary * hash);
-                float depth = CityGrid.TileSize * (spread + vary * hash2);
+                float footprint = CityGrid.TileSize * (spread + vary * hash) * def.Size.x;
+                float depth = CityGrid.TileSize * (spread + vary * hash2) * def.Size.y;
                 float height = storeys * storeyHeight;
 
                 // A building nobody works reads as cold and shuttered. It used to be dragged 45%

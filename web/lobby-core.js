@@ -33,16 +33,18 @@ function inSeat(room, seat) { return room.players.find((p) => p.seat === seat) |
 function vali(room) { return inSeat(room, 0); }
 
 function stateMsg(room) {
+  // Telde koltuk -1 = boşta; null değil. Unity'nin JsonUtility'si nullable tanımaz ve
+  // istemcinin bu mesajı tek tip bir struct'a açabilmesi telin sorumluluğudur.
   return {
     t: 'durum-lobi',
     code: room.code,
     rev: room.rev,
     phase: room.phase,
-    deadline: room.phaseDeadline,
+    deadline: room.phaseDeadline || 0,
     bakanSuresi: room.bakanSuresi,
     channels: room.channels.map((c) => ({ a: c.a, b: c.b })),   // varlık; içerik asla
     players: room.players.map((p) => ({
-      pid: p.pid, name: p.name, seat: p.seat,
+      pid: p.pid, name: p.name, seat: p.seat == null ? -1 : p.seat,
       connected: p.connected, ready: p.ready, submitted: p.submitted,
     })),
   };

@@ -209,6 +209,28 @@ namespace Mesruiyet.Agent
                     return Ok();
                 }
 
+                case "baglan":
+                    // {"cmd":"baglan","path":"ws://127.0.0.1:8492","id":"TEST42"} — join a
+                    // lobby. The scenario runs a local dev server; production runs the DO.
+                    if (Net.NetManager.Instance == null) return Err("net yok");
+                    Net.NetManager.Instance.Connect(c.path, c.id, "vali");
+                    return Ok();
+
+                case "lobikoltuk":
+                    if (Net.NetManager.Instance == null) return Err("net yok");
+                    Net.NetManager.Instance.ClaimSeat(c.n);
+                    return Ok();
+
+                case "lobibaslat":
+                    if (Net.NetManager.Instance == null) return Err("net yok");
+                    Net.NetManager.Instance.StartMatch();
+                    return Ok();
+
+                case "lobirapor":
+                    if (Net.NetManager.Instance == null) return Err("net yok");
+                    Net.NetManager.Instance.SendReport(c.path);
+                    return Ok();
+
                 case "ferman":
                     // {"cmd":"ferman","path":"..."} — the governor's one announcement a turn.
                     if (!Telegraph.Ferman(GameState.Current, c.path, out string fermanWhy))

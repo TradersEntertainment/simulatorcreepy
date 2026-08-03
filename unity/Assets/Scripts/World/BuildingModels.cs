@@ -144,6 +144,8 @@ namespace Mesruiyet.World
                 else bounds.Encapsulate(r.bounds);
             }
 
+            // The base scale fits a 1×1 tile; a building with a bigger footprint scales up
+            // per axis at spawn. Kept as one number so every model obeys the same rule.
             float widest = Mathf.Max(bounds.size.x, bounds.size.z, 0.01f);
             var tpl = new Template
             {
@@ -177,11 +179,16 @@ namespace Mesruiyet.World
                 if (!_templates.TryGetValue(b.Def.Id, out var tpl)) continue;
                 if (_state.District(b.District).Lost) continue;
 
-                var ground = CityGrid.World(b.Tile.x, b.Tile.y);
+                // Multi-tile buildings stand at the centre of their whole footprint and scale
+                // up with it: a 2×2 plant really is four parcels of machine.
+                var size = b.Def.Size;
+                var ground = CityGrid.World(b.Tile.x, b.Tile.y)
+                           + new Vector3((size.x - 1) * CityGrid.TileSize * 0.5f, 0,
+                                         (size.y - 1) * CityGrid.TileSize * 0.5f);
                 var go = Instantiate(tpl.Root, transform);
                 go.SetActive(true);
 
-                float s = tpl.Scale;
+                float s = tpl.Scale * Mathf.Min(size.x, size.y);
                 go.transform.localScale = tpl.Root.transform.localScale * s;
 
                 // Centre the measured bounds on the tile and set their base on the floor.
@@ -216,12 +223,13 @@ namespace Mesruiyet.World
                 r.SetPropertyBlock(block);
         }
 
-        /// <summary>The world bounds an instance would occupy on this tile, for the probe.</summary>
+        /// <summary>The world bounds an instance would occupy, centred on <paramref name="ground"/>.</summary>
         public bool ProbeBounds(string id, Vector3 ground, out Vector3 min, out Vector3 max)
         {
             min = max = ground;
             if (!_templates.TryGetValue(id, out var tpl)) return false;
-            float s = tpl.Scale;
+            var def = Buildings.Get(id);
+            float s = tpl.Scale * (def != null ? Mathf.Min(def.Size.x, def.Size.y) : 1);
             var half = tpl.LocalBounds.extents * s;
             min = new Vector3(ground.x - half.x, ground.y, ground.z - half.z);
             max = new Vector3(ground.x + half.x, ground.y + half.y * 2f, ground.z + half.z);

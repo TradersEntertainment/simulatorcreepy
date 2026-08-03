@@ -187,6 +187,16 @@ namespace Mesruiyet.Agent
             // Does every building rest on the ground? Measured, not judged: the renderer records
             // the lowest vertex each building contributed and compares it to the tile it stands
             // on. Anything above the floor is a part standing on air.
+            // The lobby connection, so a scenario can watch a real network round trip.
+            var net = Net.NetManager.Instance;
+            sb.Append("\"lobi\":{");
+            sb.Append("\"bagli\":").Append(net != null && net.Connected ? "true" : "false").Append(',');
+            Str(sb, "kod", net != null ? net.Code : ""); sb.Append(',');
+            Str(sb, "faz", net != null ? net.Phase : ""); sb.Append(',');
+            Num(sb, "koltuk", net != null ? net.MySeat : -1); sb.Append(',');
+            Num(sb, "oyuncu", net != null ? net.Players.Count : 0);
+            sb.Append("},");
+
             // The external building models: loaded count, whether each is standing in, the
             // shader that actually renders them, and the worst measured ground clearance.
             var bm = World.BuildingModels.Instance;

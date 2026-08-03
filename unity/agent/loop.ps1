@@ -1703,6 +1703,73 @@ switch ($Scenario) {
         if (-not $ok) { $chainBroken = $true }
     }
 
+    # Co-op over a real wire: the local Node lobby server, the Unity client as governor and
+    # a Node client as a minister, one full phase round trip. No Cloudflare involved —
+    # exactly the point of the three-layer split.
+    "coop" {
+        Write-Host "`n[loop] CO-OP AĞ:" -ForegroundColor Cyan
+
+        $ok = $true
+        function Check([bool] $pass, [string] $label) {
+            if ($pass) { Write-Host "  ✔ $label" -ForegroundColor Green }
+            else { Write-Host "  ✘ $label" -ForegroundColor Red; $script:ok = $false }
+        }
+        function Lobi([string] $json, [string] $key) {
+            if ($json -match "`"lobi`":\{[^}]*`"$key`":(-?[\d.]+|true|false|`"[^`"]*`")") { return $Matches[1] }
+            return ""
+        }
+
+        $webRoot = Join-Path $PSScriptRoot "..\.."
+        $server = Start-Process node -ArgumentList "web/dev-server.mjs" -WorkingDirectory $webRoot `
+                  -PassThru -WindowStyle Hidden -Environment @{ PORT = "8492" }
+        Start-Sleep -Seconds 2
+
+        try {
+            Send-Cmd '{"cmd":"baglan","path":"ws://127.0.0.1:8492","id":"TEST42"}' | Out-Null
+            Start-Sleep -Seconds 2
+            $s = Send-Cmd '{"cmd":"state"}'
+            Check ((Lobi $s "bagli") -eq "true") "Unity lobiye bağlandı"
+            Check ((Lobi $s "faz") -eq '"lobi"') "faz: lobi"
+
+            Send-Cmd '{"cmd":"lobikoltuk","n":0}' | Out-Null
+            Start-Sleep -Milliseconds 800
+            $s = Send-Cmd '{"cmd":"state"}'
+            Check ((Lobi $s "koltuk") -eq "0") "vali koltuğu alındı"
+
+            $client = Start-Process node -ArgumentList "web/test-client.mjs","ws://127.0.0.1:8492","TEST42","2","6000" `
+                      -WorkingDirectory $webRoot -PassThru -WindowStyle Hidden
+            Start-Sleep -Seconds 2
+            $s = Send-Cmd '{"cmd":"state"}'
+            Check ((Lobi $s "oyuncu") -eq "2") "ikinci oyuncu (Node) odada"
+
+            Send-Cmd '{"cmd":"lobibaslat"}' | Out-Null
+            Start-Sleep -Seconds 2
+            $s = Send-Cmd '{"cmd":"state"}'
+            Check ((Lobi $s "faz") -eq '"bakan"') "vali başlattı, faz: bakan"
+
+            # The Node minister reports on its own; the server advances the phase and BOTH
+            # clients hear it — this is the whole loop, over real sockets.
+            $deadline = (Get-Date).AddSeconds(15)
+            $vali = $false
+            while ((Get-Date) -lt $deadline) {
+                Start-Sleep -Milliseconds 800
+                $s = Send-Cmd '{"cmd":"state"}'
+                if ((Lobi $s "faz") -eq '"vali"') { $vali = $true; break }
+            }
+            Check $vali "bakan raporlayınca faz valiye döndü"
+
+            $clientDone = $client.WaitForExit(10000)
+            Check ($clientDone -and $client.ExitCode -eq 0) "Node bakanı turunu temiz kapattı"
+        }
+        finally {
+            if ($client -and -not $client.HasExited) { Stop-Process -Id $client.Id -Force -ErrorAction SilentlyContinue }
+            if ($server -and -not $server.HasExited) { Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue }
+        }
+
+        $state = Send-Cmd '{"cmd":"state"}'
+        if (-not $ok) { $chainBroken = $true }
+    }
+
     # Audio ships with no files: every clip is synthesized at startup. An unattended run cannot
     # listen, so the bus reports itself — how many clips exist, and whether the two ambient
     # voices actually track the city. A drone wired to nothing sounds exactly like a drone.

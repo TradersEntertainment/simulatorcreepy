@@ -100,6 +100,11 @@ namespace Mesruiyet.Core
             var models = world.AddComponent<BuildingModels>();
             models.Init(state);
 
+#if !UNITY_WEBGL
+            // The lobby door. Idle until someone actually connects; co-op slice 5.
+            gameObject.AddComponent<Net.NetManager>();
+#endif
+
             var hud = BuildHud(state);
 
             // The agent plays through the same UI a human does — no private back door.

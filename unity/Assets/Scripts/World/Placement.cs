@@ -193,7 +193,13 @@ namespace Mesruiyet.World
             HoverValid = Selected == null || CanBuild(Selected, tile.x, tile.y, out _);
 
             _cursor.SetActive(true);
-            _cursor.transform.position = CityGrid.World(tile.x, tile.y, 0.06f);
+            // The cursor is the building's whole footprint: a 2×2 plant shows four tiles of
+            // intent, anchored at the hovered tile.
+            var size = Selected != null ? Selected.Size : Vector2Int.one;
+            _cursor.transform.position = CityGrid.World(tile.x, tile.y, 0.06f)
+                + new Vector3((size.x - 1) * CityGrid.TileSize * 0.5f, 0,
+                              (size.y - 1) * CityGrid.TileSize * 0.5f);
+            _cursor.transform.localScale = new Vector3(size.x, 1f, size.y);
             _cursorMat.color = HoverValid ? Ok : No;
         }
 
@@ -203,28 +209,52 @@ namespace Mesruiyet.World
         public int MaterialCost(BuildingDef def)
             => Mathf.RoundToInt(def.CostMaterial * _state.Modifiers.BuildCost * _state.Consent);
 
-        /// <summary>Every reason a build can be refused, in one place, phrased for the player.</summary>
+        /// <summary>
+        /// Every reason a build can be refused, in one place, phrased for the player. A building
+        /// larger than one tile — the power station is 2×2, the market 2×1 — must clear every
+        /// tile it covers; (x, y) is its anchor corner, the lowest tile of the footprint.
+        /// </summary>
         public bool CanBuild(BuildingDef def, int x, int y, out string reason)
         {
             reason = "";
 
-            if (!CityGrid.InBounds(x, y)) { reason = "Harita dışı."; return false; }
-
-            var kind = _grid.At(x, y);
-            if (kind == TileKind.Su) { reason = "Nehre inşa edilemez."; return false; }
-            if (kind == TileKind.Bataklik) { reason = "Bataklık önce kurutulmalı."; return false; }
-            if (kind == TileKind.Yol) { reason = "Yolun üstüne inşa edilemez."; return false; }
-            if (_grid.Occupant[CityGrid.Index(x, y)] >= 0) { reason = "Bu parsel dolu."; return false; }
-
-            if (def.Requires.HasValue && kind != def.Requires.Value)
+            bool anyAdjacent = false;
+            for (int dy = 0; dy < def.Size.y; dy++)
+            for (int dx = 0; dx < def.Size.x; dx++)
             {
-                reason = def.Requires.Value == TileKind.Verimli
-                    ? "Verimli toprak gerekiyor (nehir kıyısı)."
-                    : "Tepelik arazi gerekiyor (kuzeydoğu).";
-                return false;
+                int tx = x + dx, ty = y + dy;
+                if (!CityGrid.InBounds(tx, ty)) { reason = "Harita dışı."; return false; }
+
+                var kind = _grid.At(tx, ty);
+                if (kind == TileKind.Su) { reason = "Nehre inşa edilemez."; return false; }
+                if (kind == TileKind.Bataklik) { reason = "Bataklık önce kurutulmalı."; return false; }
+                if (kind == TileKind.Yol)
+                {
+                    reason = def.Size == Vector2Int.one
+                        ? "Yolun üstüne inşa edilemez."
+                        : $"Yolun üstüne inşa edilemez ({def.Size.x}×{def.Size.y} parsel gerekiyor).";
+                    return false;
+                }
+                if (_grid.Occupant[CityGrid.Index(tx, ty)] >= 0)
+                {
+                    reason = def.Size == Vector2Int.one
+                        ? "Bu parsel dolu."
+                        : $"Parsel dolu — bu yapı {def.Size.x}×{def.Size.y} boş alan ister.";
+                    return false;
+                }
+
+                if (def.Requires.HasValue && kind != def.Requires.Value)
+                {
+                    reason = def.Requires.Value == TileKind.Verimli
+                        ? "Verimli toprak gerekiyor (nehir kıyısı)."
+                        : "Tepelik arazi gerekiyor (kuzeydoğu).";
+                    return false;
+                }
+                if (def.Adjacent.HasValue && _grid.NextTo(tx, ty, def.Adjacent.Value))
+                    anyAdjacent = true;
             }
 
-            if (def.Adjacent.HasValue && !_grid.NextTo(x, y, def.Adjacent.Value))
+            if (def.Adjacent.HasValue && !anyAdjacent)
             {
                 reason = def.Adjacent.Value == TileKind.Su
                     ? "Su kıyısına kurulmalı."
@@ -296,7 +326,11 @@ namespace Mesruiyet.World
             _state.Stock[(int)Res.Para] -= MoneyCost(def);
             _state.MaterialChain.Draw(MaterialCost(def));
 
-            _grid.Occupant[CityGrid.Index(x, y)] = _state.Buildings.Count;
+            // Every covered tile points at the building, so inspection and "is this parcel
+            // free" agree about a 2×2 plant from all four of its corners.
+            for (int dy = 0; dy < def.Size.y; dy++)
+            for (int dx = 0; dx < def.Size.x; dx++)
+                _grid.Occupant[CityGrid.Index(x + dx, y + dy)] = _state.Buildings.Count;
             _state.Buildings.Add(placed);
 
             // A road is terrain, not a box on a plot. Laying one has to change the tile itself
