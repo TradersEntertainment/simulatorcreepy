@@ -1,0 +1,36 @@
+# MEŞRUİYET lobi Worker'ının otomatik deploy'u. web/** değişip push edilince Cloudflare'e
+# kendiliğinden çıkar. Tek seferlik kurulum: repo Secrets → CLOUDFLARE_API_TOKEN +
+# CLOUDFLARE_ACCOUNT_ID (adımlar FETİH'in server/DEPLOY.md'sindekiyle aynı; kullanıcı bir
+# kere yapmış). Elle tetikleme: Actions → Run workflow.
+#
+# FETİH deseni: yalnız GitHub'ın kendi action'ları + düz npx wrangler — üçüncü taraf yok.
+
+name: Deploy Mesruiyet Lobby Worker
+
+on:
+  push:
+    branches: [claude/7-11-simulator-game-s3215m, main]
+    paths:
+      - 'web/**'
+      - '.github/workflows/deploy-lobby.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Test the lobby core first
+        run: node web/test-lobby.mjs
+      - name: Deploy to Cloudflare
+        working-directory: web
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes wrangler@4 deploy

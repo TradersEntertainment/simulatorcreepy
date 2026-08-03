@@ -1,0 +1,20 @@
+// web/wrangler.jsonc — MEŞRUİYET lobi Worker + Durable Object yapılandırması.
+//
+// Deploy: cd web && npx wrangler deploy   (ya da .github/workflows/deploy-lobby.yml otomatik)
+// Çıkan URL istemciye wss://.../lobby/<KOD> olarak verilir.
+//
+// KRİTİK (FETİH'ten öğrenilen): Durable Object ücretsiz planda SQLite destekli sınıf ister —
+// new_sqlite_classes. new_classes yazılırsa deploy ücretsiz planda REDDEDİLİR.
+{
+  "name": "mesruiyet-lobi",
+  "main": "lobby-worker.js",
+  "compatibility_date": "2025-06-01",
+  "durable_objects": {
+    "bindings": [
+      { "name": "LOBBY", "class_name": "Lobby" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["Lobby"] }
+  ]
+}
