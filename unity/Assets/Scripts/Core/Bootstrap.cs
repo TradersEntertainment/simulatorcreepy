@@ -101,8 +101,11 @@ namespace Mesruiyet.Core
             models.Init(state);
 
 #if !UNITY_WEBGL
-            // The lobby door. Idle until someone actually connects; co-op slice 5.
+            // The lobby door, and the governor-side co-op wiring. Both idle until a
+            // connection exists; single player never notices them.
             gameObject.AddComponent<Net.NetManager>();
+            var coop = gameObject.AddComponent<Net.CoopTurnController>();
+            coop.Init(state);
 #endif
 
             var hud = BuildHud(state);

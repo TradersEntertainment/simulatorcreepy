@@ -54,6 +54,9 @@ namespace Mesruiyet.Net
         /// <summary>Raised on every lobby-state change, phase change included.</summary>
         public event Action Changed;
 
+        /// <summary>Raw "rapor" lines, for the co-op turn controller on the governor's side.</summary>
+        public event Action<string> ReportReceived;
+
         void Awake() { Instance = this; }
 
         public async void Connect(string baseUrl, string code, string playerName)
@@ -89,6 +92,10 @@ namespace Mesruiyet.Net
         /// <summary>A minister's report envelope. The data is built (and filtered) upstream.</summary>
         public void SendReport(string dataJson)
             => Send("{\"t\":\"rapor\",\"data\":" + (string.IsNullOrEmpty(dataJson) ? "{}" : dataJson) + "}");
+
+        /// <summary>The governor's per-seat state, already cut by RoleView. Routed to one seat.</summary>
+        public void SendSeatState(int seat, string dataJson)
+            => Send("{\"t\":\"durum\",\"seat\":" + seat + ",\"data\":" + dataJson + "}");
 
         async void Send(string line)
         {
@@ -135,8 +142,12 @@ namespace Mesruiyet.Net
                     break;
                 }
 
-                // rapor / telgraf / ozel / ferman / durum / anlik: consumed by the co-op turn
-                // controller in the next slice. Parsed here only so unknown types stay silent.
+                case "rapor":
+                    ReportReceived?.Invoke(line);
+                    break;
+
+                // telgraf / ozel / ferman / durum / anlik: minister-side consumption arrives
+                // with the WebGL slice. Unknown types stay silent on purpose.
                 default:
                     break;
             }

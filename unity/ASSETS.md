@@ -52,8 +52,11 @@ Ajan her gelen modeli ölçecek ve raporlayacak:
 4. **Tabanı ortalı:** `bounds.center.x` ve `.z` = 0 ± 0.05.
 5. **Taban plakası YOK.** Üreteç istenmese de kaide koyuyor; oyunun kendi zeminiyle üst üste
    binip binayı havada duran bir platform gibi gösterir. Varsa kırpılacak.
-6. **Ölçek normalize:** kare 4 m. `KONUT` bir kareye, `KIŞLA` iki kareye oturacak. Çarpan tek
-   bir sabitte tutulacak, model başına elle ayarlanmayacak.
+6. **Ölçek normalize:** kare 4 m. Çarpan tek bir sabitte tutulacak, model başına elle
+   ayarlanmayacak. Ayak izleri artık veri tablosunda (`BuildingDef.Size`) ve oyun bunları
+   gerçekten uyguluyor: `santral`, `hastane`, `kisla`, `tersane` **2×2**, `pazar` **2×1**,
+   gerisi 1×1. Çok kareli bina yerleşimde dört (veya iki) boş kare ister, modeli o alana
+   ölçeklenir, imleç tüm ayak izini gösterir.
 
 ## Dosya adları — teslimat sözleşmesi
 

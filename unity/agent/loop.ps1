@@ -1693,11 +1693,17 @@ switch ($Scenario) {
         Send-Cmd '{"cmd":"grant","n":800}' | Out-Null
         Send-Cmd '{"cmd":"build","id":"dokuma","x":21,"y":17}' | Out-Null
         Send-Cmd '{"cmd":"build","id":"depo","x":23,"y":17}' | Out-Null
-        Send-Cmd '{"cmd":"build","id":"santral","x":25,"y":17}' | Out-Null
+        # The power station is 2x2 now; it needs four free non-road tiles.
+        Send-Cmd '{"cmd":"build","id":"santral","x":27,"y":14}' | Out-Null
         Start-Sleep -Milliseconds 800
         Send-Cmd '{"cmd":"focus","x":23,"y":17}' | Out-Null
         Start-Sleep -Milliseconds 700
         Shot "model-08-sanayi.png"
+
+        # The footprint check the eye can do: a 2x2 plant beside 1x1 houses.
+        Send-Cmd '{"cmd":"focus","x":27,"y":14}' | Out-Null
+        Start-Sleep -Milliseconds 700
+        Shot "model-10-santral-2x2.png"
 
         $state = Send-Cmd '{"cmd":"state"}'
         if (-not $ok) { $chainBroken = $true }
@@ -1758,8 +1764,24 @@ switch ($Scenario) {
             }
             Check $vali "bakan raporlayınca faz valiye döndü"
 
-            $clientDone = $client.WaitForExit(10000)
-            Check ($clientDone -and $client.ExitCode -eq 0) "Node bakanı turunu temiz kapattı"
+            # The deception loop, closed over the wire: the remote human claimed 900 grain;
+            # the governor's OWN ledger must now show ~900 while the truth is far lower.
+            Start-Sleep -Milliseconds 500
+            $s = Send-Cmd '{"cmd":"state"}'
+            Check ($s -match '"koltuklar":\["maliye:bot","tarim:insan"') "uzak bakan koltuğu İNSAN, boşlar BOT"
+            $trueFood = 0; $repFood = 0
+            if ($s -match '"yiyecek":([\d.]+)') { $trueFood = [double]$Matches[1] }
+            if ($s -match '"reported":\{[^}]*"yiyecek":([\d.]+)') { $repFood = [double]$Matches[1] }
+            Write-Host ("  ambar gerçek {0:N0} · ağdan gelen yalan {1:N0}" -f $trueFood, $repFood)
+            Check ([math]::Abs($repFood - 900) -le 25) "valinin defterindeki sayı ağdan gelen yalan"
+
+            # Resolve a game turn; the governor broadcasts each seat its RoleView cut and the
+            # Node minister audits it for leaks before exiting clean.
+            $t = Get-Turn
+            Send-Cmd '{"cmd":"endturn","n":1}' | Out-Null
+            Wait-Turn ($t + 1) 40 | Out-Null
+            $clientDone = $client.WaitForExit(15000)
+            Check ($clientDone -and $client.ExitCode -eq 0) "RoleView kesiti bakanda temiz (sızıntı yok)"
         }
         finally {
             if ($client -and -not $client.HasExited) { Stop-Process -Id $client.Id -Force -ErrorAction SilentlyContinue }
