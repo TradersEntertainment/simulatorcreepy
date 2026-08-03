@@ -237,6 +237,23 @@ namespace Mesruiyet.Agent
             }
             sb.Append("],");
             Num(sb, "raporBekleyen", HotSeat.PendingCount); sb.Append(',');
+
+            // Objectives, the sealed archive and the back rooms — measurable, per COOP.md.
+            sb.Append("\"hedefler\":[");
+            for (int d = 0; d < 5; d++)
+            {
+                if (d > 0) sb.Append(',');
+                var obj = Objectives.Get(g.ObjectiveOf[d]);
+                sb.Append('{');
+                Str(sb, "koltuk", ((Domain)d).ToString().ToLowerInvariant()); sb.Append(',');
+                Str(sb, "hedef", g.ObjectiveOf[d] ?? ""); sb.Append(',');
+                sb.Append("\"tutuyor\":").Append(obj != null && obj.Holds(g) ? "true" : "false");
+                sb.Append('}');
+            }
+            sb.Append("],");
+            Num(sb, "telgrafArsivi", g.TelegraphArchive.Count); sb.Append(',');
+            Num(sb, "ozelKanal", g.Channels.Count); sb.Append(',');
+            Num(sb, "fermanTuru", g.FermanTurn); sb.Append(',');
             sb.Append("\"satirlar\":[");
             bool firstLine = true;
             for (int d = 0; d < 5; d++)

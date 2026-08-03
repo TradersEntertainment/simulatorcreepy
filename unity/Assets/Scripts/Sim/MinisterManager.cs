@@ -29,7 +29,7 @@ namespace Mesruiyet.Sim
             Instance = this;
             _state = state;
             Refresh();
-            WriteTelegrams();
+            WriteTelegrams(seal: true);      // the founding cabinet's first words go on record
         }
 
         /// <summary>Recompute transparency. Called every tick and after every build.</summary>
@@ -72,9 +72,13 @@ namespace Mesruiyet.Sim
 
         /// <summary>
         /// One line per minister per turn. Early turns introduce the domain; after that they
-        /// report on it — in their own voice, with their own numbers.
+        /// report on it — in their own voice, with their own numbers. A human-held desk gets
+        /// a placeholder until its holder actually writes; their words arrive by
+        /// <see cref="SubmitHumanTelegram"/> and are sealed there.
+        /// <paramref name="seal"/> archives this round of telegrams — true only from the turn
+        /// tick, so a mid-turn cabinet reshuffle does not seal the same words twice.
         /// </summary>
-        public void WriteTelegrams()
+        public void WriteTelegrams(bool seal = false)
         {
             var g = _state;
             g.Telegrams.Clear();
@@ -83,6 +87,16 @@ namespace Mesruiyet.Sim
             {
                 var m = g.Cabinet.Ministers[i];
                 if (m == null) continue;
+
+                if (HotSeat.KindOf((Domain)i) == SeatKind.Insan)
+                {
+                    var human = HotSeat.HumanOf((Domain)i);
+                    if (human != null && !human.Submitted)
+                        m.Telegram = "— Masa sizde. Rapor bekleniyor. —";
+                    // A submitted human telegram stands; it was sealed when it was written.
+                    g.Telegrams.Add($"{Ministers.DomainNames[i]}|{m.Name}|{m.Telegram}");
+                    continue;
+                }
 
                 // Turns 1–10 are the diegetic tutorial. First the minister introduces themselves,
                 // so the player meets the cabinet before they have reason to doubt it; after that
@@ -98,7 +112,24 @@ namespace Mesruiyet.Sim
                            : lesson != null ? lesson.Text
                            : Report(m);
                 g.Telegrams.Add($"{Ministers.DomainNames[i]}|{m.Name}|{m.Telegram}");
+                if (seal) Telegraph.Seal(g, Ministers.DomainNames[i], m.Name, m.Telegram);
             }
+        }
+
+        /// <summary>
+        /// A human minister's own words, sealed the moment they are sent. The governor reads
+        /// them in the same TELGRAFLAR card as everyone else's.
+        /// </summary>
+        public void SubmitHumanTelegram(Domain d, string text)
+        {
+            var m = _state.Cabinet.Of(d);
+            if (m == null) return;
+            m.Telegram = string.IsNullOrWhiteSpace(text) ? "Rapor arz edilmiştir." : text.Trim();
+            Telegraph.Seal(_state, Ministers.DomainNames[(int)d], m.Name, m.Telegram);
+
+            // Rebuild the governor's telegram list with the new words in place.
+            WriteTelegrams();
+            Changed?.Invoke();
         }
 
         string Report(Minister m)

@@ -99,7 +99,11 @@ namespace Mesruiyet.Sim
             // telegrams last, so ministers quote the figures the player is about to be shown.
             MinisterManager.Instance.Refresh();
             MinisterManager.Instance.RecordTerm();
-            MinisterManager.Instance.WriteTelegrams();
+            MinisterManager.Instance.WriteTelegrams(seal: true);
+
+            // The back rooms: bot-held desks whose interests touch find each other. The
+            // governor will see that a channel exists; its lines go straight to the archive.
+            Telegraph.BotChannels(g);
 
             // Delegated ministers report what they built after their routine report, so the
             // player reads "TEPE bende: klinik kurdum" in the same channel as everything else.

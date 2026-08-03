@@ -198,6 +198,24 @@ namespace Mesruiyet.Agent
                     return Ok();
                 }
 
+                case "telgraf":
+                {
+                    // {"cmd":"telgraf","seat":2,"path":"Ambar doludur."} — a human minister's
+                    // official telegram, sealed on arrival.
+                    if (c.seat < 1 || c.seat > 5) return Err("koltuk 1..5 olmalı");
+                    var domain = (Domain)(c.seat - 1);
+                    if (HotSeat.HumanOf(domain) == null) return Err("bu koltukta insan yok");
+                    Sim.MinisterManager.Instance.SubmitHumanTelegram(domain, c.path);
+                    return Ok();
+                }
+
+                case "ferman":
+                    // {"cmd":"ferman","path":"..."} — the governor's one announcement a turn.
+                    if (!Telegraph.Ferman(GameState.Current, c.path, out string fermanWhy))
+                        return Err(fermanWhy);
+                    UI.Hud.Instance?.Refresh();
+                    return Ok();
+
                 case "submit":
                 {
                     // {"cmd":"submit","seat":2} — seal the report; the governor may now end

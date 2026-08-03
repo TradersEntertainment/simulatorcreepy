@@ -258,6 +258,26 @@ namespace Mesruiyet.Core
             return total;
         }
 
+        // ---------------------------------------------------------------- co-op: objectives & telegraph
+        /// <summary>Each desk's hidden objective id, dealt once per term. Even bots have one.</summary>
+        public readonly string[] ObjectiveOf = new string[5];
+
+        /// <summary>Every telegram ever sent, sealed as "turn|desk|name|text". The
+        /// accountability session reads these back word for word.</summary>
+        public readonly List<string> TelegraphArchive = new List<string>();
+
+        /// <summary>A back room between two desks. The governor sees that it exists, never inside.</summary>
+        public sealed class PrivateChannel
+        {
+            public Domain A, B;
+            public int OpenedTurn;
+            public readonly List<string> Lines = new List<string>();
+        }
+        public readonly List<PrivateChannel> Channels = new List<PrivateChannel>();
+
+        /// <summary>The turn the governor last issued a ferman — one open announcement per turn.</summary>
+        public int FermanTurn = -1;
+
         // ---------------------------------------------------------------- delegation
         /// <summary>
         /// Which minister runs each district, indexed by DistrictId; −1 means the governor
@@ -341,6 +361,7 @@ namespace Mesruiyet.Core
 
             g.Cabinet = Cabinet.Founding();
             g.Council = new Sim.Council();
+            Objectives.Deal(g);
 
             g.Chains = new Chain[Mesruiyet.Core.Chains.All.Length];
             for (int i = 0; i < g.Chains.Length; i++)

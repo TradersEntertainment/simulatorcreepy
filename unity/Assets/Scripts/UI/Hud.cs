@@ -857,6 +857,62 @@ namespace Mesruiyet.UI
             return card;
         }
 
+        // ---- the ferman
+
+        Button _fermanButton;
+        VisualElement _fermanPanel;
+
+        void OpenFerman()
+        {
+            _fermanPanel?.RemoveFromHierarchy();
+
+            var root = new VisualElement { name = "panel_ferman" };
+            root.style.position = Position.Absolute;
+            root.style.left = 0; root.style.top = 0; root.style.right = 0; root.style.bottom = 0;
+            root.style.backgroundColor = new Color(0, 0, 0, 0.7f);
+            root.style.alignItems = Align.Center;
+            root.style.justifyContent = Justify.Center;
+
+            var card = UiKit.Glass().Pad(22, 28);
+            card.style.width = 520;
+            card.Add(UiKit.Heading("Vali Fermanı", "tur başına bir duyuru"));
+            card.Add(UiKit.Text("Herkes okur. Arşive mühürlenir ve dönem sonunda kelimesi " +
+                                "kelimesine önünüze konur.", 10.5f, UiKit.Dim).Margin(bottom: 10));
+
+            var field = new TextField { name = "fld_ferman", multiline = true };
+            field.style.height = 64;
+            field.style.whiteSpace = WhiteSpace.Normal;
+            card.Add(field);
+
+            var row = UiKit.Row();
+            row.style.marginTop = 14;
+            row.style.justifyContent = Justify.SpaceBetween;
+
+            var cancel = new Button { name = "btn_ferman_kapat", text = "VAZGEÇ" };
+            cancel.clicked += () => { _fermanPanel?.RemoveFromHierarchy(); _fermanPanel = null; };
+            row.Add(cancel);
+
+            var send = new Button { name = "btn_ferman_yayinla", text = "FERMANI YAYINLA" };
+            send.style.backgroundColor = UiKit.Amber;
+            send.style.color = UiKit.Hex("#1A1206");
+            send.style.unityFontStyleAndWeight = FontStyle.Bold;
+            send.clicked += () =>
+            {
+                if (Telegraph.Ferman(_state, field.value, out _))
+                {
+                    _fermanPanel?.RemoveFromHierarchy();
+                    _fermanPanel = null;
+                    Refresh();
+                }
+            };
+            row.Add(send);
+            card.Add(row);
+
+            root.Add(card);
+            _fermanPanel = root;
+            _root.Add(root);
+        }
+
         // ---- the minister's own desk (hot-seat)
 
         VisualElement _ministerDesk;
@@ -2375,6 +2431,21 @@ namespace Mesruiyet.UI
             _decreeButton.clicked += OpenDecrees;
             instruments.Add(_decreeButton);
 
+            // The governor's one open announcement per turn. It rides the telegram channel,
+            // so everyone reads it where they read everything else.
+            _fermanButton = new Button { name = "btn_ferman", text = "FERMAN" };
+            _fermanButton.style.marginTop = 0; _fermanButton.style.marginBottom = 0;
+            _fermanButton.style.marginLeft = 0; _fermanButton.style.marginRight = 14;
+            _fermanButton.style.paddingTop = 10; _fermanButton.style.paddingBottom = 10;
+            _fermanButton.style.paddingLeft = 11; _fermanButton.style.paddingRight = 11;
+            _fermanButton.style.fontSize = 9.5f;
+            _fermanButton.style.unityFontStyleAndWeight = FontStyle.Bold;
+            _fermanButton.style.color = UiKit.Ink;
+            _fermanButton.style.backgroundColor = new Color(1, 1, 1, 0.06f);
+            _fermanButton.Radius(9).Border(1, UiKit.Hairline);
+            _fermanButton.clicked += OpenFerman;
+            instruments.Add(_fermanButton);
+
             var budget = new Button { name = "btn_budget", text = "BÜTÇE" };
             budget.style.marginTop = 0; budget.style.marginBottom = 0;
             budget.style.marginLeft = 0; budget.style.marginRight = 14;
@@ -2674,6 +2745,8 @@ namespace Mesruiyet.UI
                 SetFold("dis", true);
             }
 
+            _fermanButton.SetEnabled(_state.FermanTurn != _state.Turn);
+
             // Hot-seat: the turn cannot end while a human minister's report is unwritten,
             // and the button says why instead of just refusing.
             int pendingReports = HotSeat.PendingCount;
@@ -2813,7 +2886,10 @@ namespace Mesruiyet.UI
             bool eventOpen = _modal != null && _modal.name == "panel_event";
             if (!_state.ElectionPending && _state.PendingEvent != null && !eventOpen) OpenEvent();
             else if (_state.PendingEvent == null && eventOpen) CloseModal();
-            ((Label)_telegramHead[1]).text = $"{_state.Turn}. TUR";
+            // The governor sees THAT back rooms exist — a count, never a word of content.
+            ((Label)_telegramHead[1]).text = _state.Channels.Count > 0
+                ? $"{_state.Turn}. TUR · {_state.Channels.Count} ÖZEL KANAL"
+                : $"{_state.Turn}. TUR";
 
             PaintAxis(_axisRow0, "Otorite", "Özgürlük", Reporting.AxisOrder, v => v.x);
             PaintAxis(_axisRow1, "Sermaye", "Eşitlik", Reporting.AxisEconomy, v => v.y);

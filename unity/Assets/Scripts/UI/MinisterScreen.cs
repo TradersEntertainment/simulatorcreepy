@@ -93,6 +93,78 @@ namespace Mesruiyet.UI
                 reportCol.Add(repRow);
             }
 
+            // ---- the secret objective, in the conspirators' purple. No sabotage anywhere:
+            // if the city falls, this card falls with it, and the strip says so.
+            var secret = new VisualElement();
+            var purple = UiKit.Hex("#C48CFF");
+            secret.style.backgroundColor = UiKit.Alpha(purple, 0.08f);
+            secret.Radius(12).Border(1, UiKit.Alpha(purple, 0.4f)).Pad(12, 16).Margin(top: 14);
+            var secretHead = UiKit.Text("SANA VERİLEN GİZLİ HEDEF", 9, purple, FontStyle.Bold);
+            secretHead.style.letterSpacing = 1.4f;
+            secret.Add(secretHead);
+            var objective = Objectives.Get(state.ObjectiveOf[(int)domain]);
+            var secretText = UiKit.Text("“" + (objective?.Text ?? "—") + "”", 14, UiKit.Ink, FontStyle.Bold);
+            secretText.Margin(top: 4);
+            secret.Add(secretText);
+            secret.Add(UiKit.Text("Şehir çökerse bu hedef de kaybeder. Kimse sabotajla görevli değil.",
+                                  10, UiKit.Dim).Margin(top: 3));
+            card.Add(secret);
+
+            // ---- the official telegram: stock phrases plus your own words, sealed forever.
+            var wire = UiKit.Glass().Pad(10, 14).Margin(top: 14);
+            wire.Add(UiKit.Heading("Resmî telgraf → Vali", "mühürlenir · arşivlenir"));
+
+            var chipRow = new VisualElement();
+            chipRow.style.flexDirection = FlexDirection.Row;
+            chipRow.style.flexWrap = Wrap.Wrap;
+            chipRow.style.marginBottom = 8;
+            var wireField = new TextField { name = "fld_telgraf", multiline = true };
+            wireField.style.height = 54;
+            wireField.style.whiteSpace = WhiteSpace.Normal;
+
+            // Eight phrases per desk out of the thirty-two, rotated by domain so every desk
+            // clicks a different register. The rest are typed — the field is free text.
+            for (int p = 0; p < 8; p++)
+            {
+                string phrase = Telegraph.Phrases[((int)domain * 8 + p) % Telegraph.Phrases.Length];
+                var chip = new Button { text = phrase };
+                chip.style.fontSize = 9;
+                chip.style.paddingTop = 3; chip.style.paddingBottom = 3;
+                chip.style.paddingLeft = 7; chip.style.paddingRight = 7;
+                chip.style.marginRight = 4; chip.style.marginBottom = 4;
+                chip.style.marginLeft = 0; chip.style.marginTop = 0;
+                chip.style.backgroundColor = new Color(1, 1, 1, 0.05f);
+                chip.style.color = UiKit.Hex("#C9D4E2");
+                chip.Radius(7).Border(1, UiKit.Hairline);
+                chip.clicked += () =>
+                    wireField.value = (wireField.value + " " + phrase).Trim();
+                chipRow.Add(chip);
+            }
+            wire.Add(chipRow);
+            wire.Add(wireField);
+            card.Add(wire);
+
+            // ---- the back rooms this desk is party to. The governor sees only that they exist.
+            if (state.Channels.Count > 0)
+            {
+                var rooms = UiKit.Glass().Pad(10, 14).Margin(top: 14);
+                rooms.Add(UiKit.Heading("Özel kanallar", "vali içeriği göremez"));
+                foreach (var ch in state.Channels)
+                {
+                    bool mine = ch.A == domain || ch.B == domain;
+                    var other = ch.A == domain ? ch.B : ch.A;
+                    var row = UiKit.Text(
+                        mine
+                            ? $"{Ministers.DomainNames[(int)other]} — {(ch.Lines.Count > 0 ? ch.Lines[ch.Lines.Count - 1] : "kanal açık")}"
+                            : $"{Ministers.DomainNames[(int)ch.A]} ↔ {Ministers.DomainNames[(int)ch.B]} — kanal var, içerik kapalı",
+                        10.5f, mine ? UiKit.Ink : UiKit.Dim);
+                    row.style.whiteSpace = WhiteSpace.Normal;
+                    row.Margin(bottom: 4);
+                    rooms.Add(row);
+                }
+                card.Add(rooms);
+            }
+
             // ---- what the governor currently sees, from this desk
             var seen = UiKit.Glass().Pad(10, 14).Margin(top: 16);
             seen.Add(UiKit.Heading("Valinin şu an gördüğü", "senin masandan"));
@@ -134,6 +206,7 @@ namespace Mesruiyet.UI
                     human.SetClaim(lines[i].Line, claimed, trueNow);
                 }
                 human.Submit();
+                Sim.MinisterManager.Instance?.SubmitHumanTelegram(domain, wireField.value);
                 onClose();
             };
             buttons.Add(submit);

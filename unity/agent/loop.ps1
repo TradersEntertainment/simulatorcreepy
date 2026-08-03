@@ -1514,6 +1514,91 @@ switch ($Scenario) {
         if (-not $ok) { $chainBroken = $true }
     }
 
+    # The telegraph office and the secret objectives: co-op slice 4. Objectives are dealt to
+    # every desk, telegrams are sealed into a permanent archive, a human's own words reach
+    # the governor's card verbatim, the ferman is one a turn, and bot desks find each other
+    # in back rooms the governor can only count.
+    "telgraf" {
+        Write-Host "`n[loop] TELGRAF + HEDEFLER:" -ForegroundColor Cyan
+
+        $ok = $true
+        function Check([bool] $pass, [string] $label) {
+            if ($pass) { Write-Host "  ✔ $label" -ForegroundColor Green }
+            else { Write-Host "  ✘ $label" -ForegroundColor Red; $script:ok = $false }
+        }
+        function Field([string] $json, [string] $key) {
+            if ($json -match "`"$key`":(-?[\d.]+)") { return [double]$Matches[1] }
+            return [double]::NaN
+        }
+
+        $s = Send-Cmd '{"cmd":"state"}'
+
+        # Objectives: five desks, five distinct, all from the pool.
+        $ids = [regex]::Matches($s, '"hedef":"([a-z0-9]+)"') | ForEach-Object { $_.Groups[1].Value }
+        Write-Host ("  hedefler: {0}" -f ($ids -join " · "))
+        Check ($ids.Count -eq 5) "beş koltuğun beşine de hedef dağıtıldı"
+        Check (($ids | Select-Object -Unique).Count -eq 5) "hedefler birbirinden farklı"
+
+        # The founding cabinet's first words are already on record.
+        $arsiv0 = Field $s "telgrafArsivi"
+        Check ($arsiv0 -ge 5) "kuruluş telgrafları mühürlendi"
+
+        # A human minister's own words reach the governor verbatim.
+        Send-Cmd '{"cmd":"koltuk","seat":2,"id":"insan"}' | Out-Null
+        Send-Cmd '{"cmd":"report","seat":2,"line":"tahil","value":400}' | Out-Null
+        Send-Cmd '{"cmd":"submit","seat":2}' | Out-Null
+        Send-Cmd '{"cmd":"telgraf","seat":2,"path":"Ambar doludur. Endişeye mahal yoktur."}' | Out-Null
+        Start-Sleep -Milliseconds 300
+        $t1 = Send-Cmd '{"cmd":"state"}'
+        Check ($t1 -match 'Ambar doludur\. Endişeye mahal yoktur\.') "insanın telgrafı valinin kartında, kelimesi kelimesine"
+        Check ((Field $t1 "telgrafArsivi") -gt $arsiv0) "telgraf arşive mühürlendi"
+
+        # The ferman: once a turn, no more.
+        Send-Cmd '{"cmd":"ferman","path":"Fırınlar gece de çalışacaktır."}' | Out-Null
+        Start-Sleep -Milliseconds 200
+        $f = Send-Cmd '{"cmd":"state"}'
+        Check ((Field $f "fermanTuru") -eq (Get-Turn)) "ferman yayınlandı"
+        $second = Send-Cmd '{"cmd":"ferman","path":"İkinci ferman denemesi."}'
+        Check ($second -match '"ok":false') "tur başına tek ferman"
+
+        # Bot desks find each other; the governor can only count the doors.
+        Send-Cmd '{"cmd":"koltuk","seat":3,"id":"bot"}' | Out-Null
+        Send-Cmd '{"cmd":"koltuk","seat":4,"id":"bot"}' | Out-Null
+        $t = Get-Turn
+        Send-Cmd '{"cmd":"endturn","n":1}' | Out-Null
+        Wait-Turn ($t + 1) 40 | Out-Null
+        $ch = Send-Cmd '{"cmd":"state"}'
+        Write-Host ("  özel kanal: {0}" -f (Field $ch "ozelKanal"))
+        Check ((Field $ch "ozelKanal") -ge 1) "bot masaları özel kanal açtı"
+
+        # The archive keeps growing every turn. The human desk re-seals first — a new turn
+        # voided the old report, and the gate is doing its job.
+        $arsiv1 = Field $ch "telgrafArsivi"
+        Send-Cmd '{"cmd":"submit","seat":2}' | Out-Null
+        $t = Get-Turn
+        Send-Cmd '{"cmd":"endturn","n":1}' | Out-Null
+        Wait-Turn ($t + 1) 40 | Out-Null
+        $ch2 = Send-Cmd '{"cmd":"state"}'
+        Check ((Field $ch2 "telgrafArsivi") -gt $arsiv1) "arşiv her tur büyüyor"
+
+        # The desk screen carries the secret objective; photograph it.
+        Send-Cmd '{"cmd":"click","id":"btn_minister_tarim"}' | Out-Null
+        Start-Sleep -Milliseconds 500
+        Shot "telgraf-01-bakan-masasi.png"
+        Send-Cmd '{"cmd":"click","id":"btn_rapor_kapat"}' | Out-Null
+
+        # Back to a plain cabinet.
+        Send-Cmd '{"cmd":"koltuk","seat":2,"id":"formul"}' | Out-Null
+        Send-Cmd '{"cmd":"koltuk","seat":3,"id":"formul"}' | Out-Null
+        Send-Cmd '{"cmd":"koltuk","seat":4,"id":"formul"}' | Out-Null
+        Start-Sleep -Milliseconds 200
+        $back = Send-Cmd '{"cmd":"state"}'
+        Check ((Field $back "raporBekleyen") -eq 0) "koltuklar formüle döndü"
+
+        $state = Send-Cmd '{"cmd":"state"}'
+        if (-not $ok) { $chainBroken = $true }
+    }
+
     # Audio ships with no files: every clip is synthesized at startup. An unattended run cannot
     # listen, so the bus reports itself — how many clips exist, and whether the two ambient
     # voices actually track the city. A drone wired to nothing sounds exactly like a drone.
