@@ -52,6 +52,9 @@ namespace Mesruiyet.UI
         /// <summary>The whole UI layer, so a diagnostic can take it off screen entirely.</summary>
         public VisualElement Root => _root;
 
+        /// <summary>Which build category is open on the dock, "" when they are all shut.</summary>
+        public string OpenCategory => _openCategory ?? "";
+
         /// <summary>
         /// Which panel is actually on screen. Derived from the panel rather than from AtTitle
         /// and Paused, because those two describe where the player will return to, not what
@@ -79,6 +82,30 @@ namespace Mesruiyet.UI
         readonly List<VisualElement> _districtLabels = new List<VisualElement>();
         readonly List<VisualElement> _crisisMarkers = new List<VisualElement>();
         readonly List<Button> _hotbar = new List<Button>();
+        // Parallel to _hotbar: the building id behind each visible tile. The dock no longer
+        // shows all of Buildings.Hotbar at once, so index-matching against that array is over.
+        readonly List<string> _hotbarIds = new List<string>();
+        VisualElement _tileRow;
+        string _openCategory;
+        readonly List<(string key, Button btn)> _catButtons = new List<(string, Button)>();
+
+        static readonly (string key, string label, string glyph)[] Categories =
+        {
+            ("konut",   "KONUT",   "⌂"),
+            ("tarim",   "TARIM",   "❋"),
+            ("sanayi",  "SANAYİ",  "⚒"),
+            ("altyapi", "ALTYAPI", "═"),
+            ("kamu",    "KAMU",    "✚"),
+            ("ordu",    "ORDU",    "▲"),
+        };
+
+        // ---- foldable rail cards. Body + chevron per key, so a header click can collapse a
+        // card the player is not governing by right now. Dış Dünya starts folded and opens
+        // itself exactly once, the first time the threat is worth looking at.
+        readonly Dictionary<string, (VisualElement body, Label chev)> _folds =
+            new Dictionary<string, (VisualElement, Label)>();
+        bool _outsideAutoOpened;
+
         Button _endTurn;
         Label _electionNote, _noReturn;
 
@@ -389,14 +416,65 @@ namespace Mesruiyet.UI
             var rail = scroll.contentContainer;
             rail.style.width = Length.Percent(100);
 
-            rail.Add(BuildBufferCard());
-            rail.Add(BuildMinisterCard());
-            rail.Add(BuildChainCard());
-            rail.Add(BuildAxisCard());
-            rail.Add(BuildOutsideCard());
-            rail.Add(BuildCouncilCard());
-            rail.Add(BuildFactionCard());
-            rail.Add(BuildTelegramCard());
+            // Every card folds from its header. Half of them start folded: eight open cards
+            // is a wall of numbers, and "too cluttered to play" was the exact complaint. The
+            // safety margin, the cabinet and the telegrams stay open — those three are the
+            // turn-to-turn read; the rest unfold on demand.
+            rail.Add(Foldable(BuildBufferCard(), "tampon", true));
+            rail.Add(Foldable(BuildMinisterCard(), "bakanlar", true));
+            rail.Add(Foldable(BuildChainCard(), "zincir", false));
+            rail.Add(Foldable(BuildAxisCard(), "eksen", false));
+            rail.Add(Foldable(BuildOutsideCard(), "dis", false));
+            rail.Add(Foldable(BuildCouncilCard(), "meclis", false));
+            rail.Add(Foldable(BuildFactionCard(), "fraksiyon", false));
+            rail.Add(Foldable(BuildTelegramCard(), "telgraf", true));
+        }
+
+        /// <summary>
+        /// Turn a rail card into a foldable one: the heading (the card's first child) becomes a
+        /// click target that shows or hides everything under it. The card element itself is
+        /// returned unchanged, so nothing that repaints into a body container has to know.
+        /// </summary>
+        VisualElement Foldable(VisualElement card, string key, bool open)
+        {
+            var header = card[0];
+            header.name = "btn_fold_" + key;
+
+            // Move every sibling below the heading into one body container.
+            var body = UiKit.Column();
+            while (card.childCount > 1)
+            {
+                var child = card[1];
+                card.Remove(child);
+                body.Add(child);
+            }
+            card.Add(body);
+
+            var chev = UiKit.Text(open ? "▾" : "▸", 12, UiKit.Hex("#8E9CB0"), FontStyle.Bold);
+            chev.style.marginLeft = 8;
+            chev.pickingMode = PickingMode.Ignore;
+            header.Add(chev);
+
+            body.style.display = open ? DisplayStyle.Flex : DisplayStyle.None;
+            _folds[key] = (body, chev);
+
+            header.pickingMode = PickingMode.Position;
+            header.RegisterCallback<ClickEvent>(_ => SetFold(key, _folds[key].body.style.display == DisplayStyle.None));
+            // The agent bridge submits rather than clicks anything that is not a Button, and
+            // this header is a plain row — both paths must land in the same place.
+            header.RegisterCallback<NavigationSubmitEvent>(_ => SetFold(key, _folds[key].body.style.display == DisplayStyle.None));
+            return card;
+        }
+
+        /// <summary>Whether a rail card's body is on screen, for the bridge to measure.</summary>
+        public bool IsFoldOpen(string key) =>
+            _folds.TryGetValue(key, out var f) && f.body.style.display == DisplayStyle.Flex;
+
+        void SetFold(string key, bool open)
+        {
+            if (!_folds.TryGetValue(key, out var f)) return;
+            f.body.style.display = open ? DisplayStyle.Flex : DisplayStyle.None;
+            f.chev.text = open ? "▾" : "▸";
         }
 
         // ---- the outside world
@@ -2112,65 +2190,57 @@ namespace Mesruiyet.UI
             dock.style.position = Position.Absolute;
             dock.style.left = 0; dock.style.right = 0; dock.style.bottom = 26;
             dock.style.flexDirection = FlexDirection.Row;
-            dock.style.alignItems = Align.Center;
+            // Bottom-aligned, not centred: opening a category grows the tools panel upward by a
+            // tile row, and the instruments and TURU BİTİR must stay put while it does. The dock
+            // wraps reverse, which flips the cross axis — FlexStart is the visual bottom here,
+            // and the tile-row screenshot with FlexEnd proved it the other way round.
+            dock.style.alignItems = Align.FlexStart;
             dock.style.justifyContent = Justify.Center;
-            // Nineteen build tiles plus the instruments plus TURU BİTİR is wider than 1600 at
-            // full size, and a clipped hotbar is worse than a two-row one. Wrapping is the
-            // safety net; the sizes below are what keep it on one row at 1920.
             dock.style.flexWrap = Wrap.WrapReverse;
             dock.pickingMode = PickingMode.Ignore;
             _chrome.Add(dock);
 
-            // ---- build hotbar
-            var tools = UiKit.Glass().Pad(9, 8).Margin(right: 8);
-            tools.style.flexDirection = FlexDirection.Row;
+            // ---- build dock: six category tabs, exactly as the reference mockup has it.
+            //
+            // Thirty-one tiles in two permanent rows was a wall — the single loudest thing on a
+            // screen the player called too cluttered to play. The categories are the resting
+            // state; a category's buildings appear in a row above it only while it is open, and
+            // close again when it is clicked a second time.
+            var tools = UiKit.Glass().Pad(9, 10).Margin(right: 8);
+            tools.style.flexDirection = FlexDirection.Column;
+            tools.style.alignItems = Align.Center;
             tools.style.flexShrink = 0;
-            // Thirty-one buildings will not sit on one line without shrinking the captions past
-            // reading. Cap the panel and let it form two rows of its own, so the instruments and
-            // TURU BİTİR keep their place beside it instead of being shoved onto another line.
-            tools.style.maxWidth = 900;
-            tools.style.flexWrap = Wrap.Wrap;
-            tools.style.justifyContent = Justify.Center;
 
-            foreach (string id in Buildings.Hotbar)
+            _tileRow = UiKit.Row();
+            _tileRow.style.display = DisplayStyle.None;
+            _tileRow.style.marginBottom = 7;
+            tools.Add(_tileRow);
+
+            var catRow = UiKit.Row();
+            foreach (var (key, label, glyph) in Categories)
             {
-                var def = Buildings.Get(id);
-                if (def == null) continue;
+                var cat = new Button { name = "btn_cat_" + key, text = string.Empty };
+                cat.style.width = 66;
+                cat.style.paddingTop = 8; cat.style.paddingBottom = 7;
+                cat.style.paddingLeft = 0; cat.style.paddingRight = 0;
+                cat.style.marginRight = 4; cat.style.marginLeft = 0;
+                cat.style.marginTop = 0; cat.style.marginBottom = 0;
+                cat.style.backgroundColor = Color.clear;
+                cat.Radius(10).Border(1, Color.clear);
+                cat.style.flexDirection = FlexDirection.Column;
+                cat.style.alignItems = Align.Center;
+                cat.Add(UiKit.Text(glyph, 16, UiKit.Ink));
+                var lbl = UiKit.Text(label, 8f, UiKit.Hex("#8E9CB0"), FontStyle.Bold);
+                lbl.style.letterSpacing = 0.8f;
+                lbl.style.marginTop = 3;
+                cat.Add(lbl);
 
-                var tile = new Button { name = "btn_build_" + id };
-                tile.text = string.Empty;
-                tile.style.width = 51;
-                tile.style.paddingTop = 8; tile.style.paddingBottom = 7;
-                tile.style.paddingLeft = 0; tile.style.paddingRight = 0;
-                tile.style.marginRight = 3; tile.style.marginLeft = 0;
-                tile.style.marginTop = 1; tile.style.marginBottom = 1;
-                tile.style.backgroundColor = Color.clear;
-                // Captions are clipped rather than allowed to spill: "ENERJİ SANTRALİ" is wider
-                // than any sane tile, and neighbouring labels running into each other is worse
-                // than a truncated one.
-                tile.style.overflow = Overflow.Hidden;
-                tile.Radius(10).Border(1, Color.clear);
-                tile.style.flexDirection = FlexDirection.Column;
-                tile.style.alignItems = Align.Center;
-
-                tile.Add(UiKit.Text(def.Glyph, 17, UiKit.Ink));
-                var caption = UiKit.Text(def.DockLabel.ToUpperInvariant(), 7.5f, UiKit.Hex("#8E9CB0"), FontStyle.Bold);
-                caption.style.letterSpacing = 0.6f;
-                caption.style.marginTop = 4;
-                caption.style.whiteSpace = WhiteSpace.NoWrap;
-                caption.tooltip = def.Name;
-                tile.Add(caption);
-
-                var captured = def;
-                tile.clicked += () =>
-                {
-                    if (Placement.Instance.Selected == captured) Placement.Instance.Disarm();
-                    else Placement.Instance.Arm(captured);
-                };
-
-                tools.Add(tile);
-                _hotbar.Add(tile);
+                string captured = key;
+                cat.clicked += () => ToggleCategory(captured);
+                catRow.Add(cat);
+                _catButtons.Add((key, cat));
             }
+            tools.Add(catRow);
             dock.Add(tools);
 
             // ---- decrees and the law book
@@ -2246,6 +2316,84 @@ namespace Mesruiyet.UI
 
             _endTurn.clicked += () => TurnResolver.Instance.BeginTurn();
             dock.Add(_endTurn);
+        }
+
+        /// <summary>
+        /// Open a category's tile row above the tabs, or close it if it is the one already
+        /// open. Closing also disarms placement — a ghost from a shelf you can no longer see
+        /// is exactly the confusion the tabs exist to remove.
+        /// </summary>
+        void ToggleCategory(string key)
+        {
+            if (_openCategory == key)
+            {
+                _openCategory = null;
+                _tileRow.style.display = DisplayStyle.None;
+                _tileRow.Clear();
+                _hotbar.Clear();
+                _hotbarIds.Clear();
+                if (Placement.Instance != null && Placement.Instance.Selected != null)
+                    Placement.Instance.Disarm();
+            }
+            else
+            {
+                _openCategory = key;
+                _tileRow.Clear();
+                _hotbar.Clear();
+                _hotbarIds.Clear();
+
+                foreach (string id in Buildings.Hotbar)
+                {
+                    var def = Buildings.Get(id);
+                    if (def == null || def.Category != key) continue;
+                    var tile = MakeBuildTile(def);
+                    _tileRow.Add(tile);
+                    _hotbar.Add(tile);
+                    _hotbarIds.Add(id);
+                }
+                _tileRow.style.display = DisplayStyle.Flex;
+            }
+
+            foreach (var (k, btn) in _catButtons)
+            {
+                bool on = k == _openCategory;
+                btn.style.backgroundColor = on ? UiKit.Alpha(UiKit.Blue, 0.18f) : Color.clear;
+                btn.Border(1, on ? UiKit.Alpha(UiKit.Blue, 0.45f) : Color.clear);
+            }
+        }
+
+        Button MakeBuildTile(BuildingDef def)
+        {
+            var tile = new Button { name = "btn_build_" + def.Id };
+            tile.text = string.Empty;
+            tile.style.width = 54;
+            tile.style.paddingTop = 8; tile.style.paddingBottom = 7;
+            tile.style.paddingLeft = 0; tile.style.paddingRight = 0;
+            tile.style.marginRight = 3; tile.style.marginLeft = 0;
+            tile.style.marginTop = 1; tile.style.marginBottom = 1;
+            tile.style.backgroundColor = Color.clear;
+            // Captions clip rather than spill: "ENERJİ SANTRALİ" is wider than any sane tile,
+            // and neighbouring labels running into each other is worse than a truncated one.
+            tile.style.overflow = Overflow.Hidden;
+            tile.Radius(10).Border(1, Color.clear);
+            tile.style.flexDirection = FlexDirection.Column;
+            tile.style.alignItems = Align.Center;
+
+            tile.Add(UiKit.Text(def.Glyph, 17, UiKit.Ink));
+            var caption = UiKit.Text(def.DockLabel.ToUpperInvariant(), 7.5f, UiKit.Hex("#8E9CB0"), FontStyle.Bold);
+            caption.style.letterSpacing = 0.6f;
+            caption.style.marginTop = 4;
+            caption.style.whiteSpace = WhiteSpace.NoWrap;
+            caption.tooltip = def.Name;
+            tile.Add(caption);
+
+            var captured = def;
+            tile.clicked += () =>
+            {
+                if (Placement.Instance.Selected == captured) Placement.Instance.Disarm();
+                else Placement.Instance.Arm(captured);
+            };
+            return tile;
         }
 
         // ================================================================ world labels
@@ -2382,15 +2530,23 @@ namespace Mesruiyet.UI
             UpdateLabels();
             UpdatePointerOverUi();
 
-            // The dock reflects what the hotbar has armed without waiting for a rebuild.
+            // The dock reflects what the open category has armed without waiting for a rebuild.
             for (int i = 0; i < _hotbar.Count; i++)
             {
-                var def = Buildings.Get(Buildings.Hotbar[i]);
+                var def = Buildings.Get(_hotbarIds[i]);
                 bool on = Placement.Instance.Selected == def;
                 bool affordable = _state.CanAfford(def);
                 _hotbar[i].style.backgroundColor = on ? UiKit.Alpha(UiKit.Blue, 0.18f) : Color.clear;
                 _hotbar[i].Border(1, on ? UiKit.Alpha(UiKit.Blue, 0.45f) : Color.clear);
                 _hotbar[i].style.opacity = affordable ? 1f : 0.42f;
+            }
+
+            // Dış Dünya unfolds itself once, the first time Mersa is worth watching. After
+            // that the fold is the player's to manage — the card never forces itself again.
+            if (!_outsideAutoOpened && _state.Threat > 5f)
+            {
+                _outsideAutoOpened = true;
+                SetFold("dis", true);
             }
 
             _endTurn.SetEnabled(TurnResolver.Idle);

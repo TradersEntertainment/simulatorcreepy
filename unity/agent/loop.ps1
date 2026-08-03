@@ -1240,6 +1240,36 @@ switch ($Scenario) {
         Wait-Turn ($t + 1) 40 | Out-Null
         Check ((Get-Turn) -ge ($t + 1)) "yeniden kurulan şehirde turlar işliyor"
 
+        # The build dock: categories replaced the 31-tile wall. A tab has to open, its tiles
+        # have to arm placement, ESC has to disarm, and clicking the tab again has to close it.
+        function DockField([string] $key) {
+            $s = Send-Cmd '{"cmd":"state"}'
+            if ($s -match "`"$key`":`"([^`"]*)`"") { return $Matches[1] }
+            return "?"
+        }
+        Check ((DockField "acikKategori") -eq "") "dock kategorileri kapalı başlıyor"
+        Send-Cmd '{"cmd":"click","id":"btn_cat_kamu"}' | Out-Null
+        Start-Sleep -Milliseconds 400
+        Shot "menu-06-kategori-acik.png"
+        Check ((DockField "acikKategori") -eq "kamu") "KAMU sekmesi açılıyor"
+        Send-Cmd '{"cmd":"click","id":"btn_build_klinik"}' | Out-Null
+        Start-Sleep -Milliseconds 300
+        Check ((DockField "secili") -eq "klinik") "sekmedeki karo yerleştirmeyi kuruyor"
+        Send-Cmd '{"cmd":"key","id":"escape"}' | Out-Null
+        Start-Sleep -Milliseconds 300
+        Check ((DockField "secili") -eq "") "ESC kurulu yerleştirmeyi bırakıyor"
+        Check ((Menu) -eq "") "yerleştirme kuruluyken ESC menü açmıyor"
+        Send-Cmd '{"cmd":"click","id":"btn_cat_kamu"}' | Out-Null
+        Start-Sleep -Milliseconds 300
+        Check ((DockField "acikKategori") -eq "") "sekmeye ikinci tıklama kapatıyor"
+
+        # The rail folds: Dış Dünya starts folded, a header click opens it.
+        Check ((DockField "disKarti") -eq "kapali") "Dış Dünya kartı katlı başlıyor"
+        Send-Cmd '{"cmd":"click","id":"btn_fold_dis"}' | Out-Null
+        Start-Sleep -Milliseconds 300
+        Shot "menu-07-dis-acildi.png"
+        Check ((DockField "disKarti") -eq "acik") "başlığa tıklamak kartı açıyor"
+
         $state = Send-Cmd '{"cmd":"state"}'
         if (-not $ok) { $chainBroken = $true }
     }

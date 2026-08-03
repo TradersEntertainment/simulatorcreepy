@@ -195,6 +195,13 @@ namespace Mesruiyet.Agent
             var hud = UI.Hud.Instance;
             Str(sb, "menu", hud == null ? "" : hud.MenuName); sb.Append(',');
 
+            // The dock's category tabs and the armed building, so a scenario can prove the
+            // click path works: open a tab, arm a tile, escape, and watch these two fields.
+            var placement = World.Placement.Instance;
+            Str(sb, "acikKategori", hud == null ? "" : hud.OpenCategory); sb.Append(',');
+            Str(sb, "secili", placement != null && placement.Selected != null ? placement.Selected.Id : ""); sb.Append(',');
+            Str(sb, "disKarti", hud != null && hud.IsFoldOpen("dis") ? "acik" : "kapali"); sb.Append(',');
+
             // Audio cannot be verified by listening in an unattended run, so it reports itself:
             // how many clips were synthesized, and what the two ambient voices are currently
             // doing. A drone that never responds to grievance is a dead system, silently.
