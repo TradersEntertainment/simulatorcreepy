@@ -1679,6 +1679,16 @@ switch ($Scenario) {
         Start-Sleep -Milliseconds 700
         Shot "model-07-ambar-tayin.png"
 
+        # Industry: the weaving mill, the warehouse and the power station side by side.
+        Send-Cmd '{"cmd":"grant","n":800}' | Out-Null
+        Send-Cmd '{"cmd":"build","id":"dokuma","x":21,"y":17}' | Out-Null
+        Send-Cmd '{"cmd":"build","id":"depo","x":23,"y":17}' | Out-Null
+        Send-Cmd '{"cmd":"build","id":"santral","x":25,"y":17}' | Out-Null
+        Start-Sleep -Milliseconds 800
+        Send-Cmd '{"cmd":"focus","x":23,"y":17}' | Out-Null
+        Start-Sleep -Milliseconds 700
+        Shot "model-08-sanayi.png"
+
         $state = Send-Cmd '{"cmd":"state"}'
         if (-not $ok) { $chainBroken = $true }
     }
