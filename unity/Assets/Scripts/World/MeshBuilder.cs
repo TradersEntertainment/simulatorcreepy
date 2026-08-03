@@ -55,32 +55,53 @@ namespace Mesruiyet.World
             MarkFloor();
         }
 
-        /// <summary>A quad, wound counter-clockwise from a..d as seen from the front face.</summary>
+        /// <summary>
+        /// A quad — emitted DOUBLE-SIDED, front and back with mirrored normals.
+        ///
+        /// The shader culls back faces, and a decent fraction of the hand-wound roof and wall
+        /// pieces turned out to be wound the wrong way round: invisible from outside, so every
+        /// gabled building read as an open shell with its interior showing. Rather than audit
+        /// the winding of every face ever written (and every one yet to be written), every
+        /// surface simply exists from both sides. It doubles the vertex count of meshes that
+        /// are baked once and drawn in a handful of calls, and it makes this whole class of
+        /// bug impossible.
+        /// </summary>
         public void AddQuad(Vector3 a, Vector3 b, Vector3 c, Vector3 d, Color color)
         {
-            int i = _verts.Count;
             Vector3 n = Vector3.Cross(b - a, c - a).normalized;
             Color32 c32 = color;
 
             Note(a); Note(b); Note(c); Note(d);
+
+            int i = _verts.Count;
             _verts.Add(a); _verts.Add(b); _verts.Add(c); _verts.Add(d);
             for (int k = 0; k < 4; k++) { _normals.Add(n); _colors.Add(c32); }
-
             _tris.Add(i); _tris.Add(i + 1); _tris.Add(i + 2);
             _tris.Add(i); _tris.Add(i + 2); _tris.Add(i + 3);
+
+            int j = _verts.Count;
+            _verts.Add(a); _verts.Add(b); _verts.Add(c); _verts.Add(d);
+            for (int k = 0; k < 4; k++) { _normals.Add(-n); _colors.Add(c32); }
+            _tris.Add(j); _tris.Add(j + 2); _tris.Add(j + 1);
+            _tris.Add(j); _tris.Add(j + 3); _tris.Add(j + 2);
         }
 
         public void AddTriangle(Vector3 a, Vector3 b, Vector3 c, Color color)
         {
-            int i = _verts.Count;
             Vector3 n = Vector3.Cross(b - a, c - a).normalized;
             Color32 c32 = color;
 
             Note(a); Note(b); Note(c);
+
+            int i = _verts.Count;
             _verts.Add(a); _verts.Add(b); _verts.Add(c);
             for (int k = 0; k < 3; k++) { _normals.Add(n); _colors.Add(c32); }
-
             _tris.Add(i); _tris.Add(i + 1); _tris.Add(i + 2);
+
+            int j = _verts.Count;
+            _verts.Add(a); _verts.Add(b); _verts.Add(c);
+            for (int k = 0; k < 3; k++) { _normals.Add(-n); _colors.Add(c32); }
+            _tris.Add(j); _tris.Add(j + 2); _tris.Add(j + 1);
         }
 
         /// <summary>A flat tile on the XZ plane, centred on <paramref name="centre"/>.</summary>
