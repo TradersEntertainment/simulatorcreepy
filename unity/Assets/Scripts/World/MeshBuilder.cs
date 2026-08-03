@@ -20,12 +20,24 @@ namespace Mesruiyet.World
 
         public int VertexCount => _verts.Count;
 
+        /// <summary>
+        /// Lowest vertex written since the last <see cref="MarkFloor"/>. Every part of a building
+        /// is supposed to stand on something that reaches the ground, and the only way to keep
+        /// that true as the table grows is to measure it rather than to look at it.
+        /// </summary>
+        public float LowestY { get; private set; } = float.MaxValue;
+
+        public void MarkFloor() => LowestY = float.MaxValue;
+
+        void Note(Vector3 v) { if (v.y < LowestY) LowestY = v.y; }
+
         public void Clear()
         {
             _verts.Clear();
             _normals.Clear();
             _colors.Clear();
             _tris.Clear();
+            MarkFloor();
         }
 
         /// <summary>A quad, wound counter-clockwise from a..d as seen from the front face.</summary>
@@ -35,6 +47,7 @@ namespace Mesruiyet.World
             Vector3 n = Vector3.Cross(b - a, c - a).normalized;
             Color32 c32 = color;
 
+            Note(a); Note(b); Note(c); Note(d);
             _verts.Add(a); _verts.Add(b); _verts.Add(c); _verts.Add(d);
             for (int k = 0; k < 4; k++) { _normals.Add(n); _colors.Add(c32); }
 
@@ -48,6 +61,7 @@ namespace Mesruiyet.World
             Vector3 n = Vector3.Cross(b - a, c - a).normalized;
             Color32 c32 = color;
 
+            Note(a); Note(b); Note(c);
             _verts.Add(a); _verts.Add(b); _verts.Add(c);
             for (int k = 0; k < 3; k++) { _normals.Add(n); _colors.Add(c32); }
 

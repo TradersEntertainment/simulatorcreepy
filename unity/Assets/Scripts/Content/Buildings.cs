@@ -9,9 +9,41 @@ using UnityEngine;
 
 namespace Mesruiyet.Core
 {
+    /// <summary>
+    /// The silhouette a building is drawn as. Thirty-one entries drawn as one box in thirty-one
+    /// tints is thirty-one tints, not thirty-one buildings — from the air a clinic and a library
+    /// were the same object. A form is a shape the eye can name from three hundred metres up, and
+    /// picking one stays a single line of data, which is the rule this table lives by.
+    ///
+    /// Every form is built from parts that stand on something reaching the ground. That is not a
+    /// convention; CityRenderer measures the lowest vertex of each building and the `siluet`
+    /// scenario fails if any of them is above the floor.
+    /// </summary>
+    public enum Form
+    {
+        Duz = 0,     // a slab: roads, fields, parks
+        Ev,          // pitched roof, chimney, door — a house
+        Blok,        // flat top with roof clutter — dense housing, the exchange
+        Salon,       // long body, columned porch, shallow roof — civic halls
+        Atolye,      // wide shed, saw-tooth roof, chimney — workshops
+        Ocak,        // squat kiln with a domed cap and a stack
+        Ambar,       // barn with a silo beside it
+        Degirmen,    // tapered tower with sails
+        Tapinak,     // stepped base, deep roof, ridge ornament
+        Anit,        // plinth and obelisk
+        Baca,        // a chimney stack on a small plant house
+        Kemer,       // an arcade of arches
+        Kuyu,        // a low ring with a headframe
+        Karakol,     // guard house with a watch tower
+        Pazar,       // an open canopy on posts
+    }
+
     public sealed class BuildingDef
     {
         public string Id;
+
+        /// <summary>How it is drawn. See <see cref="Core.Form"/>.</summary>
+        public Form Form = Form.Blok;
         public string Name;
         /// <summary>Short caption for the build dock, where a tile is 62 px wide.</summary>
         public string Short;
@@ -79,7 +111,7 @@ namespace Mesruiyet.Core
         {
             new BuildingDef
             {
-                Id = "yol", Name = "Yol", Category = "altyapi", Glyph = "═",
+                Id = "yol", Form = Form.Duz, Name = "Yol", Category = "altyapi", Glyph = "═",
                 CostMoney = 8, CostMaterial = 3, Upkeep = 1,
                 Tint = C("#41454E"), Storeys = 0,
                 Base = PoliticalEffect.None,
@@ -87,7 +119,7 @@ namespace Mesruiyet.Core
             },
             new BuildingDef
             {
-                Id = "konut", Name = "Konut", Category = "konut", Glyph = "⌂",
+                Id = "konut", Form = Form.Ev, Name = "Konut", Category = "konut", Glyph = "⌂",
                 CostMoney = 60, CostMaterial = 20, Upkeep = 2,
                 Housing = 48, Output = Out(isgucu: 22),
                 Tint = C("#B9A88C"), Storeys = 2,
@@ -96,7 +128,7 @@ namespace Mesruiyet.Core
             },
             new BuildingDef
             {
-                Id = "toplukonut", Name = "Toplu Konut", Short = "T. KONUT", Category = "konut", Glyph = "▤",
+                Id = "toplukonut", Form = Form.Blok, Name = "Toplu Konut", Short = "T. KONUT", Category = "konut", Glyph = "▤",
                 CostMoney = 90, CostMaterial = 45, Upkeep = 4,
                 Housing = 130, Output = Out(isgucu: 58),
                 Tint = C("#9AA3B0"), Storeys = 4,
@@ -117,7 +149,7 @@ namespace Mesruiyet.Core
             },
             new BuildingDef
             {
-                Id = "tarla", Name = "Tarla", Category = "tarim", Glyph = "≡",
+                Id = "tarla", Form = Form.Duz, Name = "Tarla", Category = "tarim", Glyph = "≡",
                 CostMoney = 40, CostMaterial = 8, Upkeep = 1, Workers = 14,
                 Output = Out(su: -4),                       // grain itself flows through the chain
                 Requires = TileKind.Verimli,
@@ -127,7 +159,7 @@ namespace Mesruiyet.Core
             },
             new BuildingDef
             {
-                Id = "degirmen", Name = "Değirmen", Category = "tarim", Glyph = "✳",
+                Id = "degirmen", Form = Form.Degirmen, Name = "Değirmen", Category = "tarim", Glyph = "✳",
                 CostMoney = 90, CostMaterial = 30, Upkeep = 3, Workers = 14,
                 Output = Out(enerji: -3),
                 Tint = C("#C2AE86"), Storeys = 2,
@@ -136,7 +168,7 @@ namespace Mesruiyet.Core
             },
             new BuildingDef
             {
-                Id = "firin", Name = "Fırın", Category = "tarim", Glyph = "◍",
+                Id = "firin", Form = Form.Ocak, Name = "Fırın", Category = "tarim", Glyph = "◍",
                 CostMoney = 70, CostMaterial = 22, Upkeep = 3, Workers = 12,
                 Output = Out(enerji: -4),
                 Tint = C("#C98F5E"), Storeys = 1,
@@ -145,7 +177,7 @@ namespace Mesruiyet.Core
             },
             new BuildingDef
             {
-                Id = "ambar", Name = "Tahıl Ambarı", Short = "AMBAR", Category = "tarim", Glyph = "▣",
+                Id = "ambar", Form = Form.Ambar, Name = "Tahıl Ambarı", Short = "AMBAR", Category = "tarim", Glyph = "▣",
                 CostMoney = 80, CostMaterial = 30, Upkeep = 2,
                 Tint = C("#A8956E"), Storeys = 2,
                 Base = PoliticalEffect.None,
@@ -154,7 +186,7 @@ namespace Mesruiyet.Core
             },
             new BuildingDef
             {
-                Id = "islik", Name = "Taş İşliği", Short = "İŞLİK", Category = "sanayi", Glyph = "⛏",
+                Id = "islik", Form = Form.Atolye, Name = "Taş İşliği", Short = "İŞLİK", Category = "sanayi", Glyph = "⛏",
                 CostMoney = 100, CostMaterial = 30, Upkeep = 4, Workers = 16,
                 Output = Out(enerji: -5),
                 Pollution = 3,
@@ -165,7 +197,7 @@ namespace Mesruiyet.Core
             },
             new BuildingDef
             {
-                Id = "depo", Name = "İnşaat Deposu", Short = "DEPO", Category = "altyapi", Glyph = "▦",
+                Id = "depo", Form = Form.Ambar, Name = "İnşaat Deposu", Short = "DEPO", Category = "altyapi", Glyph = "▦",
                 CostMoney = 90, CostMaterial = 35, Upkeep = 3, Workers = 6,
                 Tint = C("#9A9384"), Storeys = 2,
                 Base = PoliticalEffect.None,
@@ -174,7 +206,7 @@ namespace Mesruiyet.Core
             },
             new BuildingDef
             {
-                Id = "kuyu", Name = "Su Kuyusu", Short = "KUYU", Category = "altyapi", Glyph = "≋",
+                Id = "kuyu", Form = Form.Kuyu, Name = "Su Kuyusu", Short = "KUYU", Category = "altyapi", Glyph = "≋",
                 CostMoney = 50, CostMaterial = 12, Upkeep = 1, Workers = 4,
                 Output = Out(su: 26, enerji: -2),
                 Tint = C("#6E8A9C"), Storeys = 1,
@@ -183,7 +215,7 @@ namespace Mesruiyet.Core
             },
             new BuildingDef
             {
-                Id = "santral", Name = "Enerji Santrali", Short = "SANTRAL", Category = "altyapi", Glyph = "⚡",
+                Id = "santral", Form = Form.Baca, Name = "Enerji Santrali", Short = "SANTRAL", Category = "altyapi", Glyph = "⚡",
                 CostMoney = 160, CostMaterial = 55, Upkeep = 8, Workers = 22,
                 Output = Out(enerji: 48),
                 Pollution = 9,
@@ -205,7 +237,7 @@ namespace Mesruiyet.Core
             },
             new BuildingDef
             {
-                Id = "ocak", Name = "Taş Ocağı", Short = "OCAK", Category = "sanayi", Glyph = "⛰",
+                Id = "ocak", Form = Form.Ocak, Name = "Taş Ocağı", Short = "OCAK", Category = "sanayi", Glyph = "⛰",
                 CostMoney = 110, CostMaterial = 20, Upkeep = 4, Workers = 22,
                 Output = Out(enerji: -4),
                 Requires = TileKind.Tepelik,
@@ -216,7 +248,7 @@ namespace Mesruiyet.Core
             },
             new BuildingDef
             {
-                Id = "dokuma", Name = "Dokuma Atölyesi", Short = "DOKUMA", Category = "sanayi", Glyph = "⌗",
+                Id = "dokuma", Form = Form.Atolye, Name = "Dokuma Atölyesi", Short = "DOKUMA", Category = "sanayi", Glyph = "⌗",
                 CostMoney = 140, CostMaterial = 40, Upkeep = 6, Workers = 40,
                 Output = Out(para: 52, enerji: -6),
                 Pollution = 6,
@@ -239,7 +271,7 @@ namespace Mesruiyet.Core
             },
             new BuildingDef
             {
-                Id = "karakol", Name = "Karakol", Category = "kamu", Glyph = "⚑",
+                Id = "karakol", Form = Form.Karakol, Name = "Karakol", Category = "kamu", Glyph = "⚑",
                 CostMoney = 90, CostMaterial = 28, Upkeep = 5, Workers = 12,
                 Security = 12,
                 Tint = C("#5F6B7A"), Storeys = 1,
@@ -261,7 +293,7 @@ namespace Mesruiyet.Core
             },
             new BuildingDef
             {
-                Id = "matbaa", Name = "Matbaa", Category = "kamu", Glyph = "▥",
+                Id = "matbaa", Form = Form.Salon, Name = "Matbaa", Category = "kamu", Glyph = "▥",
                 CostMoney = 120, CostMaterial = 30, Upkeep = 5, Workers = 10,
                 Education = 10,
                 Tint = C("#8FA5B8"), Storeys = 2,
@@ -274,7 +306,7 @@ namespace Mesruiyet.Core
             },
             new BuildingDef
             {
-                Id = "park", Name = "Park", Category = "kamu", Glyph = "❦",
+                Id = "park", Form = Form.Duz, Name = "Park", Category = "kamu", Glyph = "❦",
                 CostMoney = 50, CostMaterial = 10, Upkeep = 2,
                 Health = 4, Culture = 3,
                 Tint = C("#5C8A4C"), Storeys = 0,
@@ -295,7 +327,7 @@ namespace Mesruiyet.Core
             },
             new BuildingDef
             {
-                Id = "tapinak", Name = "Tapınak", Category = "kamu", Glyph = "⛩",
+                Id = "tapinak", Form = Form.Tapinak, Name = "Tapınak", Category = "kamu", Glyph = "⛩",
                 CostMoney = 130, CostMaterial = 40, Upkeep = 4,
                 Culture = 12,
                 Tint = C("#C9A86A"), Storeys = 3,
@@ -308,7 +340,7 @@ namespace Mesruiyet.Core
             },
             new BuildingDef
             {
-                Id = "anit", Name = "Anıt", Category = "kamu", Glyph = "▲",
+                Id = "anit", Form = Form.Anit, Name = "Anıt", Category = "kamu", Glyph = "▲",
                 CostMoney = 260, CostMaterial = 80, Upkeep = 6,
                 Culture = 6,
                 Tint = C("#D8D2C4"), Storeys = 4,
@@ -321,7 +353,7 @@ namespace Mesruiyet.Core
             },
             new BuildingDef
             {
-                Id = "kisla", Name = "Kışla", Category = "ordu", Glyph = "▮",
+                Id = "kisla", Form = Form.Karakol, Name = "Kışla", Category = "ordu", Glyph = "▮",
                 CostMoney = 150, CostMaterial = 50, Upkeep = 9, Workers = 24,
                 Security = 8,
                 Tint = C("#6E7A6A"), Storeys = 2,
@@ -339,7 +371,7 @@ namespace Mesruiyet.Core
             // could not answer. These are the answer.
             new BuildingDef
             {
-                Id = "klinik", Name = "Klinik", Category = "kamu", Glyph = "✚",
+                Id = "klinik", Form = Form.Salon, Name = "Klinik", Category = "kamu", Glyph = "✚",
                 CostMoney = 110, CostMaterial = 25, Upkeep = 5, Workers = 8,
                 Health = 14,
                 Tint = C("#D6E2E6"), Storeys = 1,
@@ -360,7 +392,7 @@ namespace Mesruiyet.Core
             },
             new BuildingDef
             {
-                Id = "hastane", Name = "Hastane", Category = "kamu", Glyph = "✢",
+                Id = "hastane", Form = Form.Salon, Name = "Hastane", Category = "kamu", Glyph = "✢",
                 CostMoney = 340, CostMaterial = 95, Upkeep = 14, Workers = 26,
                 Health = 34,
                 Tint = C("#E3ECEF"), Storeys = 3, Size = new Vector2Int(2, 2),
@@ -375,7 +407,7 @@ namespace Mesruiyet.Core
             // ---------------------------------------------------------------- learning
             new BuildingDef
             {
-                Id = "okul", Name = "Okul", Category = "kamu", Glyph = "✎",
+                Id = "okul", Form = Form.Salon, Name = "Okul", Category = "kamu", Glyph = "✎",
                 CostMoney = 95, CostMaterial = 22, Upkeep = 4, Workers = 9,
                 Education = 13,
                 Tint = C("#C6B89C"), Storeys = 2,
@@ -396,7 +428,7 @@ namespace Mesruiyet.Core
             },
             new BuildingDef
             {
-                Id = "kutuphane", Name = "Kütüphane", Category = "kamu", Glyph = "▤",
+                Id = "kutuphane", Form = Form.Salon, Name = "Kütüphane", Category = "kamu", Glyph = "▤",
                 CostMoney = 150, CostMaterial = 38, Upkeep = 6, Workers = 6,
                 Education = 9, Culture = 8,
                 Tint = C("#A89478"), Storeys = 2,
@@ -409,7 +441,7 @@ namespace Mesruiyet.Core
             },
             new BuildingDef
             {
-                Id = "hamam", Name = "Hamam", Category = "kamu", Glyph = "≈",
+                Id = "hamam", Form = Form.Salon, Name = "Hamam", Category = "kamu", Glyph = "≈",
                 CostMoney = 105, CostMaterial = 30, Upkeep = 5,
                 Health = 8, Culture = 7, Output = Out(su: -6),
                 Tint = C("#B9C6C2"), Storeys = 1,
@@ -424,7 +456,7 @@ namespace Mesruiyet.Core
             // ---------------------------------------------------------------- commerce
             new BuildingDef
             {
-                Id = "pazar", Name = "Pazar Yeri", Short = "PAZAR", Category = "sanayi", Glyph = "⌸",
+                Id = "pazar", Form = Form.Pazar, Name = "Pazar Yeri", Short = "PAZAR", Category = "sanayi", Glyph = "⌸",
                 CostMoney = 80, CostMaterial = 18, Upkeep = 3, Workers = 12,
                 Output = Out(para: 16),
                 Tint = C("#C2A15E"), Storeys = 1,
@@ -437,7 +469,7 @@ namespace Mesruiyet.Core
             },
             new BuildingDef
             {
-                Id = "borsa", Name = "Serbest Borsa", Short = "BORSA", Category = "sanayi", Glyph = "⌷",
+                Id = "borsa", Form = Form.Blok, Name = "Serbest Borsa", Short = "BORSA", Category = "sanayi", Glyph = "⌷",
                 CostMoney = 300, CostMaterial = 70, Upkeep = 10, Workers = 18,
                 Output = Out(para: 62),
                 Tint = C("#D4B978"), Storeys = 4,
@@ -458,7 +490,7 @@ namespace Mesruiyet.Core
             },
             new BuildingDef
             {
-                Id = "tayinlama", Name = "Tayınlama Deposu", Short = "TAYIN", Category = "tarim", Glyph = "⊞",
+                Id = "tayinlama", Form = Form.Ambar, Name = "Tayınlama Deposu", Short = "TAYIN", Category = "tarim", Glyph = "⊞",
                 CostMoney = 140, CostMaterial = 45, Upkeep = 8, Workers = 10,
                 Output = Out(yiyecek: 12),
                 Tint = C("#8C9E7E"), Storeys = 2,
@@ -473,7 +505,7 @@ namespace Mesruiyet.Core
             // ---------------------------------------------------------------- water and power
             new BuildingDef
             {
-                Id = "sukemeri", Name = "Su Kemeri", Short = "KEMER", Category = "altyapi", Glyph = "∩",
+                Id = "sukemeri", Form = Form.Kemer, Name = "Su Kemeri", Short = "KEMER", Category = "altyapi", Glyph = "∩",
                 CostMoney = 230, CostMaterial = 85, Upkeep = 6,
                 Output = Out(su: 48),
                 Tint = C("#A9B3BC"), Storeys = 3,
@@ -482,7 +514,7 @@ namespace Mesruiyet.Core
             },
             new BuildingDef
             {
-                Id = "aritma", Name = "Arıtma", Category = "altyapi", Glyph = "◌",
+                Id = "aritma", Form = Form.Kuyu, Name = "Arıtma", Category = "altyapi", Glyph = "◌",
                 CostMoney = 175, CostMaterial = 55, Upkeep = 7, Workers = 8,
                 Output = Out(su: 22), Health = 9, Pollution = -8,
                 Tint = C("#8FA8AE"), Storeys = 1,
@@ -497,7 +529,7 @@ namespace Mesruiyet.Core
             // ---------------------------------------------------------------- the hard edge
             new BuildingDef
             {
-                Id = "kontrol", Name = "Kontrol Noktası", Short = "KONTROL", Category = "ordu", Glyph = "⊤",
+                Id = "kontrol", Form = Form.Karakol, Name = "Kontrol Noktası", Short = "KONTROL", Category = "ordu", Glyph = "⊤",
                 CostMoney = 70, CostMaterial = 20, Upkeep = 4, Workers = 6,
                 Security = 10,
                 Tint = C("#6A6E75"), Storeys = 1,
@@ -518,7 +550,7 @@ namespace Mesruiyet.Core
             },
             new BuildingDef
             {
-                Id = "tersane", Name = "Tersane", Category = "ordu", Glyph = "⊿",
+                Id = "tersane", Form = Form.Atolye, Name = "Tersane", Category = "ordu", Glyph = "⊿",
                 CostMoney = 280, CostMaterial = 90, Upkeep = 12, Workers = 30,
                 Output = Out(para: 20), Security = 6, Pollution = 5,
                 Adjacent = TileKind.Su,

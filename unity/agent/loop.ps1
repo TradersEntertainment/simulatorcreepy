@@ -915,6 +915,68 @@ switch ($Scenario) {
     # Does the deck actually deal a varied game? A card table can look full on paper and still
     # hand out the same four crises all run, because the conditions that gate the interesting
     # cards are the conditions that stay true. Only a full term shows it.
+    # Every building has its own silhouette, and every part of every one of them stands on
+    # something that reaches the ground. The second half is measured rather than looked at: the
+    # renderer records each building's lowest vertex against the tile it stands on.
+    "siluet" {
+        Write-Host "`n[loop] SİLUET:" -ForegroundColor Cyan
+
+        function Field([string] $json, [string] $key) {
+            if ($json -match "`"$key`":(-?[\d.]+)") { return [double]$Matches[1] }
+            return [double]::NaN
+        }
+        $ok = $true
+        function Check([bool] $pass, [string] $label) {
+            if ($pass) { Write-Host "  ✔ $label" -ForegroundColor Green }
+            else { Write-Host "  ✘ $label" -ForegroundColor Red; $script:ok = $false }
+        }
+
+        # Put one of everything on the map, so every form is exercised, not just the founding six.
+        Send-Cmd '{"cmd":"grant","n":40000}' | Out-Null
+        $ids = @("konut","toplukonut","tarla","degirmen","firin","ambar","tayinlama",
+                 "ocak","islik","depo","pazar","borsa","dokuma",
+                 "kuyu","sukemeri","aritma","santral","yol",
+                 "klinik","hastane","okul","kutuphane","hamam","park","tapinak","matbaa","anit",
+                 "karakol","kontrol","kisla","tersane")
+        $placed = 0
+        foreach ($id in $ids) {
+            $done = $false
+            foreach ($x in 4..42) {
+                if ($done) { break }
+                foreach ($y in 3..27) {
+                    if ((Send-Cmd ('{"cmd":"build","id":"' + $id + '","x":' + $x + ',"y":' + $y + '}')) -match '"ok":true') {
+                        $done = $true; $placed++; break
+                    }
+                }
+            }
+        }
+
+        $t = Get-Turn
+        Send-Cmd '{"cmd":"endturn","n":1}' | Out-Null
+        Wait-Turn ($t + 1) 60 | Out-Null
+        Start-Sleep -Milliseconds 800
+        $s = Send-Cmd '{"cmd":"state"}'
+
+        $havada = [int](Field $s "havada")
+        $lift   = Field $s "enKotuKalkis"
+        $who    = ""
+        if ($s -match '"enKotuYapi":"([^"]*)"') { $who = $Matches[1] }
+
+        Write-Host ("  {0}/{1} yapı kondu · havada duran {2} · en kötü kalkış {3:N3} ({4})" -f `
+                    $placed, $ids.Count, $havada, $lift, $who)
+
+        Check ($placed -eq $ids.Count) "her yapı haritaya kondu"
+        Check ($havada -eq 0) "hiçbir yapı havada durmuyor"
+        Check ($lift -le 0.01) "en kötü kalkış bile zeminde"
+
+        Send-Cmd '{"cmd":"press","key":"zoomin"}' | Out-Null
+        Start-Sleep -Milliseconds 900
+        Shot "siluet.png"
+
+        $state = $s
+        if (-not $ok) { $chainBroken = $true }
+    }
+
     # The uncertainty system. A minister who shades a figure a little should state it precisely;
     # one who shades it a lot should give a range whose ends actually differ. The failure this
     # catches is a range printed as "~1911–1911" — a widget that looks broken rather than unsure.

@@ -273,6 +273,10 @@ namespace Mesruiyet.World
         {
             _builder.Clear();
 
+            _floating = 0;
+            _worstLift = 0f;
+            _worstLiftId = "";
+
             for (int i = 0; i < _state.Buildings.Count; i++)
             {
                 var b = _state.Buildings[i];
@@ -283,18 +287,9 @@ namespace Mesruiyet.World
                 float hash = CityGrid.Hash(b.Tile.x, b.Tile.y, 11);
                 float hash2 = CityGrid.Hash(b.Tile.x, b.Tile.y, 23);
 
-                if (def.Storeys <= 0)
-                {
-                    // Flat works — roads, fields, parks. A thin slab reads better than nothing.
-                    Color flat = def.Id == "tarla"
-                        ? MeshBuilder.Shade(def.Tint, 0.92f + 0.16f * hash)
-                        : def.Tint;
-                    _builder.AddBox(ground, new Vector3(CityGrid.TileSize * 0.92f, 0.14f, CityGrid.TileSize * 0.92f), flat);
-
-                    if (def.Id == "tarla") AddFurrows(ground, hash);
-                    if (def.Id == "park") AddTree(ground + new Vector3((hash - 0.5f) * 2f, 0.14f, (hash2 - 0.5f) * 2f), 1f);
-                    continue;
-                }
+                // Everything a building contributes is measured against the ground it stands on,
+                // so "does every part of this rest on something" stops being a matter of opinion.
+                _builder.MarkFloor();
 
                 // Housing borrows its district's palette, so each quarter reads differently from
                 // the air. Civic buildings keep their own colour — they are meant to stand out.
@@ -328,28 +323,40 @@ namespace Mesruiyet.World
                 bool dead = !b.Staffed;
                 if (dead) tint = Color.Lerp(tint, ColShuttered, 0.38f);
 
-                _builder.AddBox(ground, new Vector3(footprint, height, depth), tint);
-                AddWindows(ground, footprint, depth, height, storeys, b.Tile, dead);
+                var s = new Shape
+                {
+                    Ground = ground, W = footprint, D = depth, H = height,
+                    Tint = tint, Tile = b.Tile, Dead = dead,
+                    Hash = hash, Hash2 = hash2, Storeys = storeys,
+                };
 
-                // Houses get a pitched roof, a chimney and a front door; everything above four
-                // storeys and every civic building keeps a flat top, because that is the honest
-                // difference between a home and an institution. A town of flat-topped boxes
-                // reads as an office park, which is not what four hundred settlers built.
-                bool cottage = residential && storeys <= 3;
-                if (cottage) AddCottageTop(ground, footprint, depth, height, tint, b.Tile, dead);
-                else if (storeys >= 2) AddRoofClutter(ground, footprint, depth, height, tint, b.Tile);
+                switch (def.Form)
+                {
+                    case Form.Duz:      FormDuz(s, def); break;
+                    case Form.Ev:       FormEv(s); break;
+                    case Form.Salon:    FormSalon(s); break;
+                    case Form.Atolye:   FormAtolye(s); break;
+                    case Form.Ocak:     FormOcak(s); break;
+                    case Form.Ambar:    FormAmbar(s); break;
+                    case Form.Degirmen: FormDegirmen(s); break;
+                    case Form.Tapinak:  FormTapinak(s); break;
+                    case Form.Anit:     FormAnit(s); break;
+                    case Form.Baca:     FormBaca(s); break;
+                    case Form.Kemer:    FormKemer(s); break;
+                    case Form.Kuyu:     FormKuyu(s); break;
+                    case Form.Karakol:  FormKarakol(s); break;
+                    case Form.Pazar:    FormPazar(s); break;
+                    default:            FormBlok(s); break;
+                }
 
-                if (residential) AddDoor(ground, footprint, depth, b.Tile, dead);
+                if (def.Form != Form.Duz)
+                    AddIdeologyProps(ground, footprint, depth, height, hash, hash2);
 
-                if (def.Id == "anit")
-                    _builder.AddPyramid(ground + Vector3.up * height, footprint * 0.5f, 4.2f, MeshBuilder.Shade(tint, 1.1f));
-                if (def.Id == "tapinak")
-                    _builder.AddPyramid(ground + Vector3.up * height, footprint * 0.62f, 3.4f, Hex("#B5654A"));
-                if (def.Id == "santral" || def.Id == "dokuma")
-                    _builder.AddBox(ground + new Vector3(footprint * 0.32f, 0, -depth * 0.3f),
-                                    new Vector3(1.1f, height + 5.5f, 1.1f), MeshBuilder.Shade(tint, 0.62f));
-
-                AddIdeologyProps(ground, footprint, depth, height, hash, hash2);
+                // How far off the floor this building's lowest corner ended up. Zero is right;
+                // anything else means a part of it is standing on air.
+                float lift = _builder.LowestY - ground.y;
+                if (lift > _worstLift) { _worstLift = lift; _worstLiftId = def.Id; }
+                if (lift > 0.01f) _floating++;
             }
 
             _builder.Into(_buildingMesh);
@@ -442,6 +449,265 @@ namespace Mesruiyet.World
                                     new Vector3(0.36f, 0.5f, 0.04f),
                                     MeshBuilder.Shade(PropLaundry, 0.85f + i * 0.06f));
             }
+        }
+
+        // ---------------------------------------------------------------- silhouettes
+        //
+        // One method per Form. The house style rule for all of them: a part is placed either at
+        // `g.Ground` or at the top of a part that itself reaches the ground. Nothing is offset
+        // upward "to sit on" something — AddBox measures from its base, so an upward offset is a
+        // gap, and a gap is what made the last round of these look like they were floating.
+
+        /// <summary>Everything a form needs to draw itself.</summary>
+        struct Shape
+        {
+            public Vector3 Ground;
+            public float W, D, H;
+            public Color Tint;
+            public Vector2Int Tile;
+            public bool Dead;
+            public float Hash, Hash2;
+            public int Storeys;
+        }
+
+        int _floating;
+        float _worstLift;
+        string _worstLiftId = "";
+
+        /// <summary>Buildings whose lowest corner is off the ground. Should always be zero.</summary>
+        public int FloatingBuildings => _floating;
+        public float WorstLift => _worstLift;
+        public string WorstLiftId => _worstLiftId;
+
+        Color Shade(Shape g, float k) => MeshBuilder.Shade(g.Tint, k);
+
+        /// <summary>A slab: road, field, park. The only form with no height at all.</summary>
+        void FormDuz(Shape g, BuildingDef def)
+        {
+            Color flat = def.Id == "tarla" ? MeshBuilder.Shade(def.Tint, 0.92f + 0.16f * g.Hash) : def.Tint;
+            _builder.AddBox(g.Ground, new Vector3(CityGrid.TileSize * 0.92f, 0.14f, CityGrid.TileSize * 0.92f), flat);
+
+            if (def.Id == "tarla") AddFurrows(g.Ground, g.Hash);
+            if (def.Id == "park")
+            {
+                AddTree(g.Ground + new Vector3((g.Hash - 0.5f) * 2f, 0.14f, (g.Hash2 - 0.5f) * 2f), 1f);
+                // A bench and a path, so a park is not a green rectangle.
+                _builder.AddBox(g.Ground + new Vector3(1.1f, 0.14f, -0.8f),
+                                new Vector3(1.4f, 0.44f, 0.4f), Hex("#7A6244"));
+            }
+        }
+
+        /// <summary>A house: pitched roof, chimney, door. Unchanged in spirit, now one of many.</summary>
+        void FormEv(Shape g)
+        {
+            _builder.AddBox(g.Ground, new Vector3(g.W, g.H, g.D), g.Tint);
+            AddWindows(g.Ground, g.W, g.D, g.H, g.Storeys, g.Tile, g.Dead);
+            AddCottageTop(g.Ground, g.W, g.D, g.H, g.Tint, g.Tile, g.Dead);
+            AddDoor(g.Ground, g.W, g.D, g.Tile, g.Dead);
+        }
+
+        /// <summary>Dense housing and the exchange: a flat top with things on it.</summary>
+        void FormBlok(Shape g)
+        {
+            _builder.AddBox(g.Ground, new Vector3(g.W, g.H, g.D), g.Tint);
+            AddWindows(g.Ground, g.W, g.D, g.H, g.Storeys, g.Tile, g.Dead);
+            AddRoofClutter(g.Ground, g.W, g.D, g.H, g.Tint, g.Tile);
+            AddDoor(g.Ground, g.W, g.D, g.Tile, g.Dead);
+        }
+
+        /// <summary>
+        /// A civic hall: a long low body, a shallow roof, and a porch of columns across the front.
+        /// The columns are the tell — nothing else in the city has a row of verticals at its face.
+        /// </summary>
+        void FormSalon(Shape g)
+        {
+            float h = g.H * 0.8f;
+            _builder.AddBox(g.Ground, new Vector3(g.W, h, g.D * 0.86f), g.Tint);
+            AddWindows(g.Ground, g.W, g.D * 0.86f, h, Mathf.Max(1, g.Storeys), g.Tile, g.Dead);
+            _builder.AddGable(g.Ground + Vector3.up * h, g.W, g.D * 0.86f, 0.9f,
+                              Shade(g, 0.7f), g.W >= g.D);
+
+            // Porch: a floor slab at ground level, four columns standing on it, and a lintel.
+            float pz = g.D * 0.43f + 0.55f;
+            Vector3 porch = g.Ground + new Vector3(0, 0, pz);
+            _builder.AddBox(porch, new Vector3(g.W * 0.92f, 0.22f, 1.3f), Shade(g, 0.82f));
+            float colH = h * 0.72f;
+            for (int i = 0; i < 4; i++)
+            {
+                float u = (i / 3f - 0.5f) * g.W * 0.72f;
+                _builder.AddBox(porch + new Vector3(u, 0, 0.2f),
+                                new Vector3(0.24f, colH, 0.24f), Shade(g, 1.08f));
+            }
+            _builder.AddBox(porch + new Vector3(0, colH, 0.2f),
+                            new Vector3(g.W * 0.86f, 0.34f, 0.62f), Shade(g, 0.9f));
+        }
+
+        /// <summary>A workshop: a wide shed with a saw-tooth roof and a stack at one corner.</summary>
+        void FormAtolye(Shape g)
+        {
+            float h = g.H * 0.66f;
+            _builder.AddBox(g.Ground, new Vector3(g.W * 1.05f, h, g.D), Shade(g, 0.95f));
+
+            // Saw-tooth: three short slopes, each standing on the roof deck below it.
+            Vector3 deck = g.Ground + Vector3.up * h;
+            for (int i = 0; i < 3; i++)
+            {
+                float u = (i - 1) * g.W * 0.33f;
+                _builder.AddBox(deck + new Vector3(u, 0, 0), new Vector3(g.W * 0.28f, 0.5f, g.D * 0.9f),
+                                Shade(g, 0.8f));
+                _builder.AddWindow(deck + new Vector3(u, 0.9f, -g.D * 0.2f), Vector3.forward,
+                                   g.W * 0.24f, 0.7f, g.Dead ? Hex("#39414E") : Hex("#BFD4E6"));
+                _builder.AddGable(deck + new Vector3(u, 0.5f, 0), g.W * 0.28f, g.D * 0.9f, 0.7f,
+                                  Shade(g, 0.68f), false, 0.04f);
+            }
+
+            // The stack stands on the ground beside the shed, not on its roof.
+            _builder.AddBox(g.Ground + new Vector3(g.W * 0.62f, 0, -g.D * 0.34f),
+                            new Vector3(1.05f, h + 6.5f, 1.05f), Shade(g, 0.6f));
+        }
+
+        /// <summary>A kiln: a squat drum, a domed cap, a flue. Bakeries and quarry ovens.</summary>
+        void FormOcak(Shape g)
+        {
+            float h = g.H * 0.62f;
+            _builder.AddBox(g.Ground, new Vector3(g.W * 0.9f, h, g.D * 0.9f), g.Tint);
+            _builder.AddPyramid(g.Ground + Vector3.up * h, g.W * 0.45f, 1.6f, Shade(g, 0.78f));
+
+            // Flue from the ground up past the dome, and a mouth glowing at the base.
+            _builder.AddBox(g.Ground + new Vector3(g.W * 0.34f, 0, g.D * 0.28f),
+                            new Vector3(0.7f, h + 3.4f, 0.7f), Shade(g, 0.62f));
+            _builder.AddWindow(g.Ground + new Vector3(0, 0.7f, g.D * 0.45f + 0.02f), Vector3.forward,
+                               g.W * 0.34f, 1.1f, g.Dead ? Hex("#39414E") : Hex("#FF9B4A"));
+        }
+
+        /// <summary>A barn with a silo. Granary, depot, ration store.</summary>
+        void FormAmbar(Shape g)
+        {
+            float h = g.H * 0.72f;
+            _builder.AddBox(g.Ground, new Vector3(g.W * 0.86f, h, g.D), g.Tint);
+            _builder.AddGable(g.Ground + Vector3.up * h, g.W * 0.86f, g.D, 1.5f, Shade(g, 0.72f), false);
+
+            // The silo stands on its own footing on the ground, capped with a cone.
+            Vector3 silo = g.Ground + new Vector3(g.W * 0.6f, 0, g.D * 0.2f);
+            _builder.AddBox(silo, new Vector3(1.5f, h + 2.2f, 1.5f), Shade(g, 1.06f));
+            _builder.AddPyramid(silo + Vector3.up * (h + 2.2f), 0.9f, 1.1f, Shade(g, 0.7f));
+
+            // Big doors, because that is what a barn is.
+            _builder.AddBox(g.Ground + new Vector3(0, 0, g.D * 0.5f + 0.02f),
+                            new Vector3(g.W * 0.42f, h * 0.7f, 0.1f), Shade(g, 0.6f));
+        }
+
+        /// <summary>A mill: a tapered tower, a cap, and four sails on a hub.</summary>
+        void FormDegirmen(Shape g)
+        {
+            float h = g.H * 1.15f;
+            _builder.AddBox(g.Ground, new Vector3(g.W * 0.8f, h * 0.55f, g.D * 0.8f), g.Tint);
+            _builder.AddBox(g.Ground + Vector3.up * (h * 0.55f),
+                            new Vector3(g.W * 0.62f, h * 0.45f, g.D * 0.62f), Shade(g, 1.04f));
+            _builder.AddPyramid(g.Ground + Vector3.up * h, g.W * 0.36f, 1.4f, Shade(g, 0.68f));
+
+            // Sails: a hub on the face with four arms crossing it. Read from any angle.
+            Vector3 hub = g.Ground + new Vector3(0, h * 0.78f, g.D * 0.42f);
+            _builder.AddBox(hub, new Vector3(0.4f, 0.4f, 0.3f), Shade(g, 0.55f));
+            _builder.AddBox(hub + new Vector3(0, -2.4f, 0.1f), new Vector3(0.22f, 5.2f, 0.12f), Hex("#8C7A5E"));
+            _builder.AddBox(hub + new Vector3(-2.6f, -0.11f, 0.1f), new Vector3(5.2f, 0.22f, 0.12f), Hex("#8C7A5E"));
+        }
+
+        /// <summary>A temple: a stepped base, a deep roof, a ridge ornament.</summary>
+        void FormTapinak(Shape g)
+        {
+            _builder.AddBox(g.Ground, new Vector3(g.W * 1.1f, 0.5f, g.D * 1.1f), Shade(g, 0.86f));
+            _builder.AddBox(g.Ground + Vector3.up * 0.5f, new Vector3(g.W * 0.95f, 0.4f, g.D * 0.95f), Shade(g, 0.94f));
+
+            float bodyBase = 0.9f;
+            _builder.AddBox(g.Ground + Vector3.up * bodyBase, new Vector3(g.W * 0.8f, g.H, g.D * 0.8f), g.Tint);
+            _builder.AddGable(g.Ground + Vector3.up * (bodyBase + g.H), g.W * 1.0f, g.D * 1.0f, 2.2f,
+                              Hex("#B5654A"), g.W >= g.D, 0.35f);
+            _builder.AddBox(g.Ground + Vector3.up * (bodyBase + g.H + 2.2f),
+                            new Vector3(0.3f, 1.2f, 0.3f), Hex("#D8C48A"));
+        }
+
+        /// <summary>A monument: a plinth and an obelisk, and nothing else.</summary>
+        void FormAnit(Shape g)
+        {
+            _builder.AddBox(g.Ground, new Vector3(g.W * 0.9f, 0.9f, g.D * 0.9f), Shade(g, 0.82f));
+            _builder.AddBox(g.Ground + Vector3.up * 0.9f, new Vector3(g.W * 0.55f, 0.6f, g.D * 0.55f), Shade(g, 0.92f));
+            float shaft = g.H + 3.5f;
+            _builder.AddBox(g.Ground + Vector3.up * 1.5f, new Vector3(g.W * 0.3f, shaft, g.D * 0.3f), Shade(g, 1.08f));
+            _builder.AddPyramid(g.Ground + Vector3.up * (1.5f + shaft), g.W * 0.17f, 1.6f, Shade(g, 1.15f));
+        }
+
+        /// <summary>A power house: a low plant with one very tall stack rising from the ground.</summary>
+        void FormBaca(Shape g)
+        {
+            float h = g.H * 0.7f;
+            _builder.AddBox(g.Ground, new Vector3(g.W, h, g.D * 0.9f), g.Tint);
+            AddRoofClutter(g.Ground, g.W, g.D * 0.9f, h, g.Tint, g.Tile);
+
+            Vector3 stack = g.Ground + new Vector3(-g.W * 0.3f, 0, -g.D * 0.3f);
+            _builder.AddBox(stack, new Vector3(1.5f, h + 9f, 1.5f), Shade(g, 0.66f));
+            _builder.AddBox(stack + Vector3.up * (h + 9f), new Vector3(1.8f, 0.5f, 1.8f), Shade(g, 0.5f));
+        }
+
+        /// <summary>An aqueduct: piers standing on the ground with a channel across their tops.</summary>
+        void FormKemer(Shape g)
+        {
+            float h = g.H * 1.1f;
+            for (int i = 0; i < 3; i++)
+            {
+                float u = (i - 1) * g.W * 0.42f;
+                _builder.AddBox(g.Ground + new Vector3(u, 0, 0), new Vector3(0.75f, h, g.D * 0.55f), g.Tint);
+            }
+            _builder.AddBox(g.Ground + Vector3.up * h, new Vector3(g.W * 1.15f, 0.55f, g.D * 0.7f), Shade(g, 1.05f));
+            _builder.AddBox(g.Ground + Vector3.up * (h + 0.55f), new Vector3(g.W * 1.15f, 0.4f, g.D * 0.22f), Shade(g, 0.72f));
+        }
+
+        /// <summary>A wellhead: a low ring and a headframe with a winch over it.</summary>
+        void FormKuyu(Shape g)
+        {
+            _builder.AddBox(g.Ground, new Vector3(g.W * 0.7f, 0.85f, g.D * 0.7f), g.Tint);
+            _builder.AddBox(g.Ground + Vector3.up * 0.85f, new Vector3(g.W * 0.5f, 0.14f, g.D * 0.5f), Shade(g, 0.6f));
+
+            float legH = 2.6f;
+            foreach (float sx in new[] { -1f, 1f })
+                _builder.AddBox(g.Ground + new Vector3(sx * g.W * 0.32f, 0, 0),
+                                new Vector3(0.18f, legH, 0.18f), Shade(g, 0.7f));
+            _builder.AddBox(g.Ground + Vector3.up * legH, new Vector3(g.W * 0.78f, 0.2f, 0.24f), Shade(g, 0.62f));
+        }
+
+        /// <summary>A guard post: a small house with a watch tower rising beside it.</summary>
+        void FormKarakol(Shape g)
+        {
+            float h = g.H * 0.75f;
+            _builder.AddBox(g.Ground, new Vector3(g.W * 0.85f, h, g.D * 0.85f), g.Tint);
+            AddWindows(g.Ground, g.W * 0.85f, g.D * 0.85f, h, Mathf.Max(1, g.Storeys), g.Tile, g.Dead);
+            _builder.AddGable(g.Ground + Vector3.up * h, g.W * 0.85f, g.D * 0.85f, 0.8f, Shade(g, 0.7f), g.W >= g.D);
+
+            Vector3 tower = g.Ground + new Vector3(g.W * 0.5f, 0, -g.D * 0.34f);
+            float th = h + 3.4f;
+            _builder.AddBox(tower, new Vector3(1.25f, th, 1.25f), Shade(g, 0.9f));
+            _builder.AddBox(tower + Vector3.up * th, new Vector3(1.8f, 0.7f, 1.8f), Shade(g, 0.72f));
+            _builder.AddPyramid(tower + Vector3.up * (th + 0.7f), 0.95f, 0.9f, Shade(g, 0.6f));
+        }
+
+        /// <summary>A market: an open canopy on posts, with crates under it. Barely a building.</summary>
+        void FormPazar(Shape g)
+        {
+            float postH = 2.6f;
+            for (int i = 0; i < 4; i++)
+            {
+                float sx = (i & 1) == 0 ? -1 : 1;
+                float sz = (i & 2) == 0 ? -1 : 1;
+                _builder.AddBox(g.Ground + new Vector3(sx * g.W * 0.38f, 0, sz * g.D * 0.38f),
+                                new Vector3(0.22f, postH, 0.22f), Shade(g, 0.62f));
+            }
+            _builder.AddBox(g.Ground + Vector3.up * postH, new Vector3(g.W * 0.95f, 0.2f, g.D * 0.95f), g.Tint);
+            _builder.AddGable(g.Ground + Vector3.up * (postH + 0.2f), g.W * 0.95f, g.D * 0.95f, 0.8f,
+                              Shade(g, 1.06f), g.W >= g.D, 0.2f);
+
+            // Goods on the ground under it.
+            _builder.AddBox(g.Ground + new Vector3(-0.4f, 0, 0.3f), new Vector3(0.8f, 0.7f, 0.8f), Hex("#7A6647"));
+            _builder.AddBox(g.Ground + new Vector3(0.7f, 0, -0.4f), new Vector3(0.6f, 0.5f, 0.6f), Hex("#8A6E44"));
         }
 
         static readonly Color[] RoofTiles =

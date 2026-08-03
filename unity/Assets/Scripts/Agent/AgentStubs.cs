@@ -166,6 +166,16 @@ namespace Mesruiyet.Agent
             Str(sb, "pendingEvent", g.PendingEvent != null ? g.PendingEvent.Id : ""); sb.Append(',');
             Str(sb, "lastEvent", g.LastEventOutcome); sb.Append(',');
 
+            // Does every building rest on the ground? Measured, not judged: the renderer records
+            // the lowest vertex each building contributed and compares it to the tile it stands
+            // on. Anything above the floor is a part standing on air.
+            var cr = World.CityRenderer.Instance;
+            sb.Append("\"zemin\":{");
+            Num(sb, "havada", cr != null ? cr.FloatingBuildings : 0); sb.Append(',');
+            Num(sb, "enKotuKalkis", cr != null ? cr.WorstLift : 0f); sb.Append(',');
+            Str(sb, "enKotuYapi", cr != null ? cr.WorstLiftId : "");
+            sb.Append("},");
+
             // Which menu, if any, is covering the game. The agent opens a term through the title
             // screen the same way a player does, so it has to be able to see one.
             var hud = UI.Hud.Instance;
