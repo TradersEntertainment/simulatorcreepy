@@ -1679,6 +1679,16 @@ switch ($Scenario) {
         Start-Sleep -Milliseconds 700
         Shot "model-07-ambar-tayin.png"
 
+        # Civic row: the market, the bath house and the police station.
+        Send-Cmd '{"cmd":"grant","n":900}' | Out-Null
+        Send-Cmd '{"cmd":"build","id":"pazar","x":20,"y":16}' | Out-Null
+        Send-Cmd '{"cmd":"build","id":"hamam","x":26,"y":16}' | Out-Null
+        Send-Cmd '{"cmd":"build","id":"karakol","x":27,"y":17}' | Out-Null
+        Start-Sleep -Milliseconds 800
+        Send-Cmd '{"cmd":"focus","x":24,"y":16}' | Out-Null
+        Start-Sleep -Milliseconds 700
+        Shot "model-09-kamu.png"
+
         # Industry: the weaving mill, the warehouse and the power station side by side.
         Send-Cmd '{"cmd":"grant","n":800}' | Out-Null
         Send-Cmd '{"cmd":"build","id":"dokuma","x":21,"y":17}' | Out-Null

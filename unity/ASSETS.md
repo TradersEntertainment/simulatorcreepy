@@ -72,6 +72,21 @@ KEMER → `sukemeri`, DOKUMA → `dokuma`. Türkçe karakter yok, hepsi küçük
 yükler, sınırlarını ölçüp kareye oturtur ve prosedürel formu devre dışı bırakır — model
 başına kod değişikliği gerekmez.
 
+## Kabul edilmiş istisnalar
+
+Üç model, hata payı ne kadar gevşetilirse gevşetilsin üçgen bütçesine inmiyor — kopuk küçük
+parçalardan (kafes direk, tezgâh kalabalığı, pencere oyukları) sadeleştirici bileşen sınırı
+aşamıyor. Şehirde birer ikişer bulundukları için kabul edildiler:
+
+| model | üçgen | dosya | sebep |
+|---|---|---|---|
+| pazar | 12.750 | 816 KB | tezgâhlar + tenteler |
+| hastane | 8.140 | 542 KB | pencere oyukları |
+| santral | 7.364 | 500 KB | kafes direk |
+
+Gelecek üretimlerde prompt'a "no thin lattice, fewer chunkier stalls" eklenirse bunlar da
+bütçeye iner.
+
 ## Üreteç prompt'unda düzeltilecek üç şey
 
 İlk denemede üreteç şunları ıskaladı, prompt'lar buna göre güncellenecek:
