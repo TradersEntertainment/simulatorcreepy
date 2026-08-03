@@ -79,6 +79,41 @@ namespace Mesruiyet.UI
             return e;
         }
 
+        /// <summary>
+        /// The city's seal: a double ring, the monogram, a diamond. Drawn from elements rather
+        /// than from an image, like everything else, so it scales to any size and both themes.
+        /// It appears large on the title and small beside the ledger, and being the same mark
+        /// in both places is what makes it read as an institution rather than a decoration.
+        /// </summary>
+        public static VisualElement Emblem(float size)
+        {
+            var ring = new VisualElement();
+            ring.style.width = size; ring.style.height = size;
+            ring.Radius(size / 2).Border(Mathf.Max(1.5f, size * 0.026f), Amber);
+            ring.style.backgroundColor = Hex("#141A24");
+            ring.style.alignItems = Align.Center;
+            ring.style.justifyContent = Justify.Center;
+            ring.style.flexShrink = 0;
+
+            var inner = new VisualElement();
+            float ins = size * 0.82f;
+            inner.style.width = ins; inner.style.height = ins;
+            inner.Radius(ins / 2).Border(1, Alpha(Amber, 0.4f));
+            inner.style.alignItems = Align.Center;
+            inner.style.justifyContent = Justify.Center;
+            ring.Add(inner);
+
+            var m = Text("M", size * 0.4f, Amber, FontStyle.Bold);
+            m.style.unityTextAlign = TextAnchor.MiddleCenter;
+            inner.Add(m);
+
+            var mark = Text("◆", size * 0.12f, Alpha(Amber, 0.75f));
+            mark.style.marginTop = -size * 0.06f;
+            inner.Add(mark);
+
+            return ring;
+        }
+
         /// <summary>A floating translucent card — the `.g` class from the mockup.</summary>
         public static VisualElement Glass()
         {

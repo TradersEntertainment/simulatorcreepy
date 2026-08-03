@@ -36,7 +36,7 @@ namespace Mesruiyet.UI
         VisualElement _axisRow0, _axisRow1;
         VisualElement _factionList;
         VisualElement _chainList;
-        VisualElement _ministerRow, _telegramList, _telegramHead;
+        VisualElement _ministerRow, _telegramList, _telegramHead, _delegationBody;
         VisualElement _councilHead, _councilBody, _outsideBody;
         VisualElement _appointmentCard, _modal, _scrim, _finalSession, _chrome;
 
@@ -98,6 +98,24 @@ namespace Mesruiyet.UI
             ("kamu",    "KAMU",    "✚"),
             ("ordu",    "ORDU",    "▲"),
         };
+
+        /// <summary>
+        /// One colour per build category, used on the tab glyph and as the tile emblem tint.
+        /// The palette exists so the dock can be read by colour before it is read by word.
+        /// </summary>
+        public static Color CategoryColor(string key)
+        {
+            switch (key)
+            {
+                case "konut":   return UiKit.Hex("#6FBF73");
+                case "tarim":   return UiKit.Hex("#C9A227");
+                case "sanayi":  return UiKit.Hex("#C97B4A");
+                case "altyapi": return UiKit.Hex("#5AA9F5");
+                case "kamu":    return UiKit.Hex("#B08CE8");
+                case "ordu":    return UiKit.Hex("#D26A5C");
+                default:        return UiKit.Muted;
+            }
+        }
 
         // ---- foldable rail cards. Body + chevron per key, so a header click can collapse a
         // card the player is not governing by right now. Dış Dünya starts folded and opens
@@ -278,6 +296,8 @@ namespace Mesruiyet.UI
             ident.style.flexDirection = FlexDirection.Row;
             ident.style.alignItems = Align.Center;
             ident.style.marginRight = 14;
+
+            ident.Add(UiKit.Emblem(34).Margin(right: 12));
 
             var names = UiKit.Column();
             names.Add(UiKit.Text("MEŞRUİYET", 19, UiKit.Ink, FontStyle.Bold));
@@ -826,7 +846,70 @@ namespace Mesruiyet.UI
             card.Add(UiKit.Heading("Bakanlar", "rapor güvenilirliği"));
             _ministerRow = UiKit.Row();
             card.Add(_ministerRow);
+
+            // Delegation lives with the cabinet because it IS the cabinet: hand a district to
+            // a desk and that desk builds it, one building a turn, with the same treasury.
+            var cap = UiKit.Caption("VEKÂLET — mahalleyi bir bakana bırakın");
+            cap.Margin(top: 12, bottom: 6);
+            card.Add(cap);
+            _delegationBody = UiKit.Column();
+            card.Add(_delegationBody);
             return card;
+        }
+
+        void PaintDelegations()
+        {
+            _delegationBody.Clear();
+
+            for (int i = 0; i < _state.Districts.Length; i++)
+            {
+                var d = _state.Districts[i];
+                if (d.Lost) continue;
+
+                var row = UiKit.Row();
+                row.style.justifyContent = Justify.SpaceBetween;
+                row.style.marginBottom = 4;
+
+                var name = UiKit.Text(d.Name, 10.5f, UiKit.Ink, FontStyle.Bold);
+                name.style.letterSpacing = 0.8f;
+                row.Add(name);
+
+                int assigned = _state.Delegation[i];
+                var pick = new Button
+                {
+                    name = "btn_bolge_" + d.Id.ToString().ToLowerInvariant(),
+                    text = assigned < 0 ? "VALİDE" : Ministers.DomainNames[assigned],
+                };
+                pick.style.fontSize = 8.5f;
+                pick.style.unityFontStyleAndWeight = FontStyle.Bold;
+                pick.style.letterSpacing = 0.8f;
+                pick.style.width = 96;
+                pick.style.paddingTop = 4; pick.style.paddingBottom = 4;
+                pick.style.paddingLeft = 6; pick.style.paddingRight = 6;
+                pick.style.marginTop = 0; pick.style.marginBottom = 0;
+                pick.style.marginLeft = 0; pick.style.marginRight = 0;
+                pick.style.color = assigned < 0 ? UiKit.Muted : AccentFor((Domain)assigned);
+                pick.style.backgroundColor = assigned < 0
+                    ? new Color(1, 1, 1, 0.04f)
+                    : UiKit.Alpha(AccentFor((Domain)assigned), 0.14f);
+                pick.Radius(7).Border(1, assigned < 0 ? UiKit.Hairline
+                                                      : UiKit.Alpha(AccentFor((Domain)assigned), 0.45f));
+
+                int captured = i;
+                pick.clicked += () =>
+                {
+                    // VALİDE → MALİYE → TARIM → GÜVENLİK → İMAR → HALK → VALİDE again.
+                    _state.Delegation[captured] = _state.Delegation[captured] >= 4
+                        ? -1
+                        : _state.Delegation[captured] + 1;
+                    Refresh();
+                };
+                pick.tooltip = "Tıkladıkça sıradaki bakana geçer. Bakan her tur bölgenin en çok " +
+                               "ihtiyaç duyduğu yapıyı kendi bütçenizden kurar.";
+                row.Add(pick);
+
+                _delegationBody.Add(row);
+            }
         }
 
         static Color AccentFor(Domain d)
@@ -2229,7 +2312,7 @@ namespace Mesruiyet.UI
                 cat.Radius(10).Border(1, Color.clear);
                 cat.style.flexDirection = FlexDirection.Column;
                 cat.style.alignItems = Align.Center;
-                cat.Add(UiKit.Text(glyph, 16, UiKit.Ink));
+                cat.Add(UiKit.Text(glyph, 16, CategoryColor(key)));
                 var lbl = UiKit.Text(label, 8f, UiKit.Hex("#8E9CB0"), FontStyle.Bold);
                 lbl.style.letterSpacing = 0.8f;
                 lbl.style.marginTop = 3;
@@ -2379,7 +2462,19 @@ namespace Mesruiyet.UI
             tile.style.flexDirection = FlexDirection.Column;
             tile.style.alignItems = Align.Center;
 
-            tile.Add(UiKit.Text(def.Glyph, 17, UiKit.Ink));
+            // The glyph sits on a small rounded emblem tinted with the category colour, so an
+            // open shelf still tells you at a glance which family you are looking at.
+            var emblem = new VisualElement();
+            emblem.style.width = 26; emblem.style.height = 26;
+            emblem.Radius(7).Border(1, UiKit.Alpha(CategoryColor(def.Category), 0.5f));
+            emblem.style.backgroundColor = UiKit.Alpha(CategoryColor(def.Category), 0.16f);
+            emblem.style.alignItems = Align.Center;
+            emblem.style.justifyContent = Justify.Center;
+            var glyph = UiKit.Text(def.Glyph, 15, UiKit.Ink);
+            glyph.style.unityTextAlign = TextAnchor.MiddleCenter;
+            emblem.Add(glyph);
+            tile.Add(emblem);
+
             var caption = UiKit.Text(def.DockLabel.ToUpperInvariant(), 7.5f, UiKit.Hex("#8E9CB0"), FontStyle.Bold);
             caption.style.letterSpacing = 0.6f;
             caption.style.marginTop = 4;
@@ -2635,6 +2730,7 @@ namespace Mesruiyet.UI
 
             PaintChains();
             PaintMinisters();
+            PaintDelegations();
             PaintOutside();
             PaintCouncil();
             PaintLawSlots();

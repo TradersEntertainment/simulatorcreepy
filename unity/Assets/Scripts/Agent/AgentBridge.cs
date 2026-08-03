@@ -160,6 +160,10 @@ namespace Mesruiyet.Agent
                 case "click":
                     return AgentInput.Click(c.id) ? Ok() : Err($"no ui element named '{c.id}'");
 
+                case "focus":
+                    AgentInput.Focus(c.x, c.y);
+                    return Ok();
+
                 case "build":
                     // Placement is the whole first slice, so the agent has to be able to do it.
                     return AgentInput.Build(c.id, c.x, c.y, out string why) ? Ok() : Err(why);

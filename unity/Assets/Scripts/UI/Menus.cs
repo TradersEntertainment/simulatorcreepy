@@ -31,6 +31,8 @@ namespace Mesruiyet.UI
             card.style.alignItems = Align.Center;
             card.style.minWidth = 430;
 
+            card.Add(UiKit.Emblem(86).Margin(bottom: 16));
+
             var title = UiKit.Text("MEŞRUİYET", 52, UiKit.Ink, FontStyle.Bold);
             title.style.letterSpacing = 6f;
             card.Add(title);

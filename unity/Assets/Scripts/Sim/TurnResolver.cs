@@ -58,6 +58,11 @@ namespace Mesruiyet.Sim
             var g = _state;
             g.Turn++;
 
+            // Delegated districts build first, before anything is counted: the minister's new
+            // granary staffs, produces and jams traffic this very turn, exactly as if the
+            // governor had placed it by hand a moment before pressing TURU BİTİR.
+            Delegation.Run(g, World.Placement.Instance, CityGrid.Current);
+
             // Traffic before staffing: a jammed district cannot get its people to work, and
             // Staff() is where that is felt.
             Traffic();
@@ -92,6 +97,10 @@ namespace Mesruiyet.Sim
             MinisterManager.Instance.Refresh();
             MinisterManager.Instance.RecordTerm();
             MinisterManager.Instance.WriteTelegrams();
+
+            // Delegated ministers report what they built after their routine report, so the
+            // player reads "TEPE bende: klinik kurdum" in the same channel as everything else.
+            foreach (var note in g.DelegationNotes) g.Telegrams.Add(note);
 
             g.Legitimacy = Mathf.Clamp(
                 g.Legitimacy + LegitimacyDelta(), 0, 100);

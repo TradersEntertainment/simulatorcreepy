@@ -258,6 +258,17 @@ namespace Mesruiyet.Core
             return total;
         }
 
+        // ---------------------------------------------------------------- delegation
+        /// <summary>
+        /// Which minister runs each district, indexed by DistrictId; −1 means the governor
+        /// does. A delegated district builds itself, one building a turn, with the minister's
+        /// judgement — the whole point is that the player does not have to place everything.
+        /// </summary>
+        public readonly int[] Delegation = { -1, -1, -1, -1, -1, -1 };
+
+        /// <summary>What the delegated ministers did this turn, ready-formatted as telegrams.</summary>
+        public readonly List<string> DelegationNotes = new List<string>();
+
         // ---------------------------------------------------------------- the city
         public DistrictState[] Districts;
         public readonly List<PlacedBuilding> Buildings = new List<PlacedBuilding>();

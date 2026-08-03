@@ -1250,11 +1250,26 @@ switch ($Scenario) {
         Check ((DockField "acikKategori") -eq "") "dock kategorileri kapalı başlıyor"
         Send-Cmd '{"cmd":"click","id":"btn_cat_kamu"}' | Out-Null
         Start-Sleep -Milliseconds 400
-        Shot "menu-06-kategori-acik.png"
         Check ((DockField "acikKategori") -eq "kamu") "KAMU sekmesi açılıyor"
         Send-Cmd '{"cmd":"click","id":"btn_build_klinik"}' | Out-Null
         Start-Sleep -Milliseconds 300
         Check ((DockField "secili") -eq "klinik") "sekmedeki karo yerleştirmeyi kuruyor"
+        $armed = Send-Cmd '{"cmd":"state"}'
+        Check ($armed -match '"oneri":(\d+)' -and [int]$Matches[1] -ge 1) "danışman önerilen kareleri gösteriyor"
+        # The frame is taken with the clinic armed, so the blinking hint tiles are in it.
+        Shot "menu-06-kategori-acik.png"
+
+        # And a close-up on the advisor's first suggestion, because at default framing a
+        # translucent tile is four pixels and "the hints render" cannot be settled by eye.
+        $hx = -1; $hy = -1
+        if ($armed -match '"oneriIlkX":(-?\d+)') { $hx = [int]$Matches[1] }
+        if ($armed -match '"oneriIlkY":(-?\d+)') { $hy = [int]$Matches[1] }
+        if ($hx -ge 0) {
+            Send-Cmd ('{{"cmd":"focus","x":{0},"y":{1}}}' -f $hx, $hy) | Out-Null
+            foreach ($i in 1..6) { Send-Cmd '{"cmd":"press","key":"zoomin"}' | Out-Null }
+            Start-Sleep -Milliseconds 900
+            Shot "menu-06b-oneri-yakin.png"
+        }
         Send-Cmd '{"cmd":"key","id":"escape"}' | Out-Null
         Start-Sleep -Milliseconds 300
         Check ((DockField "secili") -eq "") "ESC kurulu yerleştirmeyi bırakıyor"
@@ -1269,6 +1284,63 @@ switch ($Scenario) {
         Start-Sleep -Milliseconds 300
         Shot "menu-07-dis-acildi.png"
         Check ((DockField "disKarti") -eq "acik") "başlığa tıklamak kartı açıyor"
+
+        $state = Send-Cmd '{"cmd":"state"}'
+        if (-not $ok) { $chainBroken = $true }
+    }
+
+    # Delegation: hand a district to a minister and watch them actually build in it. This is
+    # the "şu bölge sende" loop — the game has to be playable without placing every building
+    # by hand, and that claim is only true if a delegated district visibly grows on its own.
+    "vekalet" {
+        Write-Host "`n[loop] VEKÂLET:" -ForegroundColor Cyan
+
+        $ok = $true
+        function Check([bool] $pass, [string] $label) {
+            if ($pass) { Write-Host "  ✔ $label" -ForegroundColor Green }
+            else { Write-Host "  ✘ $label" -ForegroundColor Red; $script:ok = $false }
+        }
+
+        $before = Send-Cmd '{"cmd":"state"}'
+        $baseline = 0
+        if ($before -match '"buildings":(\d+)') { $baseline = [int]$Matches[1] }
+        Check ($before -match '"vekalet":\[\]') "başlangıçta hiçbir bölge devredilmemiş"
+
+        # Four clicks on TEPE's cycle button: VALİDE → MALİYE → TARIM → GÜVENLİK → İMAR.
+        foreach ($i in 1..4) {
+            Send-Cmd '{"cmd":"click","id":"btn_bolge_tepe"}' | Out-Null
+            Start-Sleep -Milliseconds 250
+        }
+        $assigned = Send-Cmd '{"cmd":"state"}'
+        Check ($assigned -match '"vekalet":\["tepe:imar"\]') "TEPE, İMAR bakanına devredildi"
+        Shot "vekalet-01-atama.png"
+
+        # Eight turns under delegation. The minister must have built at least once, and the
+        # note must have gone out as a telegram in the turn it happened.
+        $built = 0
+        foreach ($i in 1..8) {
+            $t = Get-Turn
+            Send-Cmd '{"cmd":"endturn","n":1}' | Out-Null
+            Wait-Turn ($t + 1) 40 | Out-Null
+            $s = Send-Cmd '{"cmd":"state"}'
+            if ($s -match '"vekaletKurdu":(\d+)' -and [int]$Matches[1] -gt 0) { $built += [int]$Matches[1] }
+        }
+        $after = Send-Cmd '{"cmd":"state"}'
+        $now = 0
+        if ($after -match '"buildings":(\d+)') { $now = [int]$Matches[1] }
+
+        Write-Host ("  yapı {0} → {1} · bakanın kurdukları {2}" -f $baseline, $now, $built)
+        Check ($built -ge 1) "bakan en az bir yapı kurdu"
+        Check ($now -gt $baseline) "şehir kendi kendine büyüdü"
+        Shot "vekalet-02-sekiz-tur.png"
+
+        # Taking the district back stops the building.
+        foreach ($i in 1..2) {
+            Send-Cmd '{"cmd":"click","id":"btn_bolge_tepe"}' | Out-Null
+            Start-Sleep -Milliseconds 250
+        }
+        $back = Send-Cmd '{"cmd":"state"}'
+        Check ($back -match '"vekalet":\[\]') "bölge geri alınabiliyor"
 
         $state = Send-Cmd '{"cmd":"state"}'
         if (-not $ok) { $chainBroken = $true }

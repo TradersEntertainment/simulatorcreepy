@@ -202,6 +202,25 @@ namespace Mesruiyet.Agent
             Str(sb, "secili", placement != null && placement.Selected != null ? placement.Selected.Id : ""); sb.Append(',');
             Str(sb, "disKarti", hud != null && hud.IsFoldOpen("dis") ? "acik" : "kapali"); sb.Append(',');
 
+            // The advisor's blinking hints for whatever is armed, and which districts have been
+            // handed to which minister — both measurable, both scenario-checked.
+            Num(sb, "oneri", placement != null ? placement.Hints.Count : 0); sb.Append(',');
+            Num(sb, "oneriIlkX", placement != null && placement.Hints.Count > 0 ? placement.Hints[0].x : -1); sb.Append(',');
+            Num(sb, "oneriIlkY", placement != null && placement.Hints.Count > 0 ? placement.Hints[0].y : -1); sb.Append(',');
+            sb.Append("\"vekalet\":[");
+            bool firstDel = true;
+            for (int di = 0; di < g.Delegation.Length; di++)
+            {
+                if (g.Delegation[di] < 0) continue;
+                if (!firstDel) sb.Append(',');
+                firstDel = false;
+                sb.Append('"').Append(g.Districts[di].Id.ToString().ToLowerInvariant())
+                  .Append(':')
+                  .Append(((Domain)g.Delegation[di]).ToString().ToLowerInvariant()).Append('"');
+            }
+            sb.Append("],");
+            Num(sb, "vekaletKurdu", g.DelegationNotes.Count); sb.Append(',');
+
             // Audio cannot be verified by listening in an unattended run, so it reports itself:
             // how many clips were synthesized, and what the two ambient voices are currently
             // doing. A drone that never responds to grievance is a dead system, silently.
@@ -359,6 +378,14 @@ namespace Mesruiyet.Agent
                 case "escape": Placement.Instance?.Disarm(); break;
                 default: Debug.Log($"[AgentInput] bilinmeyen tuş: {key}"); break;
             }
+        }
+
+        /// <summary>Point the camera at a tile, so a scenario can photograph a specific spot.</summary>
+        public static void Focus(int x, int y)
+        {
+            var cam = IsoCamera.Instance;
+            if (cam == null || !CityGrid.InBounds(x, y)) return;
+            cam.FocusOn(CityGrid.World(x, y, 0));
         }
 
         /// <summary>

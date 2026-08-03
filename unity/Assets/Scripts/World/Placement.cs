@@ -5,6 +5,7 @@
 // district-dependent axis and faction shifts actually land. The player sees the political cost
 // on the selection card *before* they commit, and feels it the instant they do.
 
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using Mesruiyet.Core;
@@ -32,8 +33,18 @@ namespace Mesruiyet.World
         GameObject _cursor;
         Material _cursorMat;
 
+        // The advisor's hints: the best tiles for the armed building, blinking on the ground.
+        GameObject _hints;
+        Material _hintMat;
+        Mesh _hintMesh;
+        readonly List<Vector2Int> _hintTiles = new List<Vector2Int>();
+
+        /// <summary>Where the advisor is pointing right now, for the bridge to measure.</summary>
+        public IReadOnlyList<Vector2Int> Hints => _hintTiles;
+
         static readonly Color Ok = new Color(0.35f, 0.66f, 0.96f, 0.55f);
         static readonly Color No = new Color(0.95f, 0.34f, 0.29f, 0.5f);
+        static readonly Color Hint = new Color(1f, 0.76f, 0.28f, 0.4f);
 
         public System.Action Changed;
 
@@ -70,19 +81,58 @@ namespace Mesruiyet.World
             r.sharedMaterial = _cursorMat;
             r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             _cursor.SetActive(false);
+
+            // A sibling object for the advisor's hints, same unlit transparent treatment. Its
+            // alpha pulses in Update — a still highlight reads as terrain, a blinking one as
+            // "put it here".
+            _hints = new GameObject("AdvisorHints");
+            _hints.transform.SetParent(transform, false);
+            _hintMesh = new Mesh { name = "Hints" };
+            _hints.AddComponent<MeshFilter>().sharedMesh = _hintMesh;
+            _hintMat = new Material(_cursorMat) { name = "Hints", color = Hint };
+            var hr = _hints.AddComponent<MeshRenderer>();
+            hr.sharedMaterial = _hintMat;
+            hr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            _hints.SetActive(false);
         }
 
         public void Arm(BuildingDef def)
         {
             Selected = def;
             LastRefusal = "";
+            RefreshHints();
             Changed?.Invoke();
         }
 
         public void Disarm()
         {
             Selected = null;
+            RefreshHints();
             Changed?.Invoke();
+        }
+
+        /// <summary>
+        /// Recompute where the advisor points. Called on arm and after every successful build —
+        /// a spent tile or a spent treasury both move the answer.
+        /// </summary>
+        void RefreshHints()
+        {
+            _hintTiles.Clear();
+            if (Selected != null)
+                foreach (var s in Advisor.Recommend(Selected, _state, _grid, this, 5))
+                    _hintTiles.Add(s.Tile);
+
+            if (_hintTiles.Count == 0)
+            {
+                _hints.SetActive(false);
+                return;
+            }
+
+            var b = new MeshBuilder();
+            foreach (var t in _hintTiles)
+                b.AddTile(CityGrid.World(t.x, t.y, 0.05f), CityGrid.TileSize * 0.84f, Color.white);
+            b.Into(_hintMesh);
+            _hints.SetActive(true);
         }
 
         void Update()
@@ -92,6 +142,16 @@ namespace Mesruiyet.World
 
             // A menu is on top of the world; clicking through it and founding a mill behind the
             // pause screen is exactly the kind of thing nobody reports and everybody hits.
+            // The blink. Sinusoidal rather than on/off so it breathes instead of flashing.
+            if (_hints.activeSelf)
+            {
+                // Floor at 0.16 rather than zero: the hint must breathe, not vanish — a
+                // suggestion that blinks fully off half the time reads as a glitch.
+                var c = Hint;
+                c.a = 0.32f + 0.16f * Mathf.Sin(Time.time * 5.2f);
+                _hintMat.color = c;
+            }
+
             var hud = UI.Hud.Instance;
             if (hud != null && hud.MenuOpen) return;
 
@@ -209,7 +269,11 @@ namespace Mesruiyet.World
         /// <summary>Place the armed building. Returns false and sets LastRefusal on any refusal.</summary>
         public bool TryBuild(int x, int y) => TryBuild(Selected, x, y);
 
-        public bool TryBuild(BuildingDef def, int x, int y)
+        /// <param name="quiet">
+        /// A delegated minister building overnight must not grab the selection card or bang the
+        /// hammer — the player finds out from the telegram, not from their UI changing hands.
+        /// </param>
+        public bool TryBuild(BuildingDef def, int x, int y, bool quiet = false)
         {
             if (def == null) { LastRefusal = "Önce bir yapı seçin."; return false; }
 
@@ -248,14 +312,15 @@ namespace Mesruiyet.World
             TurnResolver.Instance.ApplyPlacement(placed);
             CityRenderer.Instance.Rebuild();
 
-            if (AudioBus.Instance != null)
+            if (!quiet && AudioBus.Instance != null)
             {
                 AudioBus.Instance.Hammer();
                 if (MoneyCost(def) >= 150) AudioBus.Instance.Coin();
             }
 
-            Inspected = placed;
+            if (!quiet) Inspected = placed;
             LastRefusal = "";
+            RefreshHints();
             Changed?.Invoke();
             return true;
         }
