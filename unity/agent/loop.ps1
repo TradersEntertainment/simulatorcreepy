@@ -1434,6 +1434,86 @@ switch ($Scenario) {
         if (-not $ok) { $chainBroken = $true }
     }
 
+    # Hot-seat: a human takes the Tarım desk, lies by hand, and the governor's screen shows
+    # the lie with a clean face. The turn gate matters as much as the lie: no human report,
+    # no turn. This is co-op slice 3 — the mode's whole idea, before any network exists.
+    "hotseat" {
+        Write-Host "`n[loop] HOT-SEAT:" -ForegroundColor Cyan
+
+        $ok = $true
+        function Check([bool] $pass, [string] $label) {
+            if ($pass) { Write-Host "  ✔ $label" -ForegroundColor Green }
+            else { Write-Host "  ✘ $label" -ForegroundColor Red; $script:ok = $false }
+        }
+        function Field([string] $json, [string] $key) {
+            if ($json -match "`"$key`":(-?[\d.]+)") { return [double]$Matches[1] }
+            return [double]::NaN
+        }
+        function Rep([string] $json, [string] $key) {
+            if ($json -match "`"reported`":\{[^}]*`"$key`":(-?[\d.]+)") { return [double]$Matches[1] }
+            return [double]::NaN
+        }
+
+        $t = Get-Turn
+        Send-Cmd '{"cmd":"endturn","n":1}' | Out-Null
+        Wait-Turn ($t + 1) 40 | Out-Null
+
+        # Seat a human at Tarım (seat 2, per COOP.md).
+        Send-Cmd '{"cmd":"koltuk","seat":2,"id":"insan"}' | Out-Null
+        Start-Sleep -Milliseconds 300
+        $s = Send-Cmd '{"cmd":"state"}'
+        Check ($s -match '"koltuklar":\["maliye:formul","tarim:insan"') "Tarım koltuğu insanda"
+        Check ((Field $s "raporBekleyen") -eq 1) "rapor bekleniyor"
+
+        # The gate: no report, no turn.
+        $t = Get-Turn
+        Send-Cmd '{"cmd":"endturn","n":1}' | Out-Null
+        Start-Sleep -Seconds 3
+        Check ((Get-Turn) -eq $t) "rapor yokken tur bitmiyor"
+
+        # The human lies: half again the granary, a comfortable buffer.
+        $trueFood = Field $s "yiyecek"
+        $claim = [math]::Round($trueFood * 1.5)
+        Send-Cmd ('{{"cmd":"report","seat":2,"line":"tahil","value":{0}}}' -f $claim) | Out-Null
+        Send-Cmd '{"cmd":"report","seat":2,"line":"tampon","value":9}' | Out-Null
+        Send-Cmd '{"cmd":"submit","seat":2}' | Out-Null
+        Start-Sleep -Milliseconds 300
+
+        $lied = Send-Cmd '{"cmd":"state"}'
+        Check ((Field $lied "raporBekleyen") -eq 0) "rapor gönderildi"
+        $repFood = Rep $lied "yiyecek"
+        Write-Host ("  ambar gerçek {0:N0} · insan bildirdi {1:N0} · vali görüyor {2:N0}" -f $trueFood, $claim, $repFood)
+        Check ([math]::Abs($repFood - $claim) -le [math]::Max(1, $claim * 0.02)) "valinin gördüğü, insanın yazdığı"
+        Check ($lied -match '"yiyecekAralikli":false') "insan yalanı temiz yüzle geliyor (rozet yok)"
+
+        # The gate opens: the turn resolves, and next turn the report is void again.
+        $t = Get-Turn
+        Send-Cmd '{"cmd":"endturn","n":1}' | Out-Null
+        Wait-Turn ($t + 1) 40 | Out-Null
+        Check ((Get-Turn) -eq ($t + 1)) "rapor sonrası tur işliyor"
+        $fresh = Send-Cmd '{"cmd":"state"}'
+        Check ((Field $fresh "raporBekleyen") -eq 1) "yeni tur yeni rapor istiyor"
+
+        # The desk screen itself: open it from the portrait, photograph it, close it.
+        Send-Cmd '{"cmd":"click","id":"btn_minister_tarim"}' | Out-Null
+        Start-Sleep -Milliseconds 500
+        Shot "hotseat-01-bakan-ekrani.png"
+        Send-Cmd '{"cmd":"click","id":"btn_rapor_gonder"}' | Out-Null
+        Start-Sleep -Milliseconds 300
+        $desk = Send-Cmd '{"cmd":"state"}'
+        Check ((Field $desk "raporBekleyen") -eq 0) "ekrandan GÖNDER de raporu mühürlüyor"
+
+        # Seat back to the formula: single player must return exactly.
+        Send-Cmd '{"cmd":"koltuk","seat":2,"id":"formul"}' | Out-Null
+        Start-Sleep -Milliseconds 300
+        $back = Send-Cmd '{"cmd":"state"}'
+        Check ($back -match '"koltuklar":\["maliye:formul","tarim:formul"') "koltuk formüle döndü"
+        Check ((Field $back "raporBekleyen") -eq 0) "bekleyen rapor kalmadı"
+
+        $state = Send-Cmd '{"cmd":"state"}'
+        if (-not $ok) { $chainBroken = $true }
+    }
+
     # Audio ships with no files: every clip is synthesized at startup. An unattended run cannot
     # listen, so the bus reports itself — how many clips exist, and whether the two ambient
     # voices actually track the city. A drone wired to nothing sounds exactly like a drone.

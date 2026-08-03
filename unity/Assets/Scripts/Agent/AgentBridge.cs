@@ -138,6 +138,11 @@ namespace Mesruiyet.Agent
             public int n;
             public int x;
             public int y;
+            // Co-op: which desk a command speaks for (0 vali, 1..5 = Maliye..Halk), which
+            // report line it fills, and the value being claimed.
+            public int seat;
+            public string line;
+            public float value;
         }
 
         string Execute(string raw)
@@ -169,6 +174,41 @@ namespace Mesruiyet.Agent
                     // scenario can measure each bot personality against the formula baseline.
                     Reporting.UseBots(c.id == "bot");
                     return Ok(Reporting.SourceName);
+
+                case "koltuk":
+                    // {"cmd":"koltuk","seat":2,"id":"insan"|"bot"|"formul"} — hand a desk to
+                    // a human, a bot, or back to the formula. Seat 2 is Tarım, per COOP.md.
+                    if (c.seat < 1 || c.seat > 5) return Err("koltuk 1..5 olmalı");
+                    HotSeat.SetSeat((Domain)(c.seat - 1),
+                        c.id == "insan" ? SeatKind.Insan : c.id == "bot" ? SeatKind.Bot : SeatKind.Formul);
+                    UI.Hud.Instance?.Refresh();
+                    return Ok();
+
+                case "report":
+                {
+                    // {"cmd":"report","seat":2,"line":"tahil","value":64} — one line of a
+                    // human minister's report, exactly what the desk screen's field does.
+                    if (c.seat < 1 || c.seat > 5) return Err("koltuk 1..5 olmalı");
+                    var domain = (Domain)(c.seat - 1);
+                    var human = HotSeat.HumanOf(domain);
+                    if (human == null) return Err("bu koltukta insan yok");
+                    var lineDef = ReportLines.Find(domain, c.line);
+                    if (lineDef == null) return Err($"'{c.line}' bu bakanlığın satırı değil");
+                    human.SetClaim(lineDef.Line, c.value, lineDef.True(GameState.Current));
+                    return Ok();
+                }
+
+                case "submit":
+                {
+                    // {"cmd":"submit","seat":2} — seal the report; the governor may now end
+                    // the turn as far as this desk is concerned.
+                    if (c.seat < 1 || c.seat > 5) return Err("koltuk 1..5 olmalı");
+                    var human = HotSeat.HumanOf((Domain)(c.seat - 1));
+                    if (human == null) return Err("bu koltukta insan yok");
+                    human.Submit();
+                    UI.Hud.Instance?.Refresh();
+                    return Ok();
+                }
 
                 case "build":
                     // Placement is the whole first slice, so the agent has to be able to do it.

@@ -154,8 +154,48 @@ namespace Mesruiyet.UI
 
             var note = UiKit.Text("Susturmayı oyun içinde M tuşu da açıp kapatır.", 11.5f, UiKit.Dim);
             note.style.whiteSpace = WhiteSpace.Normal;
-            note.Margin(top: 6, bottom: 22);
+            note.Margin(top: 6, bottom: 18);
             card.Add(note);
+
+            // ---- hot-seat seats. COOP.md slice 3: a desk can be handed to a human at this
+            // machine, and that human then writes the report the governor reads. Formula is
+            // the single-player default; YZ is the bot cabinet with its personalities.
+            var seatsHead = UiKit.Text("KOLTUKLAR — HOT-SEAT", 11.5f, UiKit.Muted, FontStyle.Bold);
+            seatsHead.style.letterSpacing = 1.2f;
+            seatsHead.Margin(bottom: 8);
+            card.Add(seatsHead);
+
+            string[] seatKeys = { "maliye", "tarim", "guvenlik", "imar", "halk" };
+            for (int i = 0; i < 5; i++)
+            {
+                var domain = (Core.Domain)i;
+                var row = UiKit.Row();
+                row.style.alignItems = Align.Center;
+                row.style.marginBottom = 6;
+                row.Add(Label(Core.Ministers.DomainNames[i]));
+
+                var seat = new Button { name = "btn_seat_" + seatKeys[i] };
+                seat.text = SeatText(Core.HotSeat.KindOf(domain));
+                StyleToggle(seat, Core.HotSeat.KindOf(domain) != Core.SeatKind.Formul);
+                seat.clicked += () =>
+                {
+                    var next = Core.HotSeat.KindOf(domain) == Core.SeatKind.Formul ? Core.SeatKind.Insan
+                             : Core.HotSeat.KindOf(domain) == Core.SeatKind.Insan ? Core.SeatKind.Bot
+                             : Core.SeatKind.Formul;
+                    Core.HotSeat.SetSeat(domain, next);
+                    seat.text = SeatText(next);
+                    StyleToggle(seat, next != Core.SeatKind.Formul);
+                    Hud.Instance?.Refresh();
+                };
+                row.Add(seat);
+                card.Add(row);
+            }
+
+            var seatNote = UiKit.Text("İNSAN koltuğu bu makinede oynanır: bakan portresinden rapor " +
+                                      "yazılır, rapor gönderilmeden tur bitmez.", 11.5f, UiKit.Dim);
+            seatNote.style.whiteSpace = WhiteSpace.Normal;
+            seatNote.Margin(top: 4, bottom: 22);
+            card.Add(seatNote);
 
             var close = Primary("btn_settings_close", "KAPAT", onClose);
             close.style.alignSelf = Align.Center;
@@ -166,6 +206,9 @@ namespace Mesruiyet.UI
         }
 
         // ---------------------------------------------------------------- parts
+
+        static string SeatText(Core.SeatKind k)
+            => k == Core.SeatKind.Insan ? "İNSAN" : k == Core.SeatKind.Bot ? "YZ" : "FORMÜL";
 
         static VisualElement Scrim(string name, float darkness)
         {

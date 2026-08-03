@@ -34,6 +34,9 @@ namespace Mesruiyet.Sim
         public void BeginTurn()
         {
             if (!Idle || _state.IsOver) return;
+            // Hot-seat: the governor does not get to resolve a turn while a human minister's
+            // report is still unwritten. The button is disabled too; this is the backstop.
+            if (HotSeat.PendingCount > 0) return;
             Idle = false;
             StartCoroutine(Resolve());
         }
@@ -101,6 +104,9 @@ namespace Mesruiyet.Sim
             // Delegated ministers report what they built after their routine report, so the
             // player reads "TEPE bende: klinik kurdum" in the same channel as everything else.
             foreach (var note in g.DelegationNotes) g.Telegrams.Add(note);
+
+            // Hot-seat: the tick made new truth, so every human report is void until rewritten.
+            HotSeat.NewTurn();
 
             g.Legitimacy = Mathf.Clamp(
                 g.Legitimacy + LegitimacyDelta(), 0, 100);

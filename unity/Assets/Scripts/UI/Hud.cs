@@ -857,6 +857,27 @@ namespace Mesruiyet.UI
             return card;
         }
 
+        // ---- the minister's own desk (hot-seat)
+
+        VisualElement _ministerDesk;
+
+        void OpenMinisterDesk(Domain domain)
+        {
+            CloseMinisterDesk();
+            _ministerDesk = MinisterScreen.Build(domain, _state, () =>
+            {
+                CloseMinisterDesk();
+                Refresh();
+            });
+            _root.Add(_ministerDesk);
+        }
+
+        void CloseMinisterDesk()
+        {
+            _ministerDesk?.RemoveFromHierarchy();
+            _ministerDesk = null;
+        }
+
         void PaintDelegations()
         {
             _delegationBody.Clear();
@@ -968,10 +989,19 @@ namespace Mesruiyet.UI
                 button.Add(badge);
 
                 var captured = domain;
-                button.clicked += () => OpenAppointment(captured);
+                // A human-held desk opens its own report screen; only formula and bot desks
+                // are the governor's to reshuffle from here.
+                button.clicked += () =>
+                {
+                    if (HotSeat.HumanOf(captured) != null) OpenMinisterDesk(captured);
+                    else OpenAppointment(captured);
+                };
                 cell.Add(button);
 
-                var label = UiKit.Text(Ministers.DomainNames[i], 8.5f, UiKit.Muted, FontStyle.Bold);
+                bool humanSeat = HotSeat.KindOf(domain) == SeatKind.Insan;
+                var label = UiKit.Text(
+                    humanSeat ? Ministers.DomainNames[i] + " · SEN" : Ministers.DomainNames[i],
+                    8.5f, humanSeat ? UiKit.Amber : UiKit.Muted, FontStyle.Bold);
                 label.style.letterSpacing = 0.6f;
                 label.style.marginTop = 5;
                 cell.Add(label);
@@ -2644,7 +2674,17 @@ namespace Mesruiyet.UI
                 SetFold("dis", true);
             }
 
-            _endTurn.SetEnabled(TurnResolver.Idle);
+            // Hot-seat: the turn cannot end while a human minister's report is unwritten,
+            // and the button says why instead of just refusing.
+            int pendingReports = HotSeat.PendingCount;
+            _endTurn.SetEnabled(TurnResolver.Idle && pendingReports == 0);
+            if (pendingReports > 0)
+                _electionNote.text = $"RAPOR BEKLENİYOR · {pendingReports}";
+            else
+            {
+                int toElection = _state.TurnsToElection;
+                _electionNote.text = toElection == 0 ? "SEÇİM BU TUR" : $"SEÇİM {toElection} TUR SONRA";
+            }
         }
 
         void UpdatePointerOverUi()

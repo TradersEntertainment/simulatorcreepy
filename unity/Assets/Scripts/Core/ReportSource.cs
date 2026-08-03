@@ -154,4 +154,64 @@ namespace Mesruiyet.Core
         /// <summary>Bots file on time, with a cosmetic delay handled by the phase clock later.</summary>
         public bool HasSubmitted(Domain domain) => true;
     }
+
+    /// <summary>
+    /// A human's report: whatever they typed, applied proportionally. Each claim is stored
+    /// with the truth it was made against; if the truth drifts inside the turn the claim
+    /// scales with it, and a claim made against an empty bakery is kept as typed. A typed
+    /// number is precise, so the overall lean stays zero and NO range badge warns the
+    /// governor — a human lie always arrives with a clean face.
+    /// </summary>
+    public sealed class HumanSource : IReportSource
+    {
+        struct Claim { public float Value; public float TrueAtClaim; }
+
+        readonly System.Collections.Generic.Dictionary<ReportLine, Claim> _claims =
+            new System.Collections.Generic.Dictionary<ReportLine, Claim>();
+
+        public bool Submitted { get; private set; }
+
+        public void SetClaim(ReportLine line, float claimed, float trueNow)
+            => _claims[line] = new Claim { Value = claimed, TrueAtClaim = trueNow };
+
+        public void Submit() => Submitted = true;
+
+        /// <summary>A new turn means new truth: last turn's report no longer stands in for it.</summary>
+        public void NewTurn()
+        {
+            _claims.Clear();
+            Submitted = false;
+        }
+
+        public float Report(Domain domain, ReportLine line, float trueValue)
+        {
+            if (!_claims.TryGetValue(line, out var c)) return trueValue;
+            if (Mathf.Abs(c.TrueAtClaim) < 0.5f) return c.Value;
+            return trueValue * (c.Value / c.TrueAtClaim);
+        }
+
+        public bool HasSubmitted(Domain domain) => Submitted;
+    }
+
+    /// <summary>
+    /// One source per desk, so a table can seat a human Tarım next to a bot Maliye next to
+    /// a plain-formula Halk. This is the shape the network slice plugs into: a remote seat
+    /// is just another entry here.
+    /// </summary>
+    public sealed class SeatSource : IReportSource
+    {
+        readonly IReportSource[] _byDomain =
+        {
+            new FormulaSource(), new FormulaSource(), new FormulaSource(),
+            new FormulaSource(), new FormulaSource(),
+        };
+
+        public IReportSource Of(Domain d) => _byDomain[(int)d];
+        public void Set(Domain d, IReportSource source) => _byDomain[(int)d] = source;
+
+        public float Report(Domain domain, ReportLine line, float trueValue)
+            => _byDomain[(int)domain].Report(domain, line, trueValue);
+
+        public bool HasSubmitted(Domain domain) => _byDomain[(int)domain].HasSubmitted(domain);
+    }
 }

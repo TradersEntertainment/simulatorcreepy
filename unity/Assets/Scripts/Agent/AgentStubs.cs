@@ -225,6 +225,37 @@ namespace Mesruiyet.Agent
             sb.Append("],");
             Num(sb, "vekaletKurdu", g.DelegationNotes.Count); sb.Append(',');
 
+            // Hot-seat: who holds each desk, how many human reports are still out, and — per
+            // COOP.md §8 — the reported value NEXT TO the true one for every line of every
+            // desk. You cannot test a lie you cannot measure.
+            sb.Append("\"koltuklar\":[");
+            for (int d = 0; d < 5; d++)
+            {
+                if (d > 0) sb.Append(',');
+                sb.Append('"').Append(((Domain)d).ToString().ToLowerInvariant()).Append(':')
+                  .Append(HotSeat.KindOf((Domain)d).ToString().ToLowerInvariant()).Append('"');
+            }
+            sb.Append("],");
+            Num(sb, "raporBekleyen", HotSeat.PendingCount); sb.Append(',');
+            sb.Append("\"satirlar\":[");
+            bool firstLine = true;
+            for (int d = 0; d < 5; d++)
+            {
+                foreach (var line in ReportLines.For((Domain)d))
+                {
+                    if (!firstLine) sb.Append(',');
+                    firstLine = false;
+                    float truth = line.True(g);
+                    sb.Append('{');
+                    Str(sb, "koltuk", ((Domain)d).ToString().ToLowerInvariant()); sb.Append(',');
+                    Str(sb, "satir", line.Key); sb.Append(',');
+                    Num(sb, "gercek", truth); sb.Append(',');
+                    Num(sb, "bildirilen", Reporting.Source.Report((Domain)d, line.Line, truth));
+                    sb.Append('}');
+                }
+            }
+            sb.Append("],");
+
             // Audio cannot be verified by listening in an unattended run, so it reports itself:
             // how many clips were synthesized, and what the two ambient voices are currently
             // doing. A drone that never responds to grievance is a dead system, silently.
