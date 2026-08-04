@@ -4,7 +4,6 @@
 // debugged, dumped and decompiled and still contain no other desk's truth, because the
 // bytes never crossed the wire.
 
-#if !UNITY_WEBGL
 using System.Text;
 using Mesruiyet.Core;
 
@@ -62,4 +61,4 @@ namespace Mesruiyet.Net
         }
     }
 }
-#endif
+

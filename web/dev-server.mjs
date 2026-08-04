@@ -90,7 +90,36 @@ function schedule(entry) {
   }, Math.max(0, at - Date.now()));
 }
 
-const server = http.createServer((req, res) => { res.writeHead(426); res.end('WebSocket only'); });
+// STATIC=<klasör> verilirse o klasörü HTTP'den de sunar — WebGL derlemesinin tarayıcı testi
+// için: sayfa ve lobi aynı origin'den gelir, allowlist derdi olmaz. Verilmezse eski davranış.
+const STATIC = process.env.STATIC || '';
+const MIME = {
+  '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.wasm': 'application/wasm',
+  '.data': 'application/octet-stream', '.json': 'application/json', '.png': 'image/png',
+  '.css': 'text/css',
+};
+const server = http.createServer(async (req, res) => {
+  if (!STATIC) { res.writeHead(426); res.end('WebSocket only'); return; }
+  const { default: fs } = await import('node:fs/promises');
+  const path = await import('node:path');
+  let rel = decodeURIComponent((req.url || '/').split('?')[0]);
+  if (rel === '/') rel = '/index.html';
+  const file = path.join(STATIC, rel);
+  if (!path.resolve(file).startsWith(path.resolve(STATIC))) { res.writeHead(403); res.end(); return; }
+  try {
+    const body = await fs.readFile(file);
+    // Unity sıkıştırılmış çıktı verdiyse asıl tip alttaki uzantıdadır: Build.wasm.br → wasm + br.
+    let plain = file, enc = null;
+    if (plain.endsWith('.br')) { enc = 'br'; plain = plain.slice(0, -3); }
+    else if (plain.endsWith('.gz')) { enc = 'gzip'; plain = plain.slice(0, -3); }
+    const headers = { 'Content-Type': MIME[path.extname(plain).toLowerCase()] || 'application/octet-stream' };
+    if (enc) headers['Content-Encoding'] = enc;
+    res.writeHead(200, headers);
+    res.end(body);
+  } catch {
+    res.writeHead(404); res.end('yok: ' + rel);
+  }
+});
 
 server.on('upgrade', (req, socket) => {
   const m = /^\/lobby\/([A-Za-z0-9]{1,12})/.exec(req.url || '');

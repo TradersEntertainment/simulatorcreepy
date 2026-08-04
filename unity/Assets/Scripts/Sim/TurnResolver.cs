@@ -37,10 +37,8 @@ namespace Mesruiyet.Sim
             // Hot-seat: the governor does not get to resolve a turn while a human minister's
             // report is still unwritten. The button is disabled too; this is the backstop.
             if (HotSeat.PendingCount > 0) return;
-#if !UNITY_WEBGL
             // Co-op: during the networked minister phase the governor waits like everyone.
             if (Net.CoopTurnController.BlocksTurn) return;
-#endif
             Idle = false;
             StartCoroutine(Resolve());
         }

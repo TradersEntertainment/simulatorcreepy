@@ -11,7 +11,6 @@
 //   3. After every resolved turn the governor broadcasts each seat its RoleView cut, so a
 //      minister's client knows its own truth and nothing else.
 
-#if !UNITY_WEBGL
 using System;
 using UnityEngine;
 using Mesruiyet.Core;
@@ -130,4 +129,4 @@ namespace Mesruiyet.Net
         }
     }
 }
-#endif
+

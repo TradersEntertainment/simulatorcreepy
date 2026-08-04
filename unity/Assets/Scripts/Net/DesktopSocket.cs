@@ -6,7 +6,10 @@
 // only ever touches messages from the main thread via Poll. Nothing in this file knows what
 // the messages mean.
 
-#if !UNITY_WEBGL
+// Compiled everywhere except the WebGL PLAYER: the editor compiles this even when the
+// active build target is WebGL (UNITY_WEBGL and UNITY_EDITOR are both defined there),
+// and NetManager's #else branch needs the type to exist in that pass.
+#if !UNITY_WEBGL || UNITY_EDITOR
 using System;
 using System.Collections.Concurrent;
 using System.Net.WebSockets;
@@ -16,7 +19,7 @@ using System.Threading.Tasks;
 
 namespace Mesruiyet.Net
 {
-    public sealed class DesktopSocket
+    public sealed class DesktopSocket : ISocket
     {
         ClientWebSocket _ws;
         CancellationTokenSource _cts;

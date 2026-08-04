@@ -100,12 +100,19 @@ namespace Mesruiyet.Core
             var models = world.AddComponent<BuildingModels>();
             models.Init(state);
 
-#if !UNITY_WEBGL
             // The lobby door, and the governor-side co-op wiring. Both idle until a
-            // connection exists; single player never notices them.
+            // connection exists; single player never notices them. Since slice 6 this runs
+            // on WebGL too — the socket underneath is per-platform, nothing here is.
             gameObject.AddComponent<Net.NetManager>();
             var coop = gameObject.AddComponent<Net.CoopTurnController>();
             coop.Init(state);
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+            // A web minister joins by LINK: ?lobi=KOD&ad=İsim(&sunucu=wss://...). This is the
+            // product flow — the governor shares a URL, the browser lands straight in the
+            // lobby. The server defaults to the page's own origin, which is exactly what the
+            // dev server and the Pages+Worker pairing both serve.
+            AutoJoinFromUrl();
 #endif
 
             var hud = BuildHud(state);
@@ -143,6 +150,35 @@ namespace Mesruiyet.Core
             if (_afterTick != null) Sim.TurnResolver.TurnCompleted -= _afterTick;
             _afterTick = null;
         }
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+        static void AutoJoinFromUrl()
+        {
+            string page = Application.absoluteURL;
+            if (string.IsNullOrEmpty(page)) return;
+
+            string Get(string key)
+            {
+                var m = System.Text.RegularExpressions.Regex.Match(page, "[?&]" + key + "=([^&#]+)");
+                return m.Success ? UnityEngine.Networking.UnityWebRequest.UnEscapeURL(m.Groups[1].Value) : "";
+            }
+
+            string code = Get("lobi");
+            if (code.Length == 0) return;
+
+            string server = Get("sunucu");
+            if (server.Length == 0)
+            {
+                var u = new System.Uri(page);
+                server = (u.Scheme == "https" ? "wss://" : "ws://") + u.Host
+                       + (u.IsDefaultPort ? "" : ":" + u.Port);
+            }
+
+            string name = Get("ad");
+            Debug.Log($"[Bootstrap] URL lobisi: {server} kod {code}");
+            Net.NetManager.Instance.Connect(server, code, name.Length > 0 ? name : "bakan");
+        }
+#endif
 
         /// <summary>
         /// A founding city with a dead chain stage is a bug, not a challenge. This used to fail

@@ -2,11 +2,9 @@
 //
 // Holds the connection, mirrors the lobby state (phase, seats, players) on the main thread,
 // and speaks the little line-JSON dialect of web/lobby-core.js. Nothing else in the game
-// touches a socket. Deliberately thin in this slice: joining, seats, phase flow and the
-// report envelope — RoleView filtering and the full co-op turn controller build on top of
-// this in the next slices.
+// touches a socket — and since slice 6 the socket itself is an ISocket, picked per platform:
+// ClientWebSocket on desktop, the browser's WebSocket through WebSocket.jslib on WebGL.
 
-#if !UNITY_WEBGL
 using System;
 using System.Collections.Generic;
 using UnityEngine;
@@ -40,7 +38,7 @@ namespace Mesruiyet.Net
     {
         public static NetManager Instance;
 
-        DesktopSocket _socket;
+        ISocket _socket;
         string _pid = "";
 
         public bool Connected => _socket != null && _socket.Open;
@@ -62,8 +60,17 @@ namespace Mesruiyet.Net
         public async void Connect(string baseUrl, string code, string playerName)
         {
             Code = code.ToUpperInvariant();
-            _pid = "u-" + SystemInfo.deviceUniqueIdentifier.Substring(0, 12);
+            // deviceUniqueIdentifier is unsupported in some browsers; a session GUID is fine —
+            // reconnection to a seat goes by lobby code, not by pid.
+            string device = SystemInfo.deviceUniqueIdentifier;
+            _pid = "u-" + (device != null && device.Length >= 12 && device != SystemInfo.unsupportedIdentifier
+                ? device.Substring(0, 12)
+                : Guid.NewGuid().ToString("N").Substring(0, 12));
+#if UNITY_WEBGL && !UNITY_EDITOR
+            _socket = new WebGLSocket();
+#else
             _socket = new DesktopSocket();
+#endif
 
             string url = baseUrl.TrimEnd('/') + "/lobby/" + Code;
             bool ok = await _socket.Connect(url);
@@ -160,4 +167,3 @@ namespace Mesruiyet.Net
         }
     }
 }
-#endif
