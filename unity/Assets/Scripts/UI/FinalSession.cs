@@ -51,10 +51,20 @@ namespace Mesruiyet.UI
             columns.style.alignItems = Align.Stretch;
             columns.Add(LedgerColumn(g));
             columns.Add(TestimonyColumn(g));
+            // COOP.md §6: when a seat was ever held by something other than the formula, the
+            // session gains its fourth column — the seats themselves on trial.
+            if (CoopSeen(g)) columns.Add(CoopColumn(g));
             columns.Add(EndingColumn(g, onClose));
             root.Add(columns);
 
             return root;
+        }
+
+        static bool CoopSeen(GameState g)
+        {
+            foreach (var r in g.SeatHistory)
+                if (r.Kind != SeatKind.Formul) return true;
+            return false;
         }
 
         static VisualElement Card(string title, string note)
@@ -163,6 +173,116 @@ namespace Mesruiyet.UI
             if (shown == 0)
                 yield return UiKit.Text("Hiçbir bakanlık kayda değer bir sapma bildirmedi.",
                                         11.5f, UiKit.Green, FontStyle.Bold).Margin(bottom: 4);
+        }
+
+        // ---------------------------------------------------------------- the co-op column
+        //
+        // COOP.md §6, played straight and cold: per seat the lifetime deviation, the turn it
+        // lied hardest with the sealed telegram from that same turn quoted word for word, the
+        // hidden objective opened, and every private channel published in full. The fight is
+        // upstairs in the testimony; this column is the record.
+
+        static VisualElement CoopColumn(GameState g)
+        {
+            var card = Card("Koltuklar", "kim ne bildirdi");
+
+            var list = new ScrollView(ScrollViewMode.Vertical);
+            list.style.flexGrow = 1;
+            list.verticalScrollerVisibility = ScrollerVisibility.Auto;
+
+            for (int d = 0; d < 5; d++)
+            {
+                float devSum = 0; int rows = 0;
+                GameState.SeatRecord worst = null;
+                bool everHuman = false, everBot = false;
+                foreach (var r in g.SeatHistory)
+                {
+                    if (r.Desk != d) continue;
+                    rows++; devSum += r.DevPercent;
+                    everHuman |= r.Kind == SeatKind.Insan;
+                    everBot |= r.Kind == SeatKind.Bot;
+                    if (worst == null || r.DevPercent > worst.DevPercent) worst = r;
+                }
+                if (rows == 0) continue;
+
+                string kind = everHuman ? "İNSAN" : everBot ? "BOT" : "FORMÜL";
+                var block = UiKit.Column().Margin(bottom: 13);
+                block.Add(UiKit.Text($"{Ministers.DomainNames[d]} · {kind}", 10.5f,
+                                     everHuman ? UiKit.Purple : UiKit.Dim, FontStyle.Bold));
+
+                float avg = devSum / rows;
+                block.Add(UiKit.Text($"{rows} turda ortalama %{avg:0} sapma", 11f,
+                                     avg >= 8 ? UiKit.Red : UiKit.Green).Margin(top: 2));
+
+                if (worst != null && worst.DevPercent >= 5f)
+                {
+                    var w = UiKit.Text(
+                        $"En kötüsü {worst.Turn}. tur: {worst.WorstLine} gerçekte " +
+                        $"{worst.WorstTrue:0} iken {worst.WorstShown:0} bildirildi.",
+                        10.5f, UiKit.Muted).Margin(top: 2);
+                    w.style.whiteSpace = WhiteSpace.Normal;
+                    block.Add(w);
+
+                    string wire = TelegramAt(g, d, worst.Turn);
+                    if (wire != null)
+                    {
+                        var q = UiKit.Text("Aynı turun telgrafı: “" + wire + "”",
+                                           10.5f, UiKit.Hex("#C9D4E2")).Margin(top: 2);
+                        q.style.whiteSpace = WhiteSpace.Normal;
+                        block.Add(q);
+                    }
+                }
+
+                var def = Objectives.Get(g.ObjectiveOf[d]);
+                if (def != null)
+                {
+                    bool held = def.Holds(g);
+                    var o = UiKit.Text(
+                        $"Gizli hedef: {def.Text} — " + (held ? "TUTTU" : "TUTMADI"),
+                        10.5f, held ? UiKit.Purple : UiKit.Dim, FontStyle.Bold).Margin(top: 3);
+                    o.style.whiteSpace = WhiteSpace.Normal;
+                    block.Add(o);
+                }
+
+                list.Add(block);
+            }
+
+            if (g.Channels.Count > 0)
+            {
+                list.Add(UiKit.Caption("Özel kanallar — tamamı").Margin(top: 10, bottom: 6));
+                foreach (var ch in g.Channels)
+                {
+                    var head = UiKit.Text(
+                        $"{Ministers.DomainNames[(int)ch.A]} ↔ {Ministers.DomainNames[(int)ch.B]} " +
+                        $"({ch.OpenedTurn}. turdan beri)", 10.5f, UiKit.Red, FontStyle.Bold);
+                    list.Add(head);
+                    foreach (var line in ch.Lines)
+                    {
+                        var l = UiKit.Text(line, 10.5f, UiKit.Hex("#C9D4E2")).Margin(top: 1);
+                        l.style.whiteSpace = WhiteSpace.Normal;
+                        list.Add(l);
+                    }
+                    list.Add(UiKit.Text(" ", 4, UiKit.Dim));
+                }
+            }
+
+            card.Add(list);
+            return card;
+        }
+
+        /// <summary>The sealed telegram this desk sent on this turn, if any — word for word.</summary>
+        static string TelegramAt(GameState g, int desk, int turn)
+        {
+            string tag = "|" + Ministers.DomainNames[desk] + "|";
+            foreach (var entry in g.TelegraphArchive)
+            {
+                int bar = entry.IndexOf('|');
+                if (bar <= 0 || !int.TryParse(entry.Substring(0, bar), out int t) || t != turn) continue;
+                if (!entry.Substring(bar).StartsWith(tag)) continue;
+                int last = entry.LastIndexOf('|');
+                if (last > bar) return entry.Substring(last + 1);
+            }
+            return null;
         }
 
         // ---------------------------------------------------------------- 2 & 3. testimony

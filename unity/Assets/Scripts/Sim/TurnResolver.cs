@@ -627,6 +627,39 @@ namespace Mesruiyet.Sim
                 AxisEconomy = g.AxisEconomy,
                 Legitimacy = g.Legitimacy,
             });
+
+            // The co-op ledger: the same desk-by-desk lines the report screens speak, frozen
+            // before resolution mutates the truth. Runs in single player too (all-formula
+            // rows); the accountability session only surfaces it once a seat was ever held
+            // by something other than the formula.
+            for (int d = 0; d < 5; d++)
+            {
+                float devSum = 0; int devCount = 0;
+                string worstLine = ""; float worstTrue = 0, worstShown = 0, worstDev = -1;
+                foreach (var line in ReportLines.For((Domain)d))
+                {
+                    float truth = line.True(g);
+                    float shown = Reporting.Source.Report((Domain)d, line.Line, truth);
+                    if (Mathf.Abs(truth) < 0.5f) continue;
+                    float dev = Mathf.Abs(shown / truth - 1f);
+                    devSum += dev; devCount++;
+                    if (dev > worstDev)
+                    {
+                        worstDev = dev; worstLine = line.Key;
+                        worstTrue = truth; worstShown = shown;
+                    }
+                }
+                g.SeatHistory.Add(new GameState.SeatRecord
+                {
+                    Turn = g.Turn,
+                    Desk = d,
+                    Kind = HotSeat.KindOf((Domain)d),
+                    DevPercent = devCount == 0 ? 0 : devSum / devCount * 100f,
+                    WorstLine = worstLine,
+                    WorstTrue = worstTrue,
+                    WorstShown = worstShown,
+                });
+            }
         }
 
         /// <summary>

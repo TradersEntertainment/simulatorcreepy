@@ -20,6 +20,8 @@ namespace Mesruiyet.UI
         public static readonly Color Amber = Hex("#F5B33C");
         public static readonly Color Red = Hex("#F2564B");
         public static readonly Color Green = Hex("#3FCF77");
+        /// <summary>COOP.md §10: the hidden-objective colour.</summary>
+        public static readonly Color Purple = Hex("#C48CFF");
         public static readonly Color Blue = Hex("#5AA9F5");
         public static readonly Color Track = new Color(1f, 1f, 1f, 0.10f);
 

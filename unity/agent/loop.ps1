@@ -1841,6 +1841,15 @@ switch ($Scenario) {
             Wait-Turn ($t + 1) 40 | Out-Null
             $clientDone = $client.WaitForExit(15000)
             Check ($clientDone -and $client.ExitCode -eq 0) "RoleView kesiti bakanda temiz (sızıntı yok)"
+
+            # Slice 7: the accountability session with the co-op column. The resolved turn
+            # above wrote SeatRecords with a human on Tarım, so ending the term here must
+            # show the fourth column — seats, deviations, objectives, private channels.
+            Send-Cmd '{"cmd":"hesapver"}' | Out-Null
+            Start-Sleep -Milliseconds 1500
+            $s = Send-Cmd '{"cmd":"state"}'
+            Check ($s -match '"isOver":true') "dönem test komutuyla kapandı"
+            Shot "coop-02-hesap-verme.png"
         }
         finally {
             if ($client -and -not $client.HasExited) { Stop-Process -Id $client.Id -Force -ErrorAction SilentlyContinue }

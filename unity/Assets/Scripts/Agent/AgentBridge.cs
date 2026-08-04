@@ -238,6 +238,14 @@ namespace Mesruiyet.Agent
                     UI.Hud.Instance?.Refresh();
                     return Ok();
 
+                case "hesapver":
+                    // Test-only: end the term right here so the accountability session can be
+                    // photographed without simulating sixty turns. Dev builds only, like the
+                    // whole bridge.
+                    GameState.Current.Ending = Ending.Surdurulebilir;
+                    UI.Hud.Instance?.Refresh();
+                    return Ok();
+
                 case "submit":
                 {
                     // {"cmd":"submit","seat":2} — seal the report; the governor may now end

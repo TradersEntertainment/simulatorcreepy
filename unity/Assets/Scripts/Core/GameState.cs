@@ -206,6 +206,23 @@ namespace Mesruiyet.Core
         /// </summary>
         public readonly List<TurnRecord> History = new List<TurnRecord>();
 
+        /// <summary>
+        /// The co-op ledger: one row per desk per turn — who held the seat, how far its
+        /// report leaned on average, and the single line that lied hardest. COOP.md §6 wants
+        /// the accountability session to show this PER PLAYER, so it is recorded per desk
+        /// rather than folded into the city-wide TurnRecord.
+        /// </summary>
+        public sealed class SeatRecord
+        {
+            public int Turn;
+            public int Desk;            // (int)Domain
+            public SeatKind Kind;
+            public float DevPercent;    // average |reported/true − 1| × 100 across the desk's lines
+            public string WorstLine = "";
+            public float WorstTrue, WorstShown;
+        }
+        public readonly List<SeatRecord> SeatHistory = new List<SeatRecord>();
+
         public int LostDistricts
         {
             get
