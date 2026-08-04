@@ -9,6 +9,10 @@
   "name": "mesruiyet-lobi",
   "main": "lobby-worker.js",
   "compatibility_date": "2025-06-01",
+  // Oyunun WebGL sürümü de aynı Worker'dan çıkar: tek origin — sayfa hangi adresten
+  // geldiyse lobi de orası, allowlist ve ?sunucu= parametresi gerekmez. Klasörü
+  // BuildScript.WebRelease doldurur (Brotli + JS fallback, başlık ayarı istemez).
+  "assets": { "directory": "public", "binding": "ASSETS" },
   "durable_objects": {
     "bindings": [
       { "name": "LOBBY", "class_name": "Lobby" }

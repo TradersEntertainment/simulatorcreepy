@@ -26,7 +26,18 @@ namespace Mesruiyet.EditorTools
         [MenuItem("Meşruiyet/Build WebGL")]
         public static void Web() => Run(BuildTarget.WebGL, "");
 
-        static void Run(BuildTarget target, string exeName)
+        // The shipping web build: Brotli with the JS decompression fallback, so ANY static
+        // host serves it without Content-Encoding configuration — the lobby Worker's assets
+        // directory included. No Development flag: a fraction of the size, no AgentBridge.
+        [MenuItem("Meşruiyet/Build WebGL (release)")]
+        public static void WebRelease()
+        {
+            PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Brotli;
+            PlayerSettings.WebGL.decompressionFallback = true;
+            Run(BuildTarget.WebGL, "", release: true, outSub: "WebGLRelease");
+        }
+
+        static void Run(BuildTarget target, string exeName, bool release = false, string outSub = null)
         {
             // Idempotent: creates the boot scene, the UI panel asset and the player settings
             // the agent loop needs, so a fresh clone builds without anyone opening the GUI.
@@ -44,7 +55,7 @@ namespace Mesruiyet.EditorTools
                 return;
             }
 
-            var sub = target.ToString();
+            var sub = outSub ?? target.ToString();
             var path = Path.Combine(OutDir, sub, exeName);
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path)));
 
@@ -54,8 +65,9 @@ namespace Mesruiyet.EditorTools
                 target = target,
                 locationPathName = path,
                 // Development build keeps AgentBridge compiled in and gives us a real stack
-                // trace in player.log — the agent loop depends on both.
-                options = BuildOptions.Development | BuildOptions.AllowDebugging
+                // trace in player.log — the agent loop depends on both. Release drops both.
+                options = release ? BuildOptions.None
+                                  : BuildOptions.Development | BuildOptions.AllowDebugging
             };
 
             var report = BuildPipeline.BuildPlayer(opts);
