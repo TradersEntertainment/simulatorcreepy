@@ -86,9 +86,21 @@ aşamıyor. Şehirde birer ikişer bulundukları için kabul edildiler:
 | pazar | 12.750 | 816 KB | tezgâhlar + tenteler |
 | hastane | 8.140 | 542 KB | pencere oyukları |
 | santral | 7.364 | 500 KB | kafes direk |
+| islik | 5.010 | 293 KB | tezgâh + taş blokları (0.005 oranında bile 4.104'ün altına inmiyor) |
+| tersane | 7.090 | 390 KB | gemi gövdesi + rampa parçaları (taban 6.746; 2×2 bina, santral emsali) |
 
 Gelecek üretimlerde prompt'a "no thin lattice, fewer chunkier stalls" eklenirse bunlar da
 bütçeye iner.
+
+## Renk uzayı tuzağı — son partide çıktı (ocak/islik/kontrol/tersane)
+
+Üreteç bu partide 4096×4096, sharp'ın okuyamadığı renk-uzaylı PNG doku verdi;
+`gltf-transform optimize --texture-size 128` **"colourspace: parameter space not set"**
+hatasıyla düşüyor. Çözüm: dokuyu çıkar, GDI+ ile 128 px'e indir, geri koy, sonra boru
+hattının kalanını `--texture-compress false` ile çalıştır. Scriptler ajan scratchpad'inde
+(`tex-extract.mjs`, `recenter.mjs`, `measure.mjs`) — gerekirse yeniden yazılması beş dakika.
+`recenter.mjs` ayrıca XZ merkezini tam sıfıra, tabanı tam zemine çeker; bu parti ±0.07'ye
+kadar kaymış geliyordu.
 
 ## Üreteç prompt'unda düzeltilecek üç şey
 

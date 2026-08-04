@@ -1705,6 +1705,43 @@ switch ($Scenario) {
         Start-Sleep -Milliseconds 700
         Shot "model-10-santral-2x2.png"
 
+        # The last four of the thirty. The founding city already stands a quarry and a
+        # stoneworks in the north-east hills; the checkpoint and the shipyard are placed fresh.
+        Check ($s -match '"kapsanan":\[[^\]]*"ocak"') "taş ocağı modeli devrede"
+        Check ($s -match '"kapsanan":\[[^\]]*"islik"') "taş işliği modeli devrede"
+        Check ($s -match '"kapsanan":\[[^\]]*"kontrol"') "kontrol noktası modeli devrede"
+        Check ($s -match '"kapsanan":\[[^\]]*"tersane"') "tersane modeli devrede"
+
+        Send-Cmd '{"cmd":"focus","x":42,"y":23}' | Out-Null
+        Start-Sleep -Milliseconds 700
+        Shot "model-11-ocak.png"
+        Send-Cmd '{"cmd":"focus","x":37,"y":19}' | Out-Null
+        Start-Sleep -Milliseconds 700
+        Shot "model-12-islik.png"
+
+        Send-Cmd '{"cmd":"grant","n":600}' | Out-Null
+        $k = Send-Cmd '{"cmd":"build","id":"kontrol","x":25,"y":17}'
+        Check ($k -match '"ok":true') "kontrol noktası kuruldu"
+
+        # The shipyard is 2x2, must touch water AND sit inside a district — the riverbank
+        # outside LİMAN refuses with "hiçbir mahalleye ait değil". At x=9-10 the bank sits
+        # at y=3, both columns are dry silt and no road crosses; (27,2) is the ESKİ ŞEHİR
+        # fallback in case a scattered founding house took the tile.
+        $tx = 9; $ty = 4
+        $t = Send-Cmd '{"cmd":"build","id":"tersane","x":9,"y":4}'
+        if ($t -notmatch '"ok":true') {
+            $tx = 27; $ty = 2
+            $t = Send-Cmd '{"cmd":"build","id":"tersane","x":27,"y":2}'
+        }
+        Check ($t -match '"ok":true') "tersane nehir kıyısına kuruldu"
+        Start-Sleep -Milliseconds 800
+        Send-Cmd '{"cmd":"focus","x":25,"y":17}' | Out-Null
+        Start-Sleep -Milliseconds 700
+        Shot "model-13-kontrol.png"
+        Send-Cmd ('{"cmd":"focus","x":' + $tx + ',"y":' + $ty + '}') | Out-Null
+        Start-Sleep -Milliseconds 700
+        Shot "model-14-tersane.png"
+
         $state = Send-Cmd '{"cmd":"state"}'
         if (-not $ok) { $chainBroken = $true }
     }
