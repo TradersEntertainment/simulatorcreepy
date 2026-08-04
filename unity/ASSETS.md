@@ -57,6 +57,13 @@ Ajan her gelen modeli ölçecek ve raporlayacak:
    gerçekten uyguluyor: `santral`, `hastane`, `kisla`, `tersane` **2×2**, `pazar` **2×1**,
    gerisi 1×1. Çok kareli bina yerleşimde dört (veya iki) boş kare ister, modeli o alana
    ölçeklenir, imleç tüm ayak izini gösterir.
+7. **Yükseklik veriden gelir, üreteçten değil.** `BuildingModels` her modelin dünya
+   yüksekliğini `Storeys × katYüksekliği` hedefine çeker (konut 2.6 m/kat, kamu 3.1 m/kat —
+   prosedürel formlarla aynı kural). Y çarpanı [0.55, 1.8] aralığına kısılır; `Storeys = 0`
+   olanlar (tarla, park) kendi oranını korur. Çok kareli binada taban parselle büyür,
+   yükseklik büyümez. Yani üretecin binayı yanlış boyda vermesi kabulü etkilemez —
+   ama aşırı basık/aşırı sivri gelen model kısıtlamaya takılıp yine de yanlış okunur,
+   oranı prompt'ta sayıyla istemeye devam edin.
 
 ## Dosya adları — teslimat sözleşmesi
 

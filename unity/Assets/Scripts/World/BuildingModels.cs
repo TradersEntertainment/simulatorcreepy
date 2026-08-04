@@ -26,6 +26,7 @@ namespace Mesruiyet.World
             public GameObject Root;
             public Bounds LocalBounds;     // combined renderer bounds at scale 1
             public float Scale;
+            public float YScale;           // 0 = no storey target, keep the model's proportions
             public string Shader = "";
         }
 
@@ -147,16 +148,32 @@ namespace Mesruiyet.World
             // The base scale fits a 1×1 tile; a building with a bigger footprint scales up
             // per axis at spawn. Kept as one number so every model obeys the same rule.
             float widest = Mathf.Max(bounds.size.x, bounds.size.z, 0.01f);
+            float scale = Footprint / widest;
+
+            // Height obeys the data, not the generator's whim: the same storey rule the
+            // procedural forms use, so a well stays squat and an apartment block towers.
+            // Flat things (fields, the park) keep their own proportions, and the stretch is
+            // clamped so no model becomes a chimney or a pancake.
+            var def = Buildings.Get(id);
+            float yScale = 0f;
+            if (def != null && def.Storeys > 0)
+            {
+                float storeyHeight = def.Category == "konut" ? 2.6f : 3.1f;
+                float worldH = Mathf.Max(bounds.size.y, 0.01f) * scale;
+                yScale = Mathf.Clamp(def.Storeys * storeyHeight / worldH, 0.55f, 1.8f);
+            }
+
             var tpl = new Template
             {
                 Root = root,
                 LocalBounds = bounds,
-                Scale = Footprint / widest,
+                Scale = scale,
+                YScale = yScale,
                 Shader = shaderName,
             };
             root.SetActive(false);
             _templates[id] = tpl;
-            Debug.Log($"[BuildingModels] {id} hazır · ölçek {tpl.Scale:0.00} · shader {shaderName}");
+            Debug.Log($"[BuildingModels] {id} hazır · ölçek {tpl.Scale:0.00} · kat çarpanı {tpl.YScale:0.00} · shader {shaderName}");
         }
 
         void Update()
@@ -188,13 +205,18 @@ namespace Mesruiyet.World
                 var go = Instantiate(tpl.Root, transform);
                 go.SetActive(true);
 
+                // The footprint grows with the parcel; the height does not — a 2×2 plant is
+                // four parcels of machine, not a machine twice as tall. Its storeys say how
+                // high it stands, same as its procedural neighbours.
                 float s = tpl.Scale * Mathf.Min(size.x, size.y);
-                go.transform.localScale = tpl.Root.transform.localScale * s;
+                float sy = tpl.YScale > 0f ? tpl.Scale * tpl.YScale : s;
+                go.transform.localScale = Vector3.Scale(
+                    tpl.Root.transform.localScale, new Vector3(s, sy, s));
 
                 // Centre the measured bounds on the tile and set their base on the floor.
-                var c = tpl.LocalBounds.center * s;
-                float baseY = (tpl.LocalBounds.center.y - tpl.LocalBounds.extents.y) * s;
-                go.transform.position = new Vector3(ground.x - c.x, ground.y - baseY, ground.z - c.z);
+                var c = tpl.LocalBounds.center;
+                float baseY = (tpl.LocalBounds.center.y - tpl.LocalBounds.extents.y) * sy;
+                go.transform.position = new Vector3(ground.x - c.x * s, ground.y - baseY, ground.z - c.z * s);
 
                 // An unworked building goes cold like its procedural neighbours.
                 if (!b.Staffed) Tint(go, new Color(0.55f, 0.58f, 0.62f, 1f));
@@ -230,9 +252,10 @@ namespace Mesruiyet.World
             if (!_templates.TryGetValue(id, out var tpl)) return false;
             var def = Buildings.Get(id);
             float s = tpl.Scale * (def != null ? Mathf.Min(def.Size.x, def.Size.y) : 1);
+            float sy = tpl.YScale > 0f ? tpl.Scale * tpl.YScale : s;
             var half = tpl.LocalBounds.extents * s;
             min = new Vector3(ground.x - half.x, ground.y, ground.z - half.z);
-            max = new Vector3(ground.x + half.x, ground.y + half.y * 2f, ground.z + half.z);
+            max = new Vector3(ground.x + half.x, ground.y + tpl.LocalBounds.size.y * sy, ground.z + half.z);
             return true;
         }
     }
