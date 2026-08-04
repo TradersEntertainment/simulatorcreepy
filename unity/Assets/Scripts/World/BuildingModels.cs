@@ -30,7 +30,10 @@ namespace Mesruiyet.World
             public string Shader = "";
         }
 
-        readonly Dictionary<string, Template> _templates = new Dictionary<string, Template>();
+        // One id can own several variants — tapinak.glb, tapinak-2.glb, tapinak-3.glb are the
+        // mosque, the church and the synagogue, and instances cycle through them in build
+        // order. The list is sorted by suffix, so the plain file is always the first placed.
+        readonly Dictionary<string, List<Template>> _templates = new Dictionary<string, List<Template>>();
         readonly List<GameObject> _spawned = new List<GameObject>();
 
         GameState _state;
@@ -40,13 +43,21 @@ namespace Mesruiyet.World
         /// <summary>For the probe: which ids are backed by a real model right now.</summary>
         public bool Covers(string id) => _templates.ContainsKey(id);
 
-        public int LoadedCount => _templates.Count;
+        public int LoadedCount
+        {
+            get
+            {
+                int n = 0;
+                foreach (var list in _templates.Values) n += list.Count;
+                return n;
+            }
+        }
         public IEnumerable<string> CoveredIds => _templates.Keys;
         public string FirstShaderName
         {
             get
             {
-                foreach (var t in _templates.Values) return t.Shader;
+                foreach (var list in _templates.Values) return list[0].Shader;
                 return "";
             }
         }
@@ -67,20 +78,36 @@ namespace Mesruiyet.World
             _loadTried = true;
 
             // The delivery contract from ASSETS.md: every .glb in the folder is named after
-            // the building id it replaces. Drop a file in, it stands in the city — no code.
+            // the building id it replaces — with an optional "-2", "-3" suffix for variants.
+            // Drop a file in, it stands in the city — no code. Suffix order decides the cycle,
+            // so the files are sorted by (id, variant) before loading, not by raw filename
+            // ("tapinak-2" sorts before "tapinak" as a string and would steal the first slot).
             string dir = System.IO.Path.Combine(Application.streamingAssetsPath, "Models", "buildings");
             if (System.IO.Directory.Exists(dir))
             {
+                var entries = new List<(string id, int variant, string file)>();
                 foreach (var file in System.IO.Directory.GetFiles(dir, "*.glb"))
                 {
-                    string id = System.IO.Path.GetFileNameWithoutExtension(file).ToLowerInvariant();
+                    string name = System.IO.Path.GetFileNameWithoutExtension(file).ToLowerInvariant();
+                    string id = name;
+                    int variant = 1;
+                    var m = System.Text.RegularExpressions.Regex.Match(name, @"^(.+)-(\d+)$");
+                    if (m.Success)
+                    {
+                        id = m.Groups[1].Value;
+                        variant = int.Parse(m.Groups[2].Value);
+                    }
                     if (Buildings.Get(id) == null)
                     {
-                        Debug.LogWarning($"[BuildingModels] '{id}' diye bir yapı yok, atlandı: {file}");
+                        Debug.LogWarning($"[BuildingModels] '{name}' diye bir yapı yok, atlandı: {file}");
                         continue;
                     }
-                    await LoadOne(id);
+                    entries.Add((id, variant, file));
                 }
+                entries.Sort((a, b) => a.id != b.id
+                    ? string.CompareOrdinal(a.id, b.id) : a.variant.CompareTo(b.variant));
+                foreach (var e in entries)
+                    await LoadOne(e.id, e.file);
             }
 
             // The city was baked with procedural stand-ins before the files finished loading.
@@ -89,10 +116,8 @@ namespace Mesruiyet.World
                 CityRenderer.Instance.Rebuild();
         }
 
-        async System.Threading.Tasks.Task LoadOne(string id)
+        async System.Threading.Tasks.Task LoadOne(string id, string path)
         {
-            string path = System.IO.Path.Combine(Application.streamingAssetsPath,
-                                                 "Models", "buildings", id + ".glb");
             if (!System.IO.File.Exists(path))
             {
                 Debug.LogWarning($"[BuildingModels] yok: {path}");
@@ -106,7 +131,7 @@ namespace Mesruiyet.World
                 return;
             }
 
-            var root = new GameObject("tpl_" + id);
+            var root = new GameObject("tpl_" + System.IO.Path.GetFileNameWithoutExtension(path));
             root.transform.SetParent(transform, false);
             var instantiator = new GameObjectInstantiator(import, root.transform);
             if (!await import.InstantiateMainSceneAsync(instantiator))
@@ -176,8 +201,10 @@ namespace Mesruiyet.World
                 Shader = shaderName,
             };
             root.SetActive(false);
-            _templates[id] = tpl;
-            Debug.Log($"[BuildingModels] {id} hazır · ölçek {tpl.Scale:0.00} · kat çarpanı {tpl.YScale:0.00} · shader {shaderName}");
+            if (!_templates.TryGetValue(id, out var variants))
+                _templates[id] = variants = new List<Template>();
+            variants.Add(tpl);
+            Debug.Log($"[BuildingModels] {root.name.Substring(4)} hazır · ölçek {tpl.Scale:0.00} · kat çarpanı {tpl.YScale:0.00} · shader {shaderName}");
         }
 
         void Update()
@@ -195,9 +222,17 @@ namespace Mesruiyet.World
             _spawned.Clear();
             WorstMinY = 0f;
 
+            // Variants cycle in build order: the first temple placed is the mosque, the second
+            // the church, the third the synagogue, then round again. state.Buildings appends,
+            // so the assignment is stable across rebakes — a temple never changes faith.
+            var placed = new Dictionary<string, int>();
+
             foreach (var b in _state.Buildings)
             {
-                if (!_templates.TryGetValue(b.Def.Id, out var tpl)) continue;
+                if (!_templates.TryGetValue(b.Def.Id, out var variants)) continue;
+                placed.TryGetValue(b.Def.Id, out int nth);
+                placed[b.Def.Id] = nth + 1;
+                var tpl = variants[nth % variants.Count];
                 if (_state.District(b.District).Lost) continue;
 
                 // Multi-tile buildings stand at the centre of their whole footprint and scale
@@ -253,7 +288,8 @@ namespace Mesruiyet.World
         public bool ProbeBounds(string id, Vector3 ground, out Vector3 min, out Vector3 max)
         {
             min = max = ground;
-            if (!_templates.TryGetValue(id, out var tpl)) return false;
+            if (!_templates.TryGetValue(id, out var variants)) return false;
+            var tpl = variants[0];
             var def = Buildings.Get(id);
             float s = tpl.Scale * (def != null ? Mathf.Min(def.Size.x, def.Size.y) : 1);
             float sy = tpl.YScale > 0f ? tpl.Scale * tpl.YScale : s;

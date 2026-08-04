@@ -78,6 +78,12 @@ kutuphane · hamam · tapinak · matbaa · park · anit · karakol · kontrol ·
 Eşleme tuzakları: T. KONUT → `toplukonut`, TAYIN → `tayinlama`, İŞLİK → `islik`,
 KEMER → `sukemeri`, DOKUMA → `dokuma`. Türkçe karakter yok, hepsi küçük harf.
 
+**Varyantlar:** `kimlik-2.glb`, `kimlik-3.glb`... aynı binanın ek modelleridir; şehirde o
+binadan her yeni koyuşta sıradaki varyant gelir ve tur tamamlanınca başa döner (kuruluş
+sırası sabittir — bina sonradan model değiştirmez). İlk kullanım: `tapinak.glb` cami,
+`tapinak-2.glb` kilise, `tapinak-3.glb` sinagog. Aynı mekanizma başka binalara da açık
+(ör. konut çeşitliliği).
+
 Çalışma anı tarafı hazır: `World/BuildingModels.cs` bu klasördeki her dosyayı kimliğiyle
 yükler, sınırlarını ölçüp kareye oturtur ve prosedürel formu devre dışı bırakır — model
 başına kod değişikliği gerekmez.
