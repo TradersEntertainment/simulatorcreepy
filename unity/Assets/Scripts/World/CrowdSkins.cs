@@ -32,19 +32,31 @@ namespace Mesruiyet.World
         /// </summary>
         public const float TargetHeight = 1.55f;
 
-        // Civilian clips, per the art direction: the b-model is the suited town figure and is
-        // unarmed by construction — the armed look in this family comes from animation alone.
-        const string ClipWalk = "CharacterArmature|Walk";
-        const string ClipIdle = "CharacterArmature|Idle_Neutral";
-        const string ClipWave = "CharacterArmature|Wave";
-        const string ClipInteract = "CharacterArmature|Interact";
-        const string ClipGuard = "CharacterArmature|Idle_Gun";
+        // Two rigs, two clip vocabularies: the KayKit adventurers ("Walking_A") and the older
+        // infantry family ("CharacterArmature|Walk"). Each action tries its candidates in
+        // order at play time, so swapping the .glb files never needs a code change here.
+        static readonly string[] ClipWalk = { "Walking_A", "CharacterArmature|Walk" };
+        static readonly string[] ClipIdle = { "Idle", "CharacterArmature|Idle_Neutral" };
+        static readonly string[] ClipWave = { "Cheer", "CharacterArmature|Wave" };
+        static readonly string[] ClipInteract = { "Interact", "CharacterArmature|Interact" };
+        static readonly string[] ClipGuard = { "Blocking", "CharacterArmature|Idle_Gun" };
+
+        /// <summary>First candidate the rig actually has — the seam between the two families.</summary>
+        static string Resolve(Animation anim, string[] candidates)
+        {
+            foreach (var name in candidates)
+                if (anim.GetClip(name) != null) return name;
+            return null;
+        }
 
         GameState _state;
         CrowdSystem _crowd;
 
         GameObject _civilianTemplate, _soldierTemplate;
         float _scale = 1f;
+        // The KayKit rigs carry their pivot above the soles, so a clone placed at ground level
+        // sinks to the ankles. Measured once on the template, added to every placement.
+        float _footLift;
         /// <summary>True when the source materials were lost and the figures are plain UnitLit.</summary>
         bool _untextured;
 
@@ -89,8 +101,12 @@ namespace Mesruiyet.World
 
         async void LoadModels()
         {
-            _civilianTemplate = await LoadTemplate("infantry_male_b.glb");
-            _soldierTemplate = await LoadTemplate("infantry_male_a.glb");
+            // The cute chunky KayKit figures, by request — the rogue reads as a hooded townsman,
+            // the knight as the garrison. The infantry pair stays on disk as a fallback.
+            _civilianTemplate = await LoadTemplate("kaykit_rogue.glb");
+            _soldierTemplate = await LoadTemplate("kaykit_knight.glb");
+            if (_civilianTemplate == null) _civilianTemplate = await LoadTemplate("infantry_male_b.glb");
+            if (_soldierTemplate == null) _soldierTemplate = await LoadTemplate("infantry_male_a.glb");
             if (_civilianTemplate == null) return;   // logged inside; instanced crowd carries on
 
             _civilians = new Slot[SkinnedCap];
@@ -189,12 +205,15 @@ namespace Mesruiyet.World
                 : firstR.sharedMaterial == null ? "(malzeme yok)"
                 : firstR.sharedMaterial.shader.name;
 
-            // Normalise the height once, on the template; every clone inherits it.
+            // Normalise the height once, on the template; every clone inherits it. The foot
+            // lift compensates a pivot that sits above the soles — without it the whole crowd
+            // stands ankle-deep in the pavement (measured −0.22 on the KayKit rig).
             var bounds = MeasureBounds(root);
             if (bounds.size.y > 0.01f)
             {
                 _scale = TargetHeight / bounds.size.y;
                 root.transform.localScale = Vector3.one * _scale;
+                _footLift = -(bounds.min.y - root.transform.position.y) * _scale;
             }
 
             root.SetActive(false);
@@ -233,7 +252,7 @@ namespace Mesruiyet.World
                 var a = _crowd.AgentAt(slot.Agent);
                 if (a.Kind != 0 || a.Pos.y < -1f) { Park(ref slot); continue; }
 
-                var pos = new Vector3(a.Pos.x, a.Pos.y, a.Pos.z);
+                var pos = new Vector3(a.Pos.x, a.Pos.y + _footLift, a.Pos.z);
                 slot.Go.transform.position = pos;
 
                 var face = new Vector3(a.Target.x - a.Pos.x, 0, a.Target.z - a.Pos.z);
@@ -246,10 +265,10 @@ namespace Mesruiyet.World
                     // Walking walks; marching also walks (with the banner beside it); idle
                     // figures mostly stand, but one in four waves or chats, which is the small
                     // life the design wants on a street corner.
-                    string clip = a.Mood == 1
+                    string clip = Resolve(slot.Anim, a.Mood == 1
                         ? (slot.Agent % 4 == 0 ? ClipWave : slot.Agent % 4 == 1 ? ClipInteract : ClipIdle)
-                        : ClipWalk;
-                    if (slot.Anim.GetClip(clip) != null) slot.Anim.CrossFade(clip, 0.2f);
+                        : ClipWalk);
+                    if (clip != null) slot.Anim.CrossFade(clip, 0.2f);
                 }
 
                 ActiveSkins++;
@@ -338,7 +357,8 @@ namespace Mesruiyet.World
                         r.SetPropertyBlock(block);
                 }
                 var anim = go.GetComponentInChildren<Animation>();
-                if (anim != null && anim.GetClip(ClipGuard) != null) { go.SetActive(true); anim.Play(ClipGuard); }
+                string guard = anim != null ? Resolve(anim, ClipGuard) : null;
+                if (guard != null) { go.SetActive(true); anim.Play(guard); }
                 else go.SetActive(true);
                 _soldiers.Add(go);
             }
@@ -351,7 +371,7 @@ namespace Mesruiyet.World
 
                 var post = posts[i % posts.Count];
                 float angle = (i / (float)SoldierCap) * Mathf.PI * 2f;
-                _soldiers[i].transform.position = post + new Vector3(Mathf.Cos(angle) * 2.4f, 0, Mathf.Sin(angle) * 2.4f);
+                _soldiers[i].transform.position = post + new Vector3(Mathf.Cos(angle) * 2.4f, _footLift, Mathf.Sin(angle) * 2.4f);
                 _soldiers[i].transform.rotation = Quaternion.Euler(0, angle * Mathf.Rad2Deg + 180f, 0);
             }
         }

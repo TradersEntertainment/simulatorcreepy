@@ -355,7 +355,9 @@ namespace Mesruiyet.Agent
                 Num(sb, "hidden", hidden); sb.Append(',');
                 // A car that cut a corner ends up on grass, so this is the diagonal-driving bug
                 // expressed as a number rather than as something to squint at.
-                Num(sb, "yoldisi", crowd.CarsOffRoad());
+                Num(sb, "yoldisi", crowd.CarsOffRoad()); sb.Append(',');
+                // How many vehicle kinds run the player's own model instead of the procedural one.
+                Num(sb, "disArac", crowd.ImportedCarKinds);
                 sb.Append("},");
             }
 

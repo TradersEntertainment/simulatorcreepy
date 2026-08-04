@@ -84,6 +84,19 @@ sırası sabittir — bina sonradan model değiştirmez). İlk kullanım: `tapin
 `tapinak-2.glb` kilise, `tapinak-3.glb` sinagog. Aynı mekanizma başka binalara da açık
 (ör. konut çeşitliliği).
 
+## Araçlar — ikinci teslimat sözleşmesi
+
+`StreamingAssets/Models/vehicles/` altına `otomobil.glb`, `yukarabasi.glb` veya `fayton.glb`
+düşürülür; sırasıyla prosedürel sedan, kamyonet ve at arabasının yerine geçer. Boru hattı
+binalarla aynı (renk-uzayı sapağı dahil). Farklar (`World/VehicleModels.cs`):
+
+- Araçlar kalabalığın instanced çizim yolunda akar; doku okunmaz. Bu yüzden model tek mesh'e
+  kaynatılır ve **128 px dokusu vertex rengine örneklenir**; kendi boyasını taşıdığı için
+  bucket tonu yerine nötr malzemeyle çizilir.
+- **Uzun eksen +Z'ye çevrilir** (burun kuralı — probe ölçerek doğruluyor), boy ve zemin
+  çizgisi yerine geçtiği prosedürel aracın kutusuna oturtulur.
+- Üçgen bütçesi binadan sıkı düşünülmeli: aynı model onlarca kez sahnede.
+
 Çalışma anı tarafı hazır: `World/BuildingModels.cs` bu klasördeki her dosyayı kimliğiyle
 yükler, sınırlarını ölçüp kareye oturtur ve prosedürel formu devre dışı bırakır — model
 başına kod değişikliği gerekmez.

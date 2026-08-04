@@ -141,6 +141,10 @@ namespace Mesruiyet.World
         /// </summary>
         Mesh[] _carMeshes;
         const int CarKinds = 3;
+        // A kind that swapped to an imported model carries its own paint in vertex colours,
+        // so it draws with the neutral material — bucket-tinting a painted fayton makes mud.
+        readonly bool[] _importedKind = new bool[CarKinds];
+        Material _neutralCarMat;
         Material[] _bucketMats;
         Material _bannerMat;
 
@@ -214,6 +218,10 @@ namespace Mesruiyet.World
 
             BuildSmoke(template);
             Repopulate();
+
+            // The player's own vehicles, if delivered. Async like the buildings: procedural
+            // kinds roll until the bake lands, then the swap is invisible mid-frame.
+            _ = VehicleModels.LoadInto(this);
 
             Debug.Log($"[Crowd] kişi {_personMesh.vertexCount}v · araba {_carMeshes[0].vertexCount}v · " +
                       $"pankart {_bannerMesh.vertexCount}v · shader {template.shader.name} · " +
@@ -343,6 +351,28 @@ namespace Mesruiyet.World
             }
             _bannerMat = new Material(template) { name = "Banner", enableInstancing = true };
             _bannerMat.SetColor("_Tint", new Color(0.88f, 0.25f, 0.18f));
+            _neutralCarMat = new Material(template) { name = "Vehicle", enableInstancing = true };
+            _neutralCarMat.SetColor("_Tint", Color.white);
+        }
+
+        /// <summary>The procedural mesh's box, for VehicleModels to seat an import into.</summary>
+        public Bounds CarMeshBounds(int kind) => _carMeshes[kind].bounds;
+
+        public int ImportedCarKinds
+        {
+            get
+            {
+                int n = 0;
+                foreach (var imported in _importedKind) if (imported) n++;
+                return n;
+            }
+        }
+
+        /// <summary>Swap a vehicle kind for a baked import. Instances pick it up next frame.</summary>
+        public void ReplaceCarMesh(int kind, Mesh mesh)
+        {
+            _carMeshes[kind] = mesh;
+            _importedKind[kind] = true;
         }
 
         // ---------------------------------------------------------------- smoke
@@ -766,7 +796,15 @@ namespace Mesruiyet.World
                     Graphics.RenderMeshInstanced(rp, _personMesh, 0, _batches[b], _batchCount[b]);
                 for (int k = 0; k < CarKinds; k++)
                     if (_carBatchCount[k][b] > 0)
-                        Graphics.RenderMeshInstanced(rp, _carMeshes[k], 0, _carBatches[k][b], _carBatchCount[k][b]);
+                    {
+                        var carRp = _importedKind[k] ? new RenderParams(_neutralCarMat)
+                        {
+                            shadowCastingMode = ShadowCastingMode.Off,
+                            receiveShadows = false,
+                            worldBounds = new Bounds(Vector3.zero, Vector3.one * 400f),
+                        } : rp;
+                        Graphics.RenderMeshInstanced(carRp, _carMeshes[k], 0, _carBatches[k][b], _carBatchCount[k][b]);
+                    }
             }
 
 

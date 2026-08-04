@@ -1742,6 +1742,28 @@ switch ($Scenario) {
         Start-Sleep -Milliseconds 700
         Shot "model-14-tersane.png"
 
+        # Faith variants cycle in build order. The founding city holds temple #1 (the mosque)
+        # and model-01 placed #2 (the church, tapinak-2.glb); two more make a row where all
+        # three worships stand in one frame — mosque, church, synagogue side by side.
+        # All three on the y=14 row: y=12-13 is the district gap between ESKİ ŞEHİR and
+        # SANAYİ and no district means no build permit.
+        $v1 = Send-Cmd '{"cmd":"build","id":"tapinak","x":25,"y":14}'
+        $v2 = Send-Cmd '{"cmd":"build","id":"tapinak","x":26,"y":14}'
+        Check ($v1 -match '"ok":true' -and $v2 -match '"ok":true') "üç inanç yan yana kuruldu"
+        Start-Sleep -Milliseconds 800
+        Send-Cmd '{"cmd":"focus","x":25,"y":14}' | Out-Null
+        Start-Sleep -Milliseconds 700
+        Shot "model-15-uc-inanc.png"
+
+        # The player's own vehicles: all three kinds must have swapped in, and a busy
+        # avenue frame for the eye — fayton, freight wagon and brass-era automobile.
+        $s = Send-Cmd '{"cmd":"state"}'
+        Check ($s -match '"disArac":3') "üç araç modeli de devrede"
+        Send-Cmd '{"cmd":"focus","x":17,"y":12}' | Out-Null
+        Send-Cmd '{"cmd":"press","key":"zoomout"}' | Out-Null
+        Start-Sleep -Milliseconds 1200
+        Shot "model-16-araclar.png"
+
         $state = Send-Cmd '{"cmd":"state"}'
         if (-not $ok) { $chainBroken = $true }
     }
