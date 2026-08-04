@@ -158,7 +158,11 @@ namespace Mesruiyet.World
             float yScale = 0f;
             if (def != null && def.Storeys > 0)
             {
-                float storeyHeight = def.Category == "konut" ? 2.6f : 3.1f;
+                // Homes run lower than the procedural 2.6 m because a model's measured height
+                // includes its roof — at 2.6 the two-storey house stretched 39% and read as a
+                // townhouse with an elongated door. 2.0 lands the house near its natural
+                // proportions and still leaves the four-storey block towering at ~8 m.
+                float storeyHeight = def.Category == "konut" ? 2.0f : 3.1f;
                 float worldH = Mathf.Max(bounds.size.y, 0.01f) * scale;
                 yScale = Mathf.Clamp(def.Storeys * storeyHeight / worldH, 0.55f, 1.8f);
             }
